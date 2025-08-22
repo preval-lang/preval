@@ -31,6 +31,7 @@ pub enum ParseError {
     ExpectedAssign,
     MalformedLet,
     DuplicateName,
+    TypeUndefined(Vec<InfoToken>),
 }
 
 pub fn parse_expression(tokens: &[InfoToken]) -> Result<InfoExpr, InfoParseError> {

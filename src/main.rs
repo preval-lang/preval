@@ -12,6 +12,7 @@ mod expression_parser;
 mod ir;
 mod module_parser;
 mod tokeniser;
+mod typ;
 mod vm;
 
 fn main() {
@@ -31,7 +32,10 @@ fn main() {
                 Ok(module) => {
                     fs::write("out.s", format!("{module:#?}")).unwrap();
 
-                    run(&module, module.functions.get("main").unwrap());
+                    println!(
+                        "{:#?}",
+                        run(&module, module.functions.get("main").unwrap(), vec![None])
+                    );
                 }
                 Err(err) => {
                     let (line, column) = get_line_and_column(&src, err.idx).unwrap();

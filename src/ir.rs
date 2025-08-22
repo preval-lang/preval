@@ -23,16 +23,16 @@ pub enum IRError {
 
 #[derive(Debug)]
 
-pub struct Module {
+pub struct Module<VarRepr: Clone> {
     pub constants: Vec<(Type, Vec<u8>)>,
-    pub functions: HashMap<String, Function>,
+    pub functions: HashMap<String, Function<VarRepr>>,
 }
 #[derive(Debug)]
-pub struct Function {
-    // TODO: ARGS
-    pub ir: Vec<Block>,
+pub struct Function<VarRepr: Clone> {
+    pub ir: Vec<Block<VarRepr>>,
     pub exported: bool,
     pub variable_types: Vec<Type>,
+    pub signature: Signature,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -53,12 +53,13 @@ pub enum Pointer {
 }
 
 #[derive(Debug, Clone)]
-pub enum Statement {
-    Operation(Operation, Option<usize>),
+pub enum Statement<VarRepr: Clone> {
+    // maybe get rid of this, there aren't any non-operation statements after introducing Terminals and Blocks
+    Operation(Operation<VarRepr>, Option<usize>),
 }
 
 #[derive(Debug, Clone)]
-pub enum Operation {
+pub enum Operation<VarRepr: Clone> {
     Call {
         function: Vec<String>,
         args: Vec<usize>,
@@ -70,9 +71,12 @@ pub enum Operation {
     LoadGlobal {
         src: usize,
     },
-
     LoadLocal {
         src: usize,
+    },
+    PartialCall {
+        function: Vec<Block<VarRepr>>,
+        variables: HashMap<usize, Option<VarRepr>>,
     },
 }
 
@@ -96,19 +100,20 @@ pub enum Terminal {
 }
 
 #[derive(Debug, Clone)]
-pub struct Block {
-    pub statements: Vec<Statement>,
+pub struct Block<VarRepr: Clone> {
+    pub statements: Vec<Statement<VarRepr>>,
     pub terminal: Terminal,
 }
 
-pub fn to_ir(
-    function: &mut Function,
+pub fn to_ir<VarRepr: Clone>(
+    function: &mut Function<VarRepr>,
     block: usize,
-    module: &mut Module,
+    module: &mut Module<VarRepr>,
     expr: InfoExpr,
     next_var: &mut usize,
     store: bool,
-    declarations: &mut HashMap<String, Declaration>,
+    declarations: &HashMap<String, Declaration>,
+    locals: &mut HashMap<String, Declaration>,
     evaluate: bool,
 ) -> Result<(), IRErrorInfo> {
     let a = match expr.expr {
@@ -121,9 +126,10 @@ pub fn to_ir(
                 next_var,
                 true,
                 declarations,
+                locals,
                 false,
             )?;
-            declarations.insert(name, Declaration::Variable(*next_var));
+            locals.insert(name, Declaration::Variable(*next_var));
             *next_var += 1;
             Ok(())
         }
@@ -137,6 +143,7 @@ pub fn to_ir(
                     next_var,
                     true,
                     declarations,
+                    locals,
                     false,
                 )?;
                 function.ir[block].terminal = Terminal::Return(Some(*next_var));
@@ -161,6 +168,7 @@ pub fn to_ir(
                             next_var,
                             true,
                             declarations,
+                            locals,
                             false,
                         )?;
                     } else {
@@ -172,6 +180,7 @@ pub fn to_ir(
                             next_var,
                             false,
                             declarations,
+                            locals,
                             false,
                         )?;
                     }
@@ -184,6 +193,7 @@ pub fn to_ir(
                         next_var,
                         false,
                         declarations,
+                        locals,
                         false,
                     )?;
                 }
@@ -192,7 +202,7 @@ pub fn to_ir(
             Ok(())
         }
         Expr::Index(left, right) => todo!(),
-        Expr::Var(name) => match declarations.get(&name) {
+        Expr::Var(name) => match locals.get(&name).or_else(|| declarations.get(&name)) {
             None => {
                 return Err(IRErrorInfo {
                     idx: expr.idx,
@@ -274,6 +284,7 @@ pub fn to_ir(
                     next_var,
                     true,
                     declarations,
+                    locals,
                     false,
                 )?;
                 arg_indexes.push(*next_var);
@@ -338,6 +349,7 @@ pub fn to_ir(
                     next_var,
                     true,
                     declarations,
+                    locals,
                     false,
                 )?;
                 *next_var += 1;

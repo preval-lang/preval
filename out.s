@@ -1,12 +1,9 @@
 Module {
     constants: [
         (
-            Array(
-                u8,
-                1,
-            ),
+            u8,
             [
-                53,
+                5,
             ],
         ),
     ],
@@ -16,14 +13,27 @@ Module {
                 Block {
                     statements: [
                         Operation(
-                            Call {
-                                function: [
-                                    "get_five",
-                                ],
-                                args: [],
+                            LoadGlobal {
+                                src: 0,
                             },
                             Some(
-                                0,
+                                1,
+                            ),
+                        ),
+                        Operation(
+                            LoadLocal {
+                                src: 1,
+                            },
+                            Some(
+                                2,
+                            ),
+                        ),
+                        Operation(
+                            LoadLocal {
+                                src: 0,
+                            },
+                            Some(
+                                3,
                             ),
                         ),
                         Operation(
@@ -32,17 +42,15 @@ Module {
                                     "print",
                                 ],
                                 args: [
-                                    0,
+                                    3,
                                 ],
                             },
-                            Some(
-                                1,
-                            ),
+                            None,
                         ),
                     ],
                     terminal: Evaluate(
                         Some(
-                            1,
+                            4,
                         ),
                     ),
                 },
@@ -52,35 +60,20 @@ Module {
                 Slice(
                     u8,
                 ),
-                void,
-            ],
-        },
-        "get_five": Function {
-            ir: [
-                Block {
-                    statements: [
-                        Operation(
-                            LoadGlobal {
-                                src: 0,
-                            },
-                            Some(
-                                0,
-                            ),
-                        ),
-                    ],
-                    terminal: Evaluate(
-                        Some(
-                            0,
-                        ),
-                    ),
-                },
-            ],
-            exported: true,
-            variable_types: [
+                u8,
+                u8,
                 Slice(
                     u8,
                 ),
             ],
+            signature: Signature {
+                args: [
+                    Slice(
+                        u8,
+                    ),
+                ],
+                returns: void,
+            },
         },
     },
 }

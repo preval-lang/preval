@@ -2,29 +2,47 @@ use std::collections::HashMap;
 
 use crate::ir::{Block, Function, Module, Operation, Statement, Terminal};
 
-pub fn run(module: &Module, function: &Function) -> Option<Vec<u8>> {
+pub type VarRepr = Vec<u8>;
+
+#[derive(Debug)]
+pub enum RunResult {
+    Void,
+    Concrete(Vec<u8>),
+    Partial(Vec<Block<VarRepr>>, HashMap<usize, Option<Vec<u8>>>),
+}
+
+pub fn run(
+    module: &Module<VarRepr>,
+    function: &Function<VarRepr>,
+    args: Vec<Option<Vec<u8>>>,
+) -> RunResult {
     let mut vars = HashMap::new();
-    let block = run_block(module, &function.ir[0], &mut vars);
-    if block.statements.len() == 0 {
-        match block.terminal {
-            Terminal::Evaluate(Some(var)) => vars.get(&var)?.clone(),
-            Terminal::Return(Some(var)) => vars.get(&var)?.clone(),
-            _ => None,
+    for (idx, arg) in args.iter().enumerate() {
+        vars.insert(idx, arg.clone());
+    }
+    let blocks = evaluate_function(module, &function, &mut vars);
+    if blocks[0].statements.len() == 0 {
+        match blocks[0].terminal {
+            Terminal::Evaluate(Some(var)) | Terminal::Return(Some(var)) => match vars.get(&var) {
+                Some(Some(var)) => RunResult::Concrete(var.clone()),
+                Some(None) => unreachable!("Return uncomputable variable"),
+                None => panic!("Undefined variable"),
+            },
+            _ => RunResult::Void,
         }
     } else {
-        None
+        RunResult::Partial(blocks, vars)
     }
 }
 
-fn run_block(
-    module: &Module,
-    // function: &Function,
-    block: &Block,
+fn evaluate_function(
+    module: &Module<VarRepr>,
+    function: &Function<VarRepr>,
     vars: &mut HashMap<usize, Option<Vec<u8>>>,
-) -> Block {
-    let mut out: Vec<Statement> = Vec::new();
+) -> Vec<Block<VarRepr>> {
+    let mut out: Vec<Statement<VarRepr>> = Vec::new();
 
-    for stmt in &block.statements {
+    for stmt in &function.ir[0].statements {
         match stmt {
             Statement::Operation(op, store) => match op {
                 Operation::LoadGlobal { src } => {
@@ -34,15 +52,34 @@ fn run_block(
                 }
                 Operation::Call { function, args } => {
                     if function[0].as_str() == "print" {
-                        if let Some(text) = vars[&args[0]].clone() {
-                            println!("{}", String::from_utf8(text).unwrap());
+                        if let Some(Some(text)) = vars.get(&args[0]).clone() {
+                            println!("{}", String::from_utf8(text.to_vec()).unwrap());
                         } else {
                             out.push(stmt.clone());
                         }
                     } else if let Some(fun) = module.functions.get(&function[0]) {
-                        let out = run(module, fun);
-                        if let Some(store) = store {
-                            vars.insert(*store, out);
+                        match run(
+                            module,
+                            fun,
+                            args.iter()
+                                .map(|arg| vars.get(arg).unwrap().clone())
+                                .collect(),
+                        ) {
+                            RunResult::Void => {}
+                            RunResult::Concrete(res) => {
+                                if let Some(store) = store {
+                                    vars.insert(*store, Some(res));
+                                }
+                            }
+                            RunResult::Partial(blocks, incomplete_vars) => {
+                                out.push(Statement::Operation(
+                                    Operation::PartialCall {
+                                        function: blocks,
+                                        variables: incomplete_vars,
+                                    },
+                                    *store,
+                                ));
+                            }
                         }
                     }
                 }
@@ -60,8 +97,8 @@ fn run_block(
         }
     }
 
-    return Block {
-        terminal: block.terminal.clone(),
+    return vec![Block::<VarRepr> {
+        terminal: function.ir[0].terminal.clone(),
         statements: out,
-    };
+    }];
 }

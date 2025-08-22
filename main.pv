@@ -1,3 +1,3 @@
-fn get_five(): stringSlice "5";
-
-fn main() print(get_five());
+fn main(a: stringSlice) {
+    print(a);
+}
