@@ -29,7 +29,6 @@ pub enum ParseError {
     ExpectedExpression(Vec<InfoToken>),
     ExpectedTopLevel,
     ExpectedAssign,
-    MalformedLet,
     DuplicateName,
     TypeUndefined(Vec<InfoToken>),
 }

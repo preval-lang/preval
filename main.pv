@@ -1,3 +1,4 @@
-fn main(a: stringSlice) {
-    print(a);
+fn main(compile_io: IO, io: IO) {
+    print(io, "Hello, world at runtime!");
+    print(compile_io, "Hello, world at compile time!");
 }

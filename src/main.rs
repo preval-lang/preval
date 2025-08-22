@@ -4,7 +4,7 @@ use crate::{
     // compiler::compile,
     module_parser::parse_module,
     tokeniser::{get_line_and_column, tokenise},
-    vm::run,
+    vm::{RunResult, evaluate, run},
 };
 
 // mod compiler;
@@ -30,12 +30,23 @@ fn main() {
             let module = parse_module(&tokens);
             match module {
                 Ok(module) => {
-                    fs::write("out.s", format!("{module:#?}")).unwrap();
+                    fs::write("ir.ir", format!("{module:#?}")).unwrap();
 
-                    println!(
-                        "{:#?}",
-                        run(&module, module.functions.get("main").unwrap(), vec![None])
+                    let eval = run(
+                        &module,
+                        module.functions.get("main").unwrap(),
+                        vec![Some(Vec::new()), None],
                     );
+
+                    fs::write("eval.ir", format!("{eval:#?}")).unwrap();
+
+                    match eval {
+                        RunResult::Partial(blocks, mut vars) => {
+                            vars.insert(1, Some(Vec::new()));
+                            evaluate(&module, &blocks, &mut vars);
+                        }
+                        _ => {}
+                    }
                 }
                 Err(err) => {
                     let (line, column) = get_line_and_column(&src, err.idx).unwrap();

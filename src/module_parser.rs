@@ -2,9 +2,9 @@ use std::{collections::HashMap, usize};
 
 use crate::{
     expression_parser::{InfoExpr, InfoParseError, ParseError, parse_expression},
-    ir::{Block, Declaration, Function, Module, Signature, Terminal, Type, to_ir},
+    ir::{Block, Declaration, Function, Module, Terminal, to_ir},
     tokeniser::{InfoToken, Keyword, Operator, Token},
-    typ::get_type,
+    typ::{Signature, Type, get_type},
 };
 
 pub fn parse_module<VarRepr: Clone>(
@@ -20,7 +20,7 @@ pub fn parse_module<VarRepr: Clone>(
     declarations.insert(
         "print".to_string(),
         Declaration::Function(Signature {
-            args: vec![Type::Slice(Box::new(Type::u8))],
+            args: vec![Type::IO, Type::Slice(Box::new(Type::u8))],
             returns: Type::void,
         }),
     );
@@ -62,9 +62,10 @@ pub fn parse_module<VarRepr: Clone>(
                         i += 1;
                         returns = get_type(tokens, &mut i)?;
                     }
+                    let void = returns == Type::void;
                     let signature = Signature {
                         args: args.iter().map(|arg| arg.1.clone()).collect(),
-                        returns: returns,
+                        returns,
                     };
                     declarations.insert(name.clone(), Declaration::Function(signature.clone()));
 
@@ -94,7 +95,7 @@ pub fn parse_module<VarRepr: Clone>(
                         &mut module,
                         body,
                         &mut next_var,
-                        true,
+                        !void,
                         &mut declarations,
                         &mut locals,
                         true,

@@ -20,7 +20,7 @@ pub fn run(
     for (idx, arg) in args.iter().enumerate() {
         vars.insert(idx, arg.clone());
     }
-    let blocks = evaluate_function(module, &function, &mut vars);
+    let blocks = evaluate(module, &function.ir, &mut vars);
     if blocks[0].statements.len() == 0 {
         match blocks[0].terminal {
             Terminal::Evaluate(Some(var)) | Terminal::Return(Some(var)) => match vars.get(&var) {
@@ -35,14 +35,14 @@ pub fn run(
     }
 }
 
-fn evaluate_function(
+pub fn evaluate(
     module: &Module<VarRepr>,
-    function: &Function<VarRepr>,
+    blocks: &Vec<Block<VarRepr>>,
     vars: &mut HashMap<usize, Option<Vec<u8>>>,
 ) -> Vec<Block<VarRepr>> {
     let mut out: Vec<Statement<VarRepr>> = Vec::new();
 
-    for stmt in &function.ir[0].statements {
+    for stmt in &blocks[0].statements {
         match stmt {
             Statement::Operation(op, store) => match op {
                 Operation::LoadGlobal { src } => {
@@ -52,8 +52,12 @@ fn evaluate_function(
                 }
                 Operation::Call { function, args } => {
                     if function[0].as_str() == "print" {
-                        if let Some(Some(text)) = vars.get(&args[0]).clone() {
-                            println!("{}", String::from_utf8(text.to_vec()).unwrap());
+                        if let Some(Some(_)) = vars.get(&args[0]).clone() {
+                            if let Some(Some(message)) = vars.get(&args[1]).clone() {
+                                println!("{}", String::from_utf8(message.to_vec()).unwrap())
+                            } else {
+                                out.push(stmt.clone());
+                            }
                         } else {
                             out.push(stmt.clone());
                         }
@@ -98,7 +102,7 @@ fn evaluate_function(
     }
 
     return vec![Block::<VarRepr> {
-        terminal: function.ir[0].terminal.clone(),
+        terminal: blocks[0].terminal.clone(),
         statements: out,
     }];
 }

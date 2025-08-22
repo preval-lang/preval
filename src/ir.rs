@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::{
     expression_parser::{Expr, InfoExpr},
     tokeniser::Literal,
+    typ::{Pointer, Signature, Type},
 };
 
 #[derive(Debug)]
@@ -35,23 +36,6 @@ pub struct Function<VarRepr: Clone> {
     pub signature: Signature,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Type {
-    usize,
-    void,
-    Pointer(Pointer),
-    u8,
-    Slice(Box<Type>),
-    Array(Box<Type>, usize),
-    IO,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Pointer {
-    Function(Box<Signature>),
-    Value(Box<Type>),
-}
-
 #[derive(Debug, Clone)]
 pub enum Statement<VarRepr: Clone> {
     // maybe get rid of this, there aren't any non-operation statements after introducing Terminals and Blocks
@@ -78,12 +62,6 @@ pub enum Operation<VarRepr: Clone> {
         function: Vec<Block<VarRepr>>,
         variables: HashMap<usize, Option<VarRepr>>,
     },
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Signature {
-    pub(crate) args: Vec<Type>,
-    pub(crate) returns: Type,
 }
 
 #[derive(Debug)]
