@@ -16,8 +16,6 @@ mod typ;
 mod vm;
 
 fn main() {
-    println!("TODO: enforce returns being the last expression");
-
     let file = "main.pv";
     let src = String::from_utf8(fs::read(file).unwrap()).unwrap();
     let tokens = tokenise(&src, 0);

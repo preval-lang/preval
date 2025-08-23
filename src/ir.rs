@@ -93,10 +93,10 @@ pub fn to_ir<VarRepr: Clone>(
     declarations: &HashMap<String, Declaration>,
     locals: &mut HashMap<String, Declaration>,
     evaluate: bool,
-) -> Result<(), IRErrorInfo> {
+) -> Result<bool, IRErrorInfo> {
     let a = match expr.expr {
         Expr::Let(name, value) => {
-            to_ir(
+            if to_ir(
                 function,
                 block,
                 module,
@@ -106,14 +106,16 @@ pub fn to_ir<VarRepr: Clone>(
                 declarations,
                 locals,
                 false,
-            )?;
+            )? {
+                return Ok(true);
+            }
             locals.insert(name, Declaration::Variable(*next_var));
             *next_var += 1;
-            Ok(())
+            Ok(false)
         }
         Expr::Return(expr) => {
             if let Some(expr) = expr {
-                to_ir(
+                if to_ir(
                     function,
                     block,
                     module,
@@ -123,14 +125,16 @@ pub fn to_ir<VarRepr: Clone>(
                     declarations,
                     locals,
                     false,
-                )?;
+                )? {
+                    return Ok(true);
+                }
                 function.ir[block].terminal = Terminal::Return(Some(*next_var));
 
                 *next_var += 1;
             } else {
-                function.ir[block].terminal = Terminal::Return(Some(*next_var));
+                function.ir[block].terminal = Terminal::Return(None);
             }
-            Ok(())
+            Ok(true)
         }
         Expr::Block(statements, returns) => {
             let mut i = 0;
@@ -138,7 +142,7 @@ pub fn to_ir<VarRepr: Clone>(
             for statement in statements {
                 if i == len - 1 {
                     if store && returns {
-                        to_ir(
+                        if to_ir(
                             function,
                             block,
                             module,
@@ -148,9 +152,11 @@ pub fn to_ir<VarRepr: Clone>(
                             declarations,
                             locals,
                             false,
-                        )?;
+                        )? {
+                            return Ok(true);
+                        }
                     } else {
-                        to_ir(
+                        if to_ir(
                             function,
                             block,
                             module,
@@ -160,10 +166,12 @@ pub fn to_ir<VarRepr: Clone>(
                             declarations,
                             locals,
                             false,
-                        )?;
+                        )? {
+                            return Ok(true);
+                        }
                     }
                 } else {
-                    to_ir(
+                    if to_ir(
                         function,
                         block,
                         module,
@@ -173,11 +181,13 @@ pub fn to_ir<VarRepr: Clone>(
                         declarations,
                         locals,
                         false,
-                    )?;
+                    )? {
+                        return Ok(true);
+                    }
                 }
                 i += 1;
             }
-            Ok(())
+            Ok(false)
         }
         Expr::Index(left, right) => todo!(),
         Expr::Var(name) => match locals.get(&name).or_else(|| declarations.get(&name)) {
@@ -196,7 +206,7 @@ pub fn to_ir<VarRepr: Clone>(
                         Some(*next_var),
                     ));
                 }
-                Ok(())
+                Ok(false)
             }
             a => todo!("{a:?}"),
         },
@@ -223,7 +233,7 @@ pub fn to_ir<VarRepr: Clone>(
                         None,
                     ));
                 }
-                Ok(())
+                Ok(false)
             }
             Literal::Number(num) => {
                 module.constants.push((Type::u8, vec![num]));
@@ -243,7 +253,7 @@ pub fn to_ir<VarRepr: Clone>(
                         None,
                     ));
                 }
-                Ok(())
+                Ok(false)
             }
         },
         Expr::Call(callee, args) => {
@@ -319,7 +329,7 @@ pub fn to_ir<VarRepr: Clone>(
             } else {
                 let function_idx = callee.idx;
                 let function_var = *next_var;
-                to_ir(
+                if to_ir(
                     function,
                     block,
                     module,
@@ -329,7 +339,9 @@ pub fn to_ir<VarRepr: Clone>(
                     declarations,
                     locals,
                     false,
-                )?;
+                )? {
+                    return Ok(true);
+                }
                 *next_var += 1;
                 let sig = match &function.variable_types[function_var] {
                     Type::Pointer(Pointer::Function(sig)) => sig,
@@ -371,7 +383,7 @@ pub fn to_ir<VarRepr: Clone>(
                     ));
                 }
             }
-            Ok(())
+            Ok(false)
         }
     };
     if evaluate {

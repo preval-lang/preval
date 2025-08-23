@@ -1,4 +1,3 @@
 fn main(compile_io: IO, io: IO) {
-    print(io, "Hello, world at runtime!");
-    print(compile_io, "Hello, world at compile time!");
+    print(io, "Hello, World!");
 }
