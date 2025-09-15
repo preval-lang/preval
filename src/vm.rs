@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, process::exit};
 
 use crate::ir::{Block, Function, Module, Operation, Statement, Terminal};
 
@@ -6,103 +6,130 @@ pub type VarRepr = Vec<u8>;
 
 #[derive(Debug)]
 pub enum RunResult {
-    Void,
     Concrete(Vec<u8>),
     Partial(Vec<Block<VarRepr>>, HashMap<usize, Option<Vec<u8>>>),
 }
 
 pub fn run(
     module: &Module<VarRepr>,
-    function: &Function<VarRepr>,
+    function: Function<VarRepr>,
     args: Vec<Option<Vec<u8>>>,
 ) -> RunResult {
     let mut vars = HashMap::new();
     for (idx, arg) in args.iter().enumerate() {
         vars.insert(idx, arg.clone());
     }
-    let blocks = evaluate(module, &function.ir, &mut vars);
-    if blocks[0].statements.len() == 0 {
-        match blocks[0].terminal {
-            Terminal::Evaluate(Some(var)) | Terminal::Return(Some(var)) => match vars.get(&var) {
-                Some(Some(var)) => RunResult::Concrete(var.clone()),
-                Some(None) => unreachable!("Return uncomputable variable"),
-                None => panic!("Undefined variable"),
-            },
-            _ => RunResult::Void,
-        }
-    } else {
-        RunResult::Partial(blocks, vars)
-    }
+    evaluate(module, function.ir, &mut vars)
 }
 
 pub fn evaluate(
     module: &Module<VarRepr>,
-    blocks: &Vec<Block<VarRepr>>,
+    mut blocks: Vec<Block<VarRepr>>,
     vars: &mut HashMap<usize, Option<Vec<u8>>>,
-) -> Vec<Block<VarRepr>> {
+) -> RunResult {
     let mut out: Vec<Statement<VarRepr>> = Vec::new();
 
-    for stmt in &blocks[0].statements {
-        match stmt {
-            Statement::Operation(op, store) => match op {
-                Operation::LoadGlobal { src } => {
-                    if let Some(store) = store {
-                        vars.insert(*store, Some(module.constants[*src].1.clone()));
+    let mut block = 0;
+    let mut last_block = 0;
+
+    loop {
+        for stmt in &blocks[block].statements {
+            match stmt {
+                Statement::Operation(op, store) => match op {
+                    Operation::LoadGlobal { src } => {
+                        if let Some(store) = store {
+                            vars.insert(*store, Some(module.constants[*src].1.clone()));
+                        }
                     }
-                }
-                Operation::Call { function, args } => {
-                    if function[0].as_str() == "print" {
-                        if let Some(Some(_)) = vars.get(&args[0]).clone() {
-                            if let Some(Some(message)) = vars.get(&args[1]).clone() {
-                                println!("{}", String::from_utf8(message.to_vec()).unwrap())
+                    Operation::Call { function, args } => {
+                        if function[0].as_str() == "print" {
+                            if let Some(Some(_)) = vars.get(&args[0]).clone() {
+                                if let Some(Some(message)) = vars.get(&args[1]).clone() {
+                                    println!("{}", String::from_utf8(message.to_vec()).unwrap())
+                                } else {
+                                    out.push(stmt.clone());
+                                }
                             } else {
                                 out.push(stmt.clone());
                             }
-                        } else {
-                            out.push(stmt.clone());
-                        }
-                    } else if let Some(fun) = module.functions.get(&function[0]) {
-                        match run(
-                            module,
-                            fun,
-                            args.iter()
-                                .map(|arg| vars.get(arg).unwrap().clone())
-                                .collect(),
-                        ) {
-                            RunResult::Void => {}
-                            RunResult::Concrete(res) => {
-                                if let Some(store) = store {
-                                    vars.insert(*store, Some(res));
+                        } else if let Some(fun) = module.functions.get(&function[0]) {
+                            match run(
+                                module,
+                                fun.clone(),
+                                args.iter()
+                                    .map(|arg| vars.get(arg).unwrap().clone())
+                                    .collect(),
+                            ) {
+                                RunResult::Concrete(res) => {
+                                    if let Some(store) = store {
+                                        vars.insert(*store, Some(res));
+                                    }
+                                }
+                                RunResult::Partial(blocks, variables) => {
+                                    out.push(Statement::Operation(
+                                        Operation::PartialCall { blocks, variables },
+                                        *store,
+                                    ));
                                 }
                             }
-                            RunResult::Partial(blocks, incomplete_vars) => {
-                                out.push(Statement::Operation(
-                                    Operation::PartialCall {
-                                        function: blocks,
-                                        variables: incomplete_vars,
-                                    },
-                                    *store,
-                                ));
+                        }
+                    }
+                    Operation::LoadLocal { src } => {
+                        if let Some(store) = store {
+                            if let Some(Some(data)) = vars.get(&src) {
+                                vars.insert(*store, Some(data.clone()));
+                            } else {
+                                out.push(stmt.clone());
+                                vars.insert(*store, None);
                             }
                         }
                     }
-                }
-                Operation::LoadLocal { src } => {
-                    if let Some(store) = store {
-                        if let Some(Some(data)) = vars.get(&src) {
-                            vars.insert(*store, Some(data.clone()));
-                        } else {
-                            out.push(stmt.clone());
+                    Operation::Phi { block_to_var } => {
+                        if let Some(store) = store {
+                            let var_num = block_to_var.get(&last_block).expect(&format!(
+                                "Block {block} did not expect to be jumped into by {last_block}"
+                            ));
+                            vars.insert(*store, vars.get(var_num).expect("Phi evaluated to undefined variable, must have forgot to store the result of the block").clone());
                         }
                     }
+                    a => todo!("Other ops {a:?}"),
+                },
+            }
+        }
+
+        blocks[block].statements = out;
+        out = Vec::new();
+
+        last_block = block;
+
+        match blocks[block].terminal {
+            Terminal::Evaluate(Some(var)) | Terminal::Return(Some(var)) => match vars.get(&var) {
+                Some(Some(data)) => {
+                    for (_, d) in vars.iter() {
+                        if d.is_none() {
+                            return RunResult::Partial(blocks, vars.clone());
+                        }
+                    }
+                    return RunResult::Concrete(data.clone());
                 }
-                _ => todo!("Other ops"),
+                Some(None) => return RunResult::Partial(blocks, vars.clone()),
+                None => panic!("returning undefined variable"),
             },
+            Terminal::Jump(b) => block = b,
+            Terminal::CondJump { cond, then, els } => match vars.get(&cond) {
+                Some(Some(cond)) => {
+                    if cond.len() > 1 && cond[0] != 0 {
+                        blocks[block].terminal = Terminal::Jump(then);
+                        block = then;
+                    } else {
+                        blocks[block].terminal = Terminal::Jump(els);
+                        block = els;
+                    }
+                }
+                Some(None) => return RunResult::Partial(blocks, vars.clone()),
+                None => panic!("conditional jump cond was an undefined variable"),
+            },
+            ref a => panic!("Unknown {a:?}"),
         }
     }
-
-    return vec![Block::<VarRepr> {
-        terminal: blocks[0].terminal.clone(),
-        statements: out,
-    }];
 }

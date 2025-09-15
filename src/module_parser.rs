@@ -21,7 +21,7 @@ pub fn parse_module<VarRepr: Clone>(
         "print".to_string(),
         Declaration::Function(Signature {
             args: vec![Type::IO, Type::Slice(Box::new(Type::u8))],
-            returns: Type::void,
+            returns: Type::Tuple(Vec::new()),
         }),
     );
 
@@ -57,12 +57,11 @@ pub fn parse_module<VarRepr: Clone>(
                     } else {
                         panic!("Missing function parameters, got {:?}", tokens[i]);
                     }
-                    let mut returns = Type::void;
+                    let mut returns = Type::Tuple(Vec::new());
                     if let Token::Colon = &tokens[i].token {
                         i += 1;
                         returns = get_type(tokens, &mut i)?;
                     }
-                    let void = returns == Type::void;
                     let signature = Signature {
                         args: args.iter().map(|arg| arg.1.clone()).collect(),
                         returns,
@@ -71,40 +70,33 @@ pub fn parse_module<VarRepr: Clone>(
 
                     let body = expect_block_or_expr(tokens, &mut i)?;
 
+                    let next_var = args.len();
+
                     let mut function = Function {
                         ir: vec![Block {
-                            terminal: Terminal::Return(None),
+                            terminal: Terminal::Return(Some(next_var)),
                             statements: Vec::new(),
                         }],
                         exported: true,
-                        variable_types: Vec::new(),
+                        variable_types: HashMap::new(),
                         signature,
                     };
 
                     let mut locals = HashMap::new();
                     for (idx, arg) in args.iter().enumerate() {
-                        function.variable_types.push(arg.1.clone());
+                        function.variable_types.insert(idx, arg.1.clone());
                         locals.insert(arg.0.clone(), Declaration::Variable(idx));
                     }
 
-                    let mut next_var = args.len();
-
-                    if let Err(e) = to_ir(
+                    to_ir(
                         &mut function,
-                        0,
+                        &mut 0,
                         &mut module,
                         body,
-                        &mut next_var,
-                        !void,
+                        Some(next_var),
                         &mut declarations,
                         &mut locals,
-                        true,
-                    ) {
-                        println!("TODO: introduce AST modules");
-                        panic!("{e:?}");
-                    }
-
-                    next_var += 1; // unnecessary as of now but lets just maintain the count for sanity purposes
+                    )?;
 
                     if let Some(_) = module.functions.insert(name.to_string(), function) {
                         return Err(InfoParseError {

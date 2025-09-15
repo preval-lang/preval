@@ -3,6 +3,8 @@ pub enum Keyword {
     Let,
     Return,
     Fn,
+    If,
+    Else,
 }
 
 impl TryFrom<&str> for Keyword {
@@ -13,6 +15,8 @@ impl TryFrom<&str> for Keyword {
             "let" => Ok(Keyword::Let),
             "return" => Ok(Keyword::Return),
             "fn" => Ok(Keyword::Fn),
+            "if" => Ok(Keyword::If),
+            "else" => Ok(Keyword::Else),
             _ => Err(()),
         }
     }

@@ -6,7 +6,7 @@ use crate::{
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     usize,
-    void,
+    Tuple(Vec<Type>),
     Pointer(Pointer),
     u8,
     Slice(Box<Type>),

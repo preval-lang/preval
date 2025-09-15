@@ -1,4 +1,7 @@
-use crate::tokeniser::{InfoToken, Keyword, Literal, Operator, Token};
+use crate::{
+    ir::{Block, IRError, IRErrorInfo},
+    tokeniser::{InfoToken, Keyword, Literal, Operator, Token},
+};
 
 #[derive(Debug)]
 pub enum Expr {
@@ -9,6 +12,11 @@ pub enum Expr {
     Return(Option<Box<InfoExpr>>),
     Block(Vec<InfoExpr>, bool),
     Let(String, Box<InfoExpr>),
+    If {
+        cond: Box<InfoExpr>,
+        then: Box<InfoExpr>,
+        els: Option<Box<InfoExpr>>,
+    },
 }
 
 #[derive(Debug)]
@@ -31,6 +39,17 @@ pub enum ParseError {
     ExpectedAssign,
     DuplicateName,
     TypeUndefined(Vec<InfoToken>),
+    ExpectedBlock(Option<InfoToken>),
+    IRError(IRError),
+}
+
+impl From<IRErrorInfo> for InfoParseError {
+    fn from(value: IRErrorInfo) -> Self {
+        InfoParseError {
+            idx: value.idx,
+            error: ParseError::IRError(value.error),
+        }
+    }
 }
 
 pub fn parse_expression(tokens: &[InfoToken]) -> Result<InfoExpr, InfoParseError> {
@@ -186,6 +205,59 @@ pub fn parse_expression(tokens: &[InfoToken]) -> Result<InfoExpr, InfoParseError
                     !tokens.last().is_some_and(|tk| tk.token == Token::Semicolon),
                 ),
             }),
+            [
+                InfoToken {
+                    token: Token::Keyword(Keyword::If),
+                    idx,
+                },
+                tail @ ..,
+            ] => {
+                let (cond, then_block, else_keyword, else_block) = match tail {
+                    [
+                        cond @ ..,
+                        InfoToken {
+                            token: Token::Block(then_contents),
+                            idx: then_idx,
+                        },
+                        InfoToken {
+                            token: Token::Keyword(Keyword::Else),
+                            idx: else_keyword_idx,
+                        },
+                        InfoToken {
+                            token: Token::Block(else_contents),
+                            idx: else_idx,
+                        },
+                    ] => (
+                        cond,
+                        InfoToken {
+                            token: Token::Block(then_contents.to_vec()),
+                            idx: *then_idx,
+                        },
+                        Some(InfoToken {
+                            token: Token::Keyword(Keyword::Else),
+                            idx: *else_keyword_idx,
+                        }),
+                        Some(InfoToken {
+                            token: Token::Block(else_contents.to_vec()),
+                            idx: *else_idx,
+                        }),
+                    ),
+                    _ => todo!("More if forms"),
+                };
+
+                Ok(InfoExpr {
+                    idx: *idx,
+                    expr: Expr::If {
+                        cond: Box::new(parse_expression(cond)?),
+                        then: Box::new(parse_expression(&[then_block])?),
+                        els: if let Some(else_block) = else_block {
+                            Some(Box::new(parse_expression(&[else_block])?))
+                        } else {
+                            None
+                        },
+                    },
+                })
+            }
             [] => Err(InfoParseError {
                 idx: 0,
                 error: ParseError::ExpectedExpression(Vec::new()),

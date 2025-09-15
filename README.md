@@ -71,8 +71,19 @@ Reflection is by far the easiest metaprogramming technique to use and was only a
 ### 0.1
 - [x] Local variables
 - [ ] Primitives u8-64 i8-64 String IO
-- [ ] Owned pointers
-- [ ] If statements
-- [ ] First class functions
+- [x] If statements
 - [ ] C interop
-- [ ] unsafe_c_pure global IO object for calling pure C functions
+### 0.2
+- [ ] Mutable state type
+- [ ] First class functions
+- [ ] `unsafe` marking
+- [ ] Unsafe global io variable for calls to pure FFI functions
+### 0.3
+- [ ] Structs
+- [ ] Tagged unions
+- [ ] Traits
+### 0.4
+- [ ] Reflection
+- [ ] Generics
+### Beyond
+- [ ] Native compilation

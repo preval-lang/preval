@@ -11,44 +11,141 @@ Partial(
                     ),
                 ),
                 Operation(
+                    LoadLocal {
+                        src: 2,
+                    },
+                    Some(
+                        3,
+                    ),
+                ),
+            ],
+            terminal: CondJump {
+                cond: 3,
+                then: 1,
+                els: 2,
+            },
+        },
+        Block {
+            statements: [
+                Operation(
+                    LoadLocal {
+                        src: 0,
+                    },
+                    Some(
+                        4,
+                    ),
+                ),
+                Operation(
+                    LoadGlobal {
+                        src: 0,
+                    },
+                    Some(
+                        5,
+                    ),
+                ),
+                Operation(
                     Call {
                         function: [
                             "print",
                         ],
                         args: [
-                            2,
-                            3,
+                            4,
+                            5,
                         ],
                     },
                     None,
                 ),
+                Operation(
+                    LoadGlobal {
+                        src: 1,
+                    },
+                    Some(
+                        4,
+                    ),
+                ),
             ],
-            terminal: Evaluate(
-                None,
+            terminal: Jump(
+                3,
+            ),
+        },
+        Block {
+            statements: [
+                Operation(
+                    LoadLocal {
+                        src: 0,
+                    },
+                    Some(
+                        6,
+                    ),
+                ),
+                Operation(
+                    LoadGlobal {
+                        src: 2,
+                    },
+                    Some(
+                        7,
+                    ),
+                ),
+                Operation(
+                    Call {
+                        function: [
+                            "print",
+                        ],
+                        args: [
+                            6,
+                            7,
+                        ],
+                    },
+                    None,
+                ),
+                Operation(
+                    LoadGlobal {
+                        src: 3,
+                    },
+                    Some(
+                        6,
+                    ),
+                ),
+            ],
+            terminal: Jump(
+                3,
+            ),
+        },
+        Block {
+            statements: [
+                Operation(
+                    Phi {
+                        block_to_var: {
+                            2: 6,
+                            1: 4,
+                        },
+                    },
+                    Some(
+                        3,
+                    ),
+                ),
+                Operation(
+                    LoadGlobal {
+                        src: 4,
+                    },
+                    Some(
+                        2,
+                    ),
+                ),
+            ],
+            terminal: Return(
+                Some(
+                    2,
+                ),
             ),
         },
     ],
     {
-        3: Some(
-            [
-                72,
-                101,
-                108,
-                108,
-                111,
-                44,
-                32,
-                87,
-                111,
-                114,
-                108,
-                100,
-                33,
-            ],
-        ),
-        1: None,
         0: Some(
             [],
         ),
+        1: None,
+        2: None,
+        3: None,
     },
 )

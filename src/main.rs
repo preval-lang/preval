@@ -27,21 +27,19 @@ fn main() {
         Ok(tokens) => {
             let module = parse_module(&tokens);
             match module {
-                Ok(module) => {
+                Ok(mut module) => {
                     fs::write("ir.ir", format!("{module:#?}")).unwrap();
 
-                    let eval = run(
-                        &module,
-                        module.functions.get("main").unwrap(),
-                        vec![Some(Vec::new()), None],
-                    );
+                    let mut main = module.functions.remove("main").unwrap();
+
+                    let eval = run(&module, main, vec![Some(Vec::new()), None]);
 
                     fs::write("eval.ir", format!("{eval:#?}")).unwrap();
 
                     match eval {
                         RunResult::Partial(blocks, mut vars) => {
                             vars.insert(1, Some(Vec::new()));
-                            evaluate(&module, &blocks, &mut vars);
+                            evaluate(&module, blocks, &mut vars);
                         }
                         _ => {}
                     }

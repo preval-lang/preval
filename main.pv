@@ -1,3 +1,7 @@
 fn main(compile_io: IO, io: IO) {
-    print(io, "Hello, World!");
+    let b = if  {
+        print(compile_io, "it's true!");
+    } else {
+        print(compile_io, "it's not true!");
+    };
 }
