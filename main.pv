@@ -1,7 +1,4 @@
 fn main(compile_io: IO, io: IO) {
-    let a = if io {
-        print(compile_io, "it's true!");
-    } else {
-        print(compile_io, "it's not true!");
-    };
+    let text = read_file(compile_io, "test.txt");
+    print(io, text);
 }

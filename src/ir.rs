@@ -1,5 +1,7 @@
 use std::{any::type_name_of_val, collections::HashMap};
 
+use serde::{Deserialize, Serialize};
+
 use crate::{
     expression_parser::{Expr, InfoExpr},
     tokeniser::Literal,
@@ -24,13 +26,13 @@ pub enum IRError {
     MissingElseBlock(),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 
 pub struct Module {
     pub constants: Vec<Vec<u8>>,
     pub functions: HashMap<String, Function>,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Function {
     pub ir: Vec<Block>,
     pub exported: bool,
@@ -38,13 +40,13 @@ pub struct Function {
     pub signature: Signature,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Statement {
     // maybe get rid of this, there aren't any non-operation statements after introducing Terminals and Blocks
     Operation(Operation, Option<usize>),
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Operation {
     Call {
         function: Vec<String>,
@@ -72,7 +74,7 @@ pub enum Declaration {
     Variable(usize),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Terminal {
     Return(Option<usize>),
     Evaluate(Option<usize>),
@@ -85,7 +87,7 @@ pub enum Terminal {
     ThenElseJump(usize),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Block {
     pub statements: Vec<Statement>,
     pub terminal: Terminal,

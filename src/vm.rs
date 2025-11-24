@@ -1,10 +1,12 @@
-use std::{collections::HashMap, process::exit};
+use std::{collections::HashMap, fs, process::exit};
+
+use serde::{Deserialize, Serialize};
 
 use crate::ir::{Block, Function, Module, Operation, Statement, Terminal};
 
 pub type VarRepr = Vec<u8>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RunResult {
     Concrete(Vec<u8>),
     Partial(Vec<Block>, HashMap<usize, Option<Vec<u8>>>),
@@ -45,6 +47,21 @@ pub fn evaluate(
                         }
                     }
                     Operation::Call { function, args } => {
+                        if function[0].as_str() == "read_file" {
+                            if let Some(Some(_)) = vars.get(&args[0]).clone() {
+                                if let Some(Some(path)) = vars.get(&args[1]).clone() {
+                                    let contents =
+                                        fs::read(String::from_utf8(path.clone()).unwrap()).unwrap();
+                                    if let Some(store) = store {
+                                        vars.insert(*store, Some(contents));
+                                    }
+                                } else {
+                                    out.push(stmt.clone());
+                                }
+                            } else {
+                                out.push(stmt.clone());
+                            }
+                        }
                         if function[0].as_str() == "print" {
                             if let Some(Some(_)) = vars.get(&args[0]).clone() {
                                 if let Some(Some(message)) = vars.get(&args[1]).clone() {

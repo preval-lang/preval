@@ -22,6 +22,13 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
             returns: Type::Tuple(Vec::new()),
         }),
     );
+    declarations.insert(
+        "read_file".to_string(),
+        Declaration::Function(Signature {
+            args: vec![Type::IO, Type::Slice(Box::new(Type::u8))],
+            returns: Type::Slice(Box::new(Type::u8)),
+        }),
+    );
 
     let mut i = 0;
 

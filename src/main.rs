@@ -1,4 +1,4 @@
-use std::fs;
+use std::{env, fs};
 
 use crate::{
     // compiler::compile,
@@ -17,6 +17,16 @@ mod typ;
 mod vm;
 
 fn main() {
+    if let Some(arg1) = env::args().collect::<Vec<_>>().get(1) {
+        if arg1 == "run" {
+            let (module, runresult): (Module, RunResult) =
+                postcard::from_bytes(&fs::read("main.pvc").unwrap()).unwrap();
+
+            run_entire_program(&module, runresult);
+            return;
+        }
+    }
+
     let file = "main.pv";
     let src = String::from_utf8(fs::read(file).unwrap()).unwrap();
     let tokens = tokenise(&src, 0);
@@ -34,6 +44,14 @@ fn main() {
                     let mut main = module.functions.remove("main").unwrap();
 
                     let eval = run(&mut module, main, vec![Some(Vec::new()), None]);
+
+                    if let Some(arg1) = env::args().collect::<Vec<_>>().get(1) {
+                        if arg1 == "compile" {
+                            let vec = postcard::to_stdvec(&(module, eval)).unwrap();
+                            fs::write("main.pvc", vec).unwrap();
+                            return;
+                        }
+                    }
 
                     // fs::write(
                     //     "eval.ir",
