@@ -7,9 +7,7 @@ use crate::{
     typ::{Signature, Type, get_type},
 };
 
-pub fn parse_module<VarRepr: Clone>(
-    tokens: &[InfoToken],
-) -> Result<Module<VarRepr>, InfoParseError> {
+pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
     let mut module = Module {
         constants: Vec::new(),
         functions: HashMap::new(),

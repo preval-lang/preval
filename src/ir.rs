@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{any::type_name_of_val, collections::HashMap};
 
 use crate::{
     expression_parser::{Expr, InfoExpr},
@@ -26,26 +26,26 @@ pub enum IRError {
 
 #[derive(Debug)]
 
-pub struct Module<VarRepr: Clone> {
-    pub constants: Vec<(Type, Vec<u8>)>,
-    pub functions: HashMap<String, Function<VarRepr>>,
+pub struct Module {
+    pub constants: Vec<Vec<u8>>,
+    pub functions: HashMap<String, Function>,
 }
 #[derive(Debug, Clone)]
-pub struct Function<VarRepr: Clone> {
-    pub ir: Vec<Block<VarRepr>>,
+pub struct Function {
+    pub ir: Vec<Block>,
     pub exported: bool,
     pub variable_types: HashMap<usize, Type>,
     pub signature: Signature,
 }
 
-#[derive(Debug, Clone)]
-pub enum Statement<VarRepr: Clone> {
+#[derive(Debug, Clone, PartialEq)]
+pub enum Statement {
     // maybe get rid of this, there aren't any non-operation statements after introducing Terminals and Blocks
-    Operation(Operation<VarRepr>, Option<usize>),
+    Operation(Operation, Option<usize>),
 }
 
-#[derive(Debug, Clone)]
-pub enum Operation<VarRepr: Clone> {
+#[derive(Debug, PartialEq, Clone)]
+pub enum Operation {
     Call {
         function: Vec<String>,
         args: Vec<usize>,
@@ -60,10 +60,6 @@ pub enum Operation<VarRepr: Clone> {
     LoadLocal {
         src: usize,
     },
-    PartialCall {
-        blocks: Vec<Block<VarRepr>>,
-        variables: HashMap<usize, Option<VarRepr>>,
-    },
     Phi {
         block_to_var: HashMap<usize, usize>,
     },
@@ -76,7 +72,7 @@ pub enum Declaration {
     Variable(usize),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Terminal {
     Return(Option<usize>),
     Evaluate(Option<usize>),
@@ -86,18 +82,19 @@ pub enum Terminal {
         then: usize,
         els: usize,
     },
+    ThenElseJump(usize),
 }
 
-#[derive(Debug, Clone)]
-pub struct Block<VarRepr: Clone> {
-    pub statements: Vec<Statement<VarRepr>>,
+#[derive(Debug, Clone, PartialEq)]
+pub struct Block {
+    pub statements: Vec<Statement>,
     pub terminal: Terminal,
 }
 
-pub fn to_ir<VarRepr: Clone>(
-    function: &mut Function<VarRepr>,
+pub fn to_ir(
+    function: &mut Function,
     block: &mut usize,
-    module: &mut Module<VarRepr>,
+    module: &mut Module,
     expr: InfoExpr,
     store: Option<usize>,
     declarations: &HashMap<String, Declaration>,
@@ -117,7 +114,7 @@ pub fn to_ir<VarRepr: Clone>(
                     },
                     Some(store),
                 ));
-                module.constants.push((typ, value));
+                module.constants.push(value);
             }
             Ok(())
         }
@@ -176,7 +173,7 @@ pub fn to_ir<VarRepr: Clone>(
                     },
                     store,
                 ));
-                module.constants.push((Type::Tuple(Vec::new()), Vec::new()));
+                module.constants.push(Vec::new());
                 function
                     .variable_types
                     .insert(store.unwrap(), Type::Tuple(Vec::new()));
@@ -294,7 +291,7 @@ pub fn to_ir<VarRepr: Clone>(
             Ok(())
         }
         Expr::If { cond, then, els } => {
-            println!("IF: {store:?}");
+            // println!("IF: {store:?}");
 
             let cond_var = function.variable_types.len();
             to_ir(
@@ -386,10 +383,10 @@ pub fn to_ir<VarRepr: Clone>(
     }
 }
 
-// pub fn to_ir<VarRepr: Clone>(
-//     function: &mut Function<VarRepr>,
+// pub fn to_ir<VarRepr: PartialEq+Clone>(
+//     function: &mut Function,
 //     block: &mut usize,
-//     module: &mut Module<VarRepr>,
+//     module: &mut Module,
 //     expr: InfoExpr,
 //     next_var: &mut usize,
 //     store: bool,
@@ -837,4 +834,89 @@ fn get_declaration<'a>(
     } else {
         panic!("Incorrect input: Cannot get declaration with no name");
     }
+}
+
+pub fn to_string(
+    module: &Module,
+    blocks: &Vec<Block>,
+    vars: HashMap<usize, Option<Vec<u8>>>,
+    indentation: usize,
+) -> String {
+    let mut out = String::new();
+    for (idx, block) in blocks.iter().enumerate() {
+        for _ in 0..indentation {
+            out.push_str("\t");
+        }
+        out.push_str(&format!("{idx}:\n"));
+        for stmt in &block.statements {
+            for _ in 0..indentation + 1 {
+                out.push_str("\t");
+            }
+            match stmt {
+                Statement::Operation(op, store) => {
+                    if let Some(store) = store {
+                        out.push_str("$");
+                        out.push_str(&store.to_string());
+                        out.push_str(" = ");
+                    }
+                    match op {
+                        Operation::Call { function, args } => {
+                            let function = function.join(".");
+                            out.push_str(&format!("call {function:?}{args:?}"));
+                        }
+                        Operation::CallPointer { pointer, args } => todo!(),
+                        Operation::LoadGlobal { src } => {
+                            out.push_str("global \"");
+                            out.push_str(
+                                &String::from_utf8(module.constants[*src].clone()).unwrap(),
+                            );
+                            out.push('\"');
+                        }
+                        Operation::LoadLocal { src } => {
+                            out.push('$');
+                            out.push_str(&src.to_string());
+                        }
+                        Operation::Phi { block_to_var } => {
+                            out.push_str(&format!("phi {block_to_var:?}"));
+                        }
+                    }
+                }
+            }
+            out.push('\n');
+        }
+        for _ in 0..indentation + 1 {
+            out.push_str("\t");
+        }
+        match block.terminal {
+            Terminal::CondJump { cond, then, els } => {
+                out.push_str(&format!("if ${} then {} else {}", cond, then, els));
+            }
+            Terminal::Jump(target) => {
+                out.push_str(&format!("jump {}", target));
+            }
+            Terminal::Return(ret) => {
+                out.push_str(&format!(
+                    "return {}",
+                    match ret {
+                        Some(var) => format!("${}", var),
+                        None => "void".to_string(),
+                    }
+                ));
+            }
+            Terminal::Evaluate(ret) => {
+                out.push_str(&format!(
+                    "evaluate {}",
+                    match ret {
+                        Some(var) => format!("${}", var),
+                        None => "void".to_string(),
+                    }
+                ));
+            }
+            Terminal::ThenElseJump(tej) => {
+                out.push_str(&format!("then else jump {tej:?}"));
+            }
+        }
+        out.push('\n');
+    }
+    out
 }

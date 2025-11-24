@@ -4,32 +4,35 @@ use crate::ir::{Block, Function, Module, Operation, Statement, Terminal};
 
 pub type VarRepr = Vec<u8>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum RunResult {
     Concrete(Vec<u8>),
-    Partial(Vec<Block<VarRepr>>, HashMap<usize, Option<Vec<u8>>>),
+    Partial(Vec<Block>, HashMap<usize, Option<Vec<u8>>>),
+    ConditionalPartial {
+        condition: (Vec<Block>, HashMap<usize, Option<Vec<u8>>>),
+        then: Box<RunResult>,
+        els: Box<RunResult>,
+    },
+    ThenElseJump(bool),
 }
 
-pub fn run(
-    module: &Module<VarRepr>,
-    function: Function<VarRepr>,
-    args: Vec<Option<Vec<u8>>>,
-) -> RunResult {
+pub fn run(module: &Module, function: Function, args: Vec<Option<Vec<u8>>>) -> RunResult {
     let mut vars = HashMap::new();
     for (idx, arg) in args.iter().enumerate() {
         vars.insert(idx, arg.clone());
     }
-    evaluate(module, function.ir, &mut vars)
+    evaluate(module, function.ir, &mut vars, 0)
 }
 
 pub fn evaluate(
-    module: &Module<VarRepr>,
-    mut blocks: Vec<Block<VarRepr>>,
+    module: &Module,
+    mut blocks: Vec<Block>,
     vars: &mut HashMap<usize, Option<Vec<u8>>>,
+    start_block: usize,
 ) -> RunResult {
-    let mut out: Vec<Statement<VarRepr>> = Vec::new();
+    let mut out: Vec<Statement> = Vec::new();
 
-    let mut block = 0;
+    let mut block = start_block;
     let mut last_block = 0;
 
     loop {
@@ -38,7 +41,7 @@ pub fn evaluate(
                 Statement::Operation(op, store) => match op {
                     Operation::LoadGlobal { src } => {
                         if let Some(store) = store {
-                            vars.insert(*store, Some(module.constants[*src].1.clone()));
+                            vars.insert(*store, Some(module.constants[*src].clone()));
                         }
                     }
                     Operation::Call { function, args } => {
@@ -65,11 +68,10 @@ pub fn evaluate(
                                         vars.insert(*store, Some(res));
                                     }
                                 }
-                                RunResult::Partial(blocks, variables) => {
-                                    out.push(Statement::Operation(
-                                        Operation::PartialCall { blocks, variables },
-                                        *store,
-                                    ));
+                                _ => {
+                                    todo!(
+                                        "Inline functions when they can't be completely evaluated"
+                                    );
                                 }
                             }
                         }
@@ -113,7 +115,7 @@ pub fn evaluate(
                     return RunResult::Concrete(data.clone());
                 }
                 Some(None) => return RunResult::Partial(blocks, vars.clone()),
-                None => panic!("returning undefined variable"),
+                None => panic!("returning undefined variable {var}"),
             },
             Terminal::Jump(b) => block = b,
             Terminal::CondJump { cond, then, els } => match vars.get(&cond) {
@@ -126,9 +128,30 @@ pub fn evaluate(
                         block = els;
                     }
                 }
-                Some(None) => return RunResult::Partial(blocks, vars.clone()),
+                Some(None) => {
+                    let mut then_vars = vars.clone();
+                    let then_result = evaluate(module, blocks.clone(), &mut then_vars, then);
+
+                    let mut else_vars = vars.clone();
+                    let else_result = evaluate(module, blocks.clone(), &mut else_vars, els);
+
+                    blocks[block].terminal = Terminal::ThenElseJump(cond);
+
+                    return RunResult::ConditionalPartial {
+                        condition: (blocks, vars.clone()),
+                        then: Box::new(then_result),
+                        els: Box::new(else_result),
+                    };
+                }
                 None => panic!("conditional jump cond was an undefined variable"),
             },
+            Terminal::ThenElseJump(var) => {
+                if let Some(Some(var)) = vars.get(&var) {
+                    return RunResult::ThenElseJump(var.len() > 1 && var[0] != 0);
+                } else {
+                    panic!("variable unknown even after second pass {var}")
+                }
+            }
             ref a => panic!("Unknown {a:?}"),
         }
     }

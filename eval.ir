@@ -1,151 +1,53 @@
-Partial(
-    [
-        Block {
-            statements: [
-                Operation(
-                    LoadLocal {
-                        src: 1,
-                    },
-                    Some(
-                        2,
-                    ),
-                ),
-                Operation(
-                    LoadLocal {
-                        src: 2,
-                    },
-                    Some(
-                        3,
-                    ),
-                ),
-            ],
-            terminal: CondJump {
-                cond: 3,
-                then: 1,
-                els: 2,
-            },
-        },
-        Block {
-            statements: [
-                Operation(
-                    LoadLocal {
-                        src: 0,
-                    },
-                    Some(
-                        4,
-                    ),
-                ),
-                Operation(
-                    LoadGlobal {
-                        src: 0,
-                    },
-                    Some(
-                        5,
-                    ),
-                ),
-                Operation(
-                    Call {
-                        function: [
-                            "print",
-                        ],
-                        args: [
-                            4,
-                            5,
-                        ],
-                    },
-                    None,
-                ),
-                Operation(
-                    LoadGlobal {
-                        src: 1,
-                    },
-                    Some(
-                        4,
-                    ),
-                ),
-            ],
-            terminal: Jump(
-                3,
-            ),
-        },
-        Block {
-            statements: [
-                Operation(
-                    LoadLocal {
-                        src: 0,
-                    },
-                    Some(
-                        6,
-                    ),
-                ),
-                Operation(
-                    LoadGlobal {
-                        src: 2,
-                    },
-                    Some(
-                        7,
-                    ),
-                ),
-                Operation(
-                    Call {
-                        function: [
-                            "print",
-                        ],
-                        args: [
-                            6,
-                            7,
-                        ],
-                    },
-                    None,
-                ),
-                Operation(
-                    LoadGlobal {
-                        src: 3,
-                    },
-                    Some(
-                        6,
-                    ),
-                ),
-            ],
-            terminal: Jump(
-                3,
-            ),
-        },
-        Block {
-            statements: [
-                Operation(
-                    Phi {
-                        block_to_var: {
-                            2: 6,
-                            1: 4,
-                        },
-                    },
-                    Some(
-                        3,
-                    ),
-                ),
-                Operation(
-                    LoadGlobal {
-                        src: 4,
-                    },
-                    Some(
-                        2,
-                    ),
-                ),
-            ],
-            terminal: Return(
-                Some(
-                    2,
-                ),
-            ),
-        },
-    ],
-    {
-        0: Some(
-            [],
-        ),
-        1: None,
-        2: None,
-        3: None,
-    },
-)
+0:
+	$2 = $1
+	if $2 then 4 else 5
+1:
+	$3 = $0
+	$4 = global "it's true!"
+	call "print"[3, 4]
+	$3 = global ""
+	jump 3
+2:
+	$5 = $0
+	$6 = global "it's not true!"
+	call "print"[5, 6]
+	$5 = global ""
+	jump 3
+3:
+	$2 = phi {2: 5, 1: 3}
+	$2 = global ""
+	return $2
+4:
+	$5 = pcall copies {} start 1
+		0:
+			$2 = $1
+			if $2 then 1 else 2
+		1:
+			jump 3
+		2:
+			$5 = $0
+			$6 = global "it's not true!"
+			call "print"[5, 6]
+			$5 = global ""
+			jump 3
+		3:
+			return $2
+
+	return $5
+5:
+	$5 = pcall copies {} start 2
+		0:
+			$2 = $1
+			if $2 then 1 else 2
+		1:
+			$3 = $0
+			$4 = global "it's true!"
+			call "print"[3, 4]
+			$3 = global ""
+			jump 3
+		2:
+			jump 3
+		3:
+			return $2
+
+	return $5

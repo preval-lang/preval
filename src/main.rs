@@ -2,6 +2,7 @@ use std::fs;
 
 use crate::{
     // compiler::compile,
+    ir::{Module, to_string},
     module_parser::parse_module,
     tokeniser::{get_line_and_column, tokenise},
     vm::{RunResult, evaluate, run},
@@ -32,17 +33,23 @@ fn main() {
 
                     let mut main = module.functions.remove("main").unwrap();
 
-                    let eval = run(&module, main, vec![Some(Vec::new()), None]);
+                    let eval = run(&mut module, main, vec![Some(Vec::new()), None]);
 
-                    fs::write("eval.ir", format!("{eval:#?}")).unwrap();
+                    // fs::write(
+                    //     "eval.ir",
+                    //     match eval.clone() {
+                    //         RunResult::Concrete(_) => todo!(),
+                    //         RunResult::Partial(blocks, vars) => {
+                    //             to_string(&module, &blocks, vars, 0)
+                    //         },
+                    //         RunResult::ConditionalPartial { condition, then, els } => {
 
-                    match eval {
-                        RunResult::Partial(blocks, mut vars) => {
-                            vars.insert(1, Some(Vec::new()));
-                            evaluate(&module, blocks, &mut vars);
-                        }
-                        _ => {}
-                    }
+                    //         }
+                    //     },
+                    // )
+                    // .unwrap();
+
+                    run_entire_program(&module, eval);
                 }
                 Err(err) => {
                     let (line, column) = get_line_and_column(&src, err.idx).unwrap();
@@ -50,5 +57,32 @@ fn main() {
                 }
             }
         }
+    }
+}
+
+fn run_entire_program(module: &Module, eval: RunResult) -> bool {
+    match eval {
+        RunResult::Concrete(_) => false,
+        RunResult::Partial(blocks, mut vars) => {
+            vars.insert(1, Some(Vec::new()));
+            run_entire_program(module, evaluate(module, blocks, &mut vars, 0))
+        }
+        RunResult::ConditionalPartial {
+            condition,
+            then,
+            els,
+        } => {
+            let (cond_blocks, mut cond_vars) = condition;
+            cond_vars.insert(1, Some(Vec::new()));
+            run_entire_program(
+                module,
+                if run_entire_program(module, evaluate(module, cond_blocks, &mut cond_vars, 0)) {
+                    *then
+                } else {
+                    *els
+                },
+            )
+        }
+        RunResult::ThenElseJump(bool) => bool,
     }
 }

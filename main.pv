@@ -1,5 +1,5 @@
 fn main(compile_io: IO, io: IO) {
-    let b = if  {
+    let a = if io {
         print(compile_io, "it's true!");
     } else {
         print(compile_io, "it's not true!");
