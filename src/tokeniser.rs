@@ -5,6 +5,7 @@ pub enum Keyword {
     Fn,
     If,
     Else,
+    Bool(bool)
 }
 
 impl TryFrom<&str> for Keyword {
@@ -17,6 +18,8 @@ impl TryFrom<&str> for Keyword {
             "fn" => Ok(Keyword::Fn),
             "if" => Ok(Keyword::If),
             "else" => Ok(Keyword::Else),
+            "true" => Ok(Keyword::Bool(true)),
+            "false" => Ok(Keyword::Bool(false)),
             _ => Err(()),
         }
     }

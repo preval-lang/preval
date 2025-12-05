@@ -14,6 +14,7 @@ pub enum Type {
     Slice(Box<Type>),
     Array(Box<Type>, usize),
     IO,
+    Bool
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

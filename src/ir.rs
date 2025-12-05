@@ -108,6 +108,7 @@ pub fn to_ir(
                 let (typ, value) = match lit {
                     Literal::String(str) => (Type::Slice(Box::new(Type::u8)), str.into_bytes()),
                     Literal::Number(n) => (Type::u8, vec![n]),
+                    Literal::Bool(v) => (Type::Bool, vec![if v {1} else {0}])
                 };
                 function.variable_types.insert(store, typ.clone());
                 function.ir[*block].statements.push(Statement::Operation(

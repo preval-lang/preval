@@ -158,6 +158,14 @@ pub fn parse_expression(tokens: &[InfoToken]) -> Result<InfoExpr, InfoParseError
             }),
             [
                 InfoToken {
+                    token: Token::Keyword(Keyword::Bool(value))
+                }
+            ] => Ok(InfoExpr {
+                idx:*idx,
+                expr: Expr::Literal(Literal::Bool(value))
+            }),
+            [
+                InfoToken {
                     token: Token::Name(name),
                     idx,
                 },
