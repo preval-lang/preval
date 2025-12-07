@@ -10,6 +10,28 @@ Module {
             120,
             116,
         ],
+        [
+            109,
+            121,
+            110,
+            97,
+            116,
+            105,
+            118,
+            101,
+        ],
+        [
+            103,
+            101,
+            116,
+            109,
+            101,
+            115,
+            115,
+            97,
+            103,
+            101,
+        ],
         [],
     ],
     functions: {
@@ -52,6 +74,34 @@ Module {
                                 src: 1,
                             },
                             Some(
+                                4,
+                            ),
+                        ),
+                        Operation(
+                            LoadGlobal {
+                                src: 2,
+                            },
+                            Some(
+                                5,
+                            ),
+                        ),
+                        Operation(
+                            Call {
+                                function: [
+                                    "call_native",
+                                ],
+                                args: [
+                                    4,
+                                    5,
+                                ],
+                            },
+                            None,
+                        ),
+                        Operation(
+                            LoadGlobal {
+                                src: 3,
+                            },
+                            Some(
                                 2,
                             ),
                         ),
@@ -65,14 +115,20 @@ Module {
             ],
             exported: true,
             variable_types: {
-                0: IO,
                 1: IO,
-                2: Tuple(
-                    [],
-                ),
                 3: Slice(
                     u8,
                 ),
+                4: Slice(
+                    u8,
+                ),
+                2: Tuple(
+                    [],
+                ),
+                5: Slice(
+                    u8,
+                ),
+                0: IO,
             },
             signature: Signature {
                 args: [
