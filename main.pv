@@ -1,12 +1,6 @@
-fn build(compile_io: IO, compiler: Compiler) {
-    compiler.executable("main", () => ma);
-    compiler.library("lib", () => )
-}
-
 fn main(compile_io: IO, io: IO) {
     let text = read_file(compile_io, "test.txt");
 
-    print(io, text);
+    let lib = load_library("native");
+    print(io, call_native(lib, "getmessage"));
 }
-
-fn library_function()

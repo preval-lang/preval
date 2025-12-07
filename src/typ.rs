@@ -14,7 +14,7 @@ pub enum Type {
     Slice(Box<Type>),
     Array(Box<Type>, usize),
     IO,
-    Bool
+    Bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -33,6 +33,7 @@ pub fn get_type(tokens: &[InfoToken], i: &mut usize) -> Result<Type, InfoParseEr
     let rv = match &tokens[*i].token {
         Token::Name(name) if name == "StringSlice" => Ok(Type::Slice(Box::new(Type::u8))),
         Token::Name(name) if name == "IO" => Ok(Type::IO),
+        Token::Name(name) if name == "bool" => Ok(Type::Bool),
         _ => Err(InfoParseError {
             idx: tokens[*i].idx,
             error: ParseError::TypeUndefined(tokens.to_vec()),

@@ -2,7 +2,10 @@ use std::{collections::HashMap, fs, process::exit};
 
 use serde::{Deserialize, Serialize};
 
-use crate::ir::{Block, Function, Module, Operation, Statement, Terminal};
+use crate::{
+    builtins::get_builtins,
+    ir::{Block, Function, Module, Operation, Statement, Terminal},
+};
 
 pub type VarRepr = Vec<u8>;
 
@@ -47,31 +50,8 @@ pub fn evaluate(
                         }
                     }
                     Operation::Call { function, args } => {
-                        if function[0].as_str() == "read_file" {
-                            if let Some(Some(_)) = vars.get(&args[0]).clone() {
-                                if let Some(Some(path)) = vars.get(&args[1]).clone() {
-                                    let contents =
-                                        fs::read(String::from_utf8(path.clone()).unwrap()).unwrap();
-                                    if let Some(store) = store {
-                                        vars.insert(*store, Some(contents));
-                                    }
-                                } else {
-                                    out.push(stmt.clone());
-                                }
-                            } else {
-                                out.push(stmt.clone());
-                            }
-                        }
-                        if function[0].as_str() == "print" {
-                            if let Some(Some(_)) = vars.get(&args[0]).clone() {
-                                if let Some(Some(message)) = vars.get(&args[1]).clone() {
-                                    println!("{}", String::from_utf8(message.to_vec()).unwrap())
-                                } else {
-                                    out.push(stmt.clone());
-                                }
-                            } else {
-                                out.push(stmt.clone());
-                            }
+                        if let Some(builtin) = get_builtins().get(&function[0]) {
+                            builtin.call(vars, args, store, &mut out, stmt);
                         } else if let Some(fun) = module.functions.get(&function[0]) {
                             match run(
                                 module,
@@ -137,7 +117,7 @@ pub fn evaluate(
             Terminal::Jump(b) => block = b,
             Terminal::CondJump { cond, then, els } => match vars.get(&cond) {
                 Some(Some(cond)) => {
-                    if cond.len() > 1 && cond[0] != 0 {
+                    if cond.len() >= 1 && cond[0] != 0 {
                         blocks[block].terminal = Terminal::Jump(then);
                         block = then;
                     } else {
@@ -164,7 +144,7 @@ pub fn evaluate(
             },
             Terminal::ThenElseJump(var) => {
                 if let Some(Some(var)) = vars.get(&var) {
-                    return RunResult::ThenElseJump(var.len() > 1 && var[0] != 0);
+                    return RunResult::ThenElseJump(var.len() >= 1 && var[0] != 0);
                 } else {
                     panic!("variable unknown even after second pass {var}")
                 }

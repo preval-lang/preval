@@ -9,6 +9,7 @@ use crate::{
 };
 
 // mod compiler;
+mod builtins;
 mod expression_parser;
 mod ir;
 mod module_parser;

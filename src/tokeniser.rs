@@ -5,7 +5,7 @@ pub enum Keyword {
     Fn,
     If,
     Else,
-    Bool(bool)
+    Bool(bool),
 }
 
 impl TryFrom<&str> for Keyword {
@@ -46,6 +46,7 @@ impl Operator {
 pub enum Literal {
     String(String),
     Number(u8),
+    Bool(bool),
 }
 
 #[derive(Debug, Clone, PartialEq)]

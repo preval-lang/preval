@@ -1,6 +1,7 @@
 use std::{collections::HashMap, usize};
 
 use crate::{
+    builtins::get_builtins,
     expression_parser::{InfoExpr, InfoParseError, ParseError, parse_expression},
     ir::{Block, Declaration, Function, Module, Terminal, to_ir},
     tokeniser::{InfoToken, Keyword, Operator, Token},
@@ -15,20 +16,9 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
 
     let mut declarations = HashMap::new();
 
-    declarations.insert(
-        "print".to_string(),
-        Declaration::Function(Signature {
-            args: vec![Type::IO, Type::Slice(Box::new(Type::u8))],
-            returns: Type::Tuple(Vec::new()),
-        }),
-    );
-    declarations.insert(
-        "read_file".to_string(),
-        Declaration::Function(Signature {
-            args: vec![Type::IO, Type::Slice(Box::new(Type::u8))],
-            returns: Type::Slice(Box::new(Type::u8)),
-        }),
-    );
+    for (name, builtin) in get_builtins() {
+        declarations.insert(name, Declaration::Function(builtin.get_signature()));
+    }
 
     let mut i = 0;
 

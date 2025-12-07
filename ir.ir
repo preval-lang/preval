@@ -48,34 +48,6 @@ Module {
                             ),
                         ),
                         Operation(
-                            LoadLocal {
-                                src: 1,
-                            },
-                            Some(
-                                4,
-                            ),
-                        ),
-                        Operation(
-                            LoadLocal {
-                                src: 2,
-                            },
-                            Some(
-                                5,
-                            ),
-                        ),
-                        Operation(
-                            Call {
-                                function: [
-                                    "print",
-                                ],
-                                args: [
-                                    4,
-                                    5,
-                                ],
-                            },
-                            None,
-                        ),
-                        Operation(
                             LoadGlobal {
                                 src: 1,
                             },
@@ -93,6 +65,7 @@ Module {
             ],
             exported: true,
             variable_types: {
+                0: IO,
                 1: IO,
                 2: Tuple(
                     [],
@@ -100,11 +73,6 @@ Module {
                 3: Slice(
                     u8,
                 ),
-                4: IO,
-                5: Slice(
-                    u8,
-                ),
-                0: IO,
             },
             signature: Signature {
                 args: [
