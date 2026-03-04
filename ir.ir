@@ -1,38 +1,11 @@
 Module {
     constants: [
-        [
-            116,
-            101,
-            115,
-            116,
-            46,
-            116,
-            120,
-            116,
-        ],
-        [
-            109,
-            121,
-            110,
-            97,
-            116,
-            105,
-            118,
-            101,
-        ],
-        [
-            103,
-            101,
-            116,
-            109,
-            101,
-            115,
-            115,
-            97,
-            103,
-            101,
-        ],
-        [],
+        string(
+            "Hello, World!",
+        ),
+        Tuple(
+            [],
+        ),
     ],
     functions: {
         "main": Function {
@@ -44,7 +17,7 @@ Module {
                                 src: 0,
                             },
                             Some(
-                                2,
+                                1,
                             ),
                         ),
                         Operation(
@@ -52,92 +25,54 @@ Module {
                                 src: 0,
                             },
                             Some(
-                                3,
+                                2,
                             ),
                         ),
                         Operation(
                             Call {
                                 function: [
-                                    "read_file",
+                                    "print",
                                 ],
                                 args: [
+                                    1,
                                     2,
-                                    3,
                                 ],
+                                generics: [],
                             },
-                            Some(
-                                2,
-                            ),
+                            None,
                         ),
                         Operation(
                             LoadGlobal {
                                 src: 1,
                             },
                             Some(
-                                4,
-                            ),
-                        ),
-                        Operation(
-                            LoadGlobal {
-                                src: 2,
-                            },
-                            Some(
-                                5,
-                            ),
-                        ),
-                        Operation(
-                            Call {
-                                function: [
-                                    "call_native",
-                                ],
-                                args: [
-                                    4,
-                                    5,
-                                ],
-                            },
-                            None,
-                        ),
-                        Operation(
-                            LoadGlobal {
-                                src: 3,
-                            },
-                            Some(
-                                2,
+                                1,
                             ),
                         ),
                     ],
                     terminal: Return(
                         Some(
-                            2,
+                            1,
                         ),
                     ),
                 },
             ],
             exported: true,
             variable_types: {
-                1: IO,
-                3: Slice(
-                    u8,
-                ),
-                4: Slice(
-                    u8,
-                ),
-                2: Tuple(
+                0: IO,
+                1: Tuple(
                     [],
                 ),
-                5: Slice(
-                    u8,
-                ),
-                0: IO,
+                2: string,
             },
             signature: Signature {
                 args: [
-                    IO,
                     IO,
                 ],
                 returns: Tuple(
                     [],
                 ),
+                generics: [],
             },
         },
     },

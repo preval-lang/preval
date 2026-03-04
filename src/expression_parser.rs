@@ -1,14 +1,14 @@
 use crate::{
-    ir::{Block, IRError, IRErrorInfo},
     tokeniser::{InfoToken, Keyword, Literal, Operator, Token},
+    typ::{Type, get_type},
 };
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Expr {
     Index(Box<InfoExpr>, Box<InfoExpr>),
     Var(String),
     Literal(Literal),
-    Call(Box<InfoExpr>, Vec<InfoExpr>),
+    Call(Box<InfoExpr>, Vec<InfoExpr>, Vec<Type>),
     Return(Option<Box<InfoExpr>>),
     Block(Vec<InfoExpr>, bool),
     Let(String, Box<InfoExpr>),
@@ -19,7 +19,7 @@ pub enum Expr {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct InfoExpr {
     pub idx: usize,
     pub expr: Expr,
@@ -40,16 +40,6 @@ pub enum ParseError {
     DuplicateName,
     TypeUndefined(Vec<InfoToken>),
     ExpectedBlock(Option<InfoToken>),
-    IRError(IRError),
-}
-
-impl From<IRErrorInfo> for InfoParseError {
-    fn from(value: IRErrorInfo) -> Self {
-        InfoParseError {
-            idx: value.idx,
-            error: ParseError::IRError(value.error),
-        }
-    }
 }
 
 pub fn parse_expression(tokens: &[InfoToken]) -> Result<InfoExpr, InfoParseError> {
@@ -127,8 +117,13 @@ pub fn parse_expression(tokens: &[InfoToken]) -> Result<InfoExpr, InfoParseError
                         })
                     }
                 }
-                Operator::Call(args) => {
+                Operator::Call(args, generics) => {
                     let left = parse_expression(&tokens[0..hp.1]).unwrap();
+
+                    let generics_types = generics
+                        .iter()
+                        .map(|ty| get_type(&ty, &mut 0).unwrap())
+                        .collect();
 
                     Ok(InfoExpr {
                         idx: left.idx,
@@ -138,6 +133,7 @@ pub fn parse_expression(tokens: &[InfoToken]) -> Result<InfoExpr, InfoParseError
                                 .filter(|a| !a.is_empty())
                                 .map(|a| parse_expression(&a).unwrap())
                                 .collect(),
+                            generics_types,
                         ),
                     })
                 }
@@ -174,12 +170,6 @@ pub fn parse_expression(tokens: &[InfoToken]) -> Result<InfoExpr, InfoParseError
                 idx: *idx,
                 expr: Expr::Var(name.clone()),
             }),
-            [
-                InfoToken {
-                    token: Token::Parens(tokens),
-                    idx: _,
-                },
-            ] => parse_expression(tokens),
             [
                 InfoToken {
                     token: Token::Keyword(Keyword::Return),

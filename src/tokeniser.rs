@@ -1,3 +1,5 @@
+use crate::{expression_parser::InfoExpr, module_parser::Function, typ::Signature};
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Keyword {
     Let,
@@ -28,7 +30,7 @@ impl TryFrom<&str> for Keyword {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Operator {
     Dot,
-    Call(Vec<Vec<InfoToken>>),
+    Call(Vec<Vec<InfoToken>>, Vec<Vec<InfoToken>>), //1:args 2:generics
     Assign,
 }
 
@@ -36,7 +38,7 @@ impl Operator {
     pub fn precidence(&self) -> i32 {
         match self {
             Operator::Dot => 0,
-            Operator::Call(_) => 1,
+            Operator::Call(_, _) => 1,
             Operator::Assign => 2,
         }
     }
@@ -47,6 +49,7 @@ pub enum Literal {
     String(String),
     Number(u8),
     Bool(bool),
+    Function(Box<Function>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -104,6 +107,30 @@ pub fn get_line_and_column(input: &str, idx: usize) -> Result<(usize, usize), EO
     Err(EOF {})
 }
 
+pub fn split_by_comma(tokens: Vec<InfoToken>) -> Vec<Vec<InfoToken>> {
+    let mut param_tokens: Vec<Vec<InfoToken>> = Vec::new();
+    for token in tokens {
+        if token.token != Token::Comma {
+            if let Some(last) = param_tokens.last_mut() {
+                last.push(token);
+            } else {
+                param_tokens.push(vec![token]);
+            }
+        } else {
+            param_tokens.push(Vec::new());
+        }
+    }
+
+    match param_tokens.last() {
+        Some(tks) if tks.is_empty() => {
+            param_tokens.remove(param_tokens.len() - 1);
+        }
+        _ => {}
+    }
+
+    param_tokens
+}
+
 pub fn tokenise(input: &str, offset: usize) -> Result<Vec<InfoToken>, TokeniseErrorInfo> {
     let mut out = Vec::new();
 
@@ -158,32 +185,36 @@ pub fn tokenise(input: &str, offset: usize) -> Result<Vec<InfoToken>, TokeniseEr
                 i += 1;
                 should_call = false;
             }
+            Some('<') => {
+                let read_generics = if let Token::Parens(contents) =
+                    read_parens(input, &mut i, offset, '<', '>')?.token
+                {
+                    contents
+                } else {
+                    panic!("read_parens failed to read")
+                };
+                let read_call = read_parens(input, &mut i, offset, '(', ')')?;
+                if let Token::Parens(tokens) = read_call.token {
+                    out.push(InfoToken {
+                        token: Token::Operator(Operator::Call(
+                            split_by_comma(tokens),
+                            split_by_comma(read_generics),
+                        )),
+                        idx: read_call.idx,
+                    });
+                } else {
+                    unreachable!("read_parens returned non-parens");
+                }
+            }
             Some('(') => {
                 if should_call {
                     let read_call = read_parens(input, &mut i, offset, '(', ')')?;
                     if let Token::Parens(tokens) = read_call.token {
-                        let mut param_tokens: Vec<Vec<InfoToken>> = Vec::new();
-                        for token in tokens {
-                            if token.token != Token::Comma {
-                                if let Some(last) = param_tokens.last_mut() {
-                                    last.push(token);
-                                } else {
-                                    param_tokens.push(vec![token]);
-                                }
-                            } else {
-                                param_tokens.push(Vec::new());
-                            }
-                        }
-
-                        match param_tokens.last() {
-                            Some(tks) if tks.is_empty() => {
-                                param_tokens.remove(param_tokens.len() - 1);
-                            }
-                            _ => {}
-                        }
-
                         out.push(InfoToken {
-                            token: Token::Operator(Operator::Call(param_tokens)),
+                            token: Token::Operator(Operator::Call(
+                                split_by_comma(tokens),
+                                Vec::new(),
+                            )),
                             idx: read_call.idx,
                         });
                     } else {

@@ -1,24 +1,29 @@
 use std::{collections::HashMap, usize};
 
 use crate::{
-    builtins::get_builtins,
     expression_parser::{InfoExpr, InfoParseError, ParseError, parse_expression},
-    ir::{Block, Declaration, Function, Module, Terminal, to_ir},
-    tokeniser::{InfoToken, Keyword, Operator, Token},
+    tokeniser::{InfoToken, Keyword, Literal, Operator, Token},
     typ::{Signature, Type, get_type},
 };
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Function {
+    pub signature: Signature,
+    pub body: InfoExpr,
+    pub exported: bool,
+}
+
+#[derive(Debug)]
+pub struct Module {
+    pub constants: HashMap<String, (Literal, bool)>,
+}
+
 pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
     let mut module = Module {
-        constants: Vec::new(),
-        functions: HashMap::new(),
+        constants: HashMap::new(),
     };
 
     let mut declarations = HashMap::new();
-
-    for (name, builtin) in get_builtins() {
-        declarations.insert(name, Declaration::Function(builtin.get_signature()));
-    }
 
     let mut i = 0;
 
@@ -31,7 +36,12 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
 
                     let mut args = Vec::new();
 
-                    if let Token::Operator(Operator::Call(arg_colon_types)) = &tokens[i].token {
+                    if let Token::Operator(Operator::Call(arg_colon_types, generics)) =
+                        &tokens[i].token
+                    {
+                        if generics.len() != 0 {
+                            todo!("GENERICS at module parser")
+                        }
                         for arg_colon_type in arg_colon_types {
                             if let [
                                 InfoToken {
@@ -60,40 +70,22 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                     let signature = Signature {
                         args: args.iter().map(|arg| arg.1.clone()).collect(),
                         returns,
+                        generics: Vec::new(),
                     };
-                    declarations.insert(name.clone(), Declaration::Function(signature.clone()));
+                    declarations.insert(name.clone(), Type::Function(Box::new(signature.clone())));
 
                     let body = expect_block_or_expr(tokens, &mut i)?;
 
                     let next_var = args.len();
 
-                    let mut function = Function {
-                        ir: vec![Block {
-                            terminal: Terminal::Return(Some(next_var)),
-                            statements: Vec::new(),
-                        }],
-                        exported: true,
-                        variable_types: HashMap::new(),
-                        signature,
-                    };
-
-                    let mut locals = HashMap::new();
-                    for (idx, arg) in args.iter().enumerate() {
-                        function.variable_types.insert(idx, arg.1.clone());
-                        locals.insert(arg.0.clone(), Declaration::Variable(idx));
-                    }
-
-                    to_ir(
-                        &mut function,
-                        &mut 0,
-                        &mut module,
-                        body,
-                        Some(next_var),
-                        &mut declarations,
-                        &mut locals,
-                    )?;
-
-                    if let Some(_) = module.functions.insert(name.to_string(), function) {
+                    if let Some(_) = module.constants.insert(
+                        name.to_string(),
+                        Literal::Function(Box::new(Function {
+                            body: body,
+                            signature,
+                            exported: true,
+                        })),
+                    ) {
                         return Err(InfoParseError {
                             idx: tokens[i].idx,
                             error: ParseError::DuplicateName,

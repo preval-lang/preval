@@ -4,25 +4,25 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     builtins::get_builtins,
-    ir::{Block, Function, Module, Operation, Statement, Terminal},
+    ir_old::{Block, Function, Module, Operation, Statement, Terminal, Value},
 };
 
 pub type VarRepr = Vec<u8>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RunResult {
-    Concrete(Vec<u8>),
-    Partial(Vec<Block>, HashMap<usize, Option<Vec<u8>>>),
+    Concrete(Value),
+    Partial(Vec<Block>, HashMap<usize, Option<Value>>),
     ConditionalPartial {
-        condition: (Vec<Block>, HashMap<usize, Option<Vec<u8>>>),
+        condition: (Vec<Block>, HashMap<usize, Option<Value>>),
         then: Box<RunResult>,
         els: Box<RunResult>,
     },
     ThenElseJump(bool),
 }
 
-pub fn run(module: &Module, function: Function, args: Vec<Option<Vec<u8>>>) -> RunResult {
-    let mut vars = HashMap::new();
+pub fn run(module: &Module, function: Function, args: Vec<Option<Value>>) -> RunResult {
+    let mut vars: HashMap<usize, Option<Value>> = HashMap::new();
     for (idx, arg) in args.iter().enumerate() {
         vars.insert(idx, arg.clone());
     }
@@ -32,7 +32,7 @@ pub fn run(module: &Module, function: Function, args: Vec<Option<Vec<u8>>>) -> R
 pub fn evaluate(
     module: &Module,
     mut blocks: Vec<Block>,
-    vars: &mut HashMap<usize, Option<Vec<u8>>>,
+    vars: &mut HashMap<usize, Option<Value>>,
     start_block: usize,
 ) -> RunResult {
     let mut out: Vec<Statement> = Vec::new();
@@ -49,9 +49,13 @@ pub fn evaluate(
                             vars.insert(*store, Some(module.constants[*src].clone()));
                         }
                     }
-                    Operation::Call { function, args } => {
+                    Operation::Call {
+                        function,
+                        args,
+                        generics,
+                    } => {
                         if let Some(builtin) = get_builtins().get(&function[0]) {
-                            builtin.call(vars, args, store, &mut out, stmt);
+                            builtin.call(vars, generics, args, store, &mut out, stmt);
                         } else if let Some(fun) = module.functions.get(&function[0]) {
                             match run(
                                 module,
@@ -116,8 +120,8 @@ pub fn evaluate(
             },
             Terminal::Jump(b) => block = b,
             Terminal::CondJump { cond, then, els } => match vars.get(&cond) {
-                Some(Some(cond)) => {
-                    if cond.len() >= 1 && cond[0] != 0 {
+                Some(Some(Value::bool(cond))) => {
+                    if *cond {
                         blocks[block].terminal = Terminal::Jump(then);
                         block = then;
                     } else {
@@ -141,10 +145,12 @@ pub fn evaluate(
                     };
                 }
                 None => panic!("conditional jump cond was an undefined variable"),
+
+                _ => panic!("conditional jump cond was not a bool"),
             },
             Terminal::ThenElseJump(var) => {
-                if let Some(Some(var)) = vars.get(&var) {
-                    return RunResult::ThenElseJump(var.len() >= 1 && var[0] != 0);
+                if let Some(Some(Value::bool(cond))) = vars.get(&var) {
+                    return RunResult::ThenElseJump(*cond);
                 } else {
                     panic!("variable unknown even after second pass {var}")
                 }

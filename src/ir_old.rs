@@ -1,4 +1,4 @@
-use std::{any::type_name_of_val, collections::HashMap};
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -24,12 +24,23 @@ pub enum IRError {
     ExtraArgument(),
     NotStorable(String),
     MissingElseBlock(),
+    IncorrectGenerics,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum Value {
+    Slice(Vec<Value>),
+    Tuple(Vec<Value>),
+    u8(u8),
+    bool(bool),
+    string(String),
+    IO,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 
 pub struct Module {
-    pub constants: Vec<Vec<u8>>,
+    pub constants: Vec<Value>,
     pub functions: HashMap<String, Function>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,6 +62,7 @@ pub enum Operation {
     Call {
         function: Vec<String>,
         args: Vec<usize>,
+        generics: Vec<Type>,
     },
     CallPointer {
         pointer: usize,
@@ -106,9 +118,10 @@ pub fn to_ir(
         Expr::Literal(lit) => {
             if let Some(store) = store {
                 let (typ, value) = match lit {
-                    Literal::String(str) => (Type::Slice(Box::new(Type::u8)), str.into_bytes()),
-                    Literal::Number(n) => (Type::u8, vec![n]),
-                    Literal::Bool(v) => (Type::Bool, vec![if v {1} else {0}])
+                    Literal::String(str) => (Type::string, Value::string(str)),
+                    Literal::Number(n) => (Type::u8, Value::u8(n)),
+                    Literal::Bool(v) => (Type::Bool, Value::bool(v)),
+                    Literal::EmptyTuple() => (Type::Tuple(Vec::new()), Value::Tuple(Vec::new())),
                 };
                 function.variable_types.insert(store, typ.clone());
                 function.ir[*block].statements.push(Statement::Operation(
@@ -176,7 +189,7 @@ pub fn to_ir(
                     },
                     store,
                 ));
-                module.constants.push(Vec::new());
+                module.constants.push(Value::Tuple(Vec::new()));
                 function
                     .variable_types
                     .insert(store.unwrap(), Type::Tuple(Vec::new()));
@@ -201,7 +214,7 @@ pub fn to_ir(
             });
             Ok(())
         }
-        Expr::Call(callee, args) => {
+        Expr::Call(callee, args, generics) => {
             let mut name = Vec::new();
 
             let callee = *callee;
@@ -223,6 +236,37 @@ pub fn to_ir(
                         });
                     }
                 };
+
+                if sig.generics.len() != generics.len() {
+                    println!("GENERICS: {generics:?} EXPECTED: {sig:?}");
+                    return Err(IRErrorInfo {
+                        idx: callee.idx,
+                        error: IRError::IncorrectGenerics,
+                    });
+                }
+
+                let sig = Signature {
+                    args: {
+                        let mut out = Vec::new();
+
+                        for arg in &sig.args {
+                            if let Type::Generic(num) = arg {
+                                out.push(generics[*num].clone());
+                            } else {
+                                out.push(arg.clone());
+                            }
+                        }
+
+                        out
+                    },
+                    returns: if let Type::Generic(returns) = sig.returns {
+                        generics[returns].clone()
+                    } else {
+                        sig.returns.clone()
+                    },
+                    generics: Vec::new(),
+                };
+
                 for (arg_index, type_index) in arg_indexes.iter().enumerate() {
                     if let Some(typ) = sig.args.get(arg_index) {
                         if function.variable_types[type_index] != *typ {
@@ -248,6 +292,7 @@ pub fn to_ir(
                         Operation::Call {
                             function: name,
                             args: arg_indexes,
+                            generics,
                         },
                         Some(store),
                     ));
@@ -256,6 +301,7 @@ pub fn to_ir(
                         Operation::Call {
                             function: name,
                             args: arg_indexes,
+                            generics,
                         },
                         None,
                     ));
@@ -863,16 +909,18 @@ pub fn to_string(
                         out.push_str(" = ");
                     }
                     match op {
-                        Operation::Call { function, args } => {
+                        Operation::Call {
+                            function,
+                            args,
+                            generics,
+                        } => {
                             let function = function.join(".");
-                            out.push_str(&format!("call {function:?}{args:?}"));
+                            out.push_str(&format!("call {function:?}{generics:?}{args:?}"));
                         }
                         Operation::CallPointer { pointer, args } => todo!(),
                         Operation::LoadGlobal { src } => {
                             out.push_str("global \"");
-                            out.push_str(
-                                &String::from_utf8(module.constants[*src].clone()).unwrap(),
-                            );
+                            out.push_str(&format!("{:?}", module.constants[*src]));
                             out.push('\"');
                         }
                         Operation::LoadLocal { src } => {
