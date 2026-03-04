@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::{collections::HashMap, fs, process::exit};
 
 use serde::{Deserialize, Serialize};
@@ -39,18 +40,22 @@ pub fn evaluate(
     let mut block = start_block;
     let mut last_block = 0;
 
+    let mut no_delete: HashSet<usize> = HashSet::new();
+
     loop {
         for stmt in &blocks[block].statements {
             match stmt {
                 Statement::Operation(op, store) => match op {
-                    Operation::Index(left, right) => match vars.get(left) {
+                    Operation::Index(leftn, rightn) => match vars.get(leftn) {
                         Some(None) => {
                             out.push(stmt.clone());
                         }
                         None => panic!("Undefined variable in index"),
-                        Some(Some(left)) => match vars.get(right) {
+                        Some(Some(left)) => match vars.get(rightn) {
                             Some(None) => {
                                 out.push(stmt.clone());
+                                no_delete.insert(*leftn);
+                                no_delete.insert(*rightn);
                             }
                             None => panic!("Undefined variable in index"),
                             Some(Some(right)) => match (left, right) {
@@ -73,7 +78,7 @@ pub fn evaluate(
                     }
                     Operation::Call { function, args } => {
                         if let Some(builtin) = get_builtins().get(&function[0]) {
-                            builtin.call(vars, args, store, &mut out, stmt);
+                            builtin.call(vars, args, store, &mut out, stmt, &mut no_delete);
                         } else if let Some(fun) = module.functions.get(&function[0]) {
                             match run(
                                 module,
@@ -101,6 +106,8 @@ pub fn evaluate(
                                 vars.insert(*store, Some(data.clone()));
                             } else {
                                 out.push(stmt.clone());
+                                no_delete.insert(*store);
+                                no_delete.insert(*src);
                                 vars.insert(*store, None);
                             }
                         }
@@ -113,8 +120,16 @@ pub fn evaluate(
                             vars.insert(*store, vars.get(var_num).expect("Phi evaluated to undefined variable, must have forgot to store the result of the block").clone());
                         }
                     }
+
                     a => todo!("Other ops {a:?}"),
                 },
+                Statement::Delete(var) => {
+                    if no_delete.contains(var) {
+                        out.push(stmt.clone());
+                    } else {
+                        vars.remove(var);
+                    }
+                }
             }
         }
 

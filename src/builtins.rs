@@ -1,4 +1,9 @@
-use std::{collections::HashMap, ffi::OsString, fs, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    ffi::OsString,
+    fs,
+    str::FromStr,
+};
 
 use libloading::{Library, Symbol, library_filename};
 
@@ -19,6 +24,7 @@ pub trait Builtin {
         store: &Option<usize>,
         out: &mut Vec<Statement>,
         stmt: &Statement,
+        no_delete: &mut HashSet<usize>,
     ) {
     }
 }
@@ -48,15 +54,37 @@ impl Builtin for Print {
         store: &Option<usize>,
         out: &mut Vec<Statement>,
         stmt: &Statement,
+        no_delete: &mut HashSet<usize>,
     ) {
-        if let Some(Some(_)) = vars.get(&args[0]).clone() {
-            if let Some(Some(message)) = vars.get(&args[1]).clone() {
-                println!("{}", message)
-            } else {
+        println!("GOT HERE!");
+        match vars.get(&args[0]).clone() {
+            Some(Some(_)) => match vars.get(&args[1]).clone() {
+                Some(Some(message)) => {
+                    if let Some(Some(message)) = vars.get(&args[1]).clone() {
+                        println!("{}", message)
+                    } else {
+                        no_delete.insert(args[0]);
+                        no_delete.insert(args[1]);
+                        out.push(stmt.clone());
+                    }
+                }
+                Some(None) => {
+                    no_delete.insert(args[0]);
+                    no_delete.insert(args[1]);
+                    out.push(stmt.clone());
+                }
+                None => {
+                    panic!("use of dropped variable");
+                }
+            },
+            Some(None) => {
+                no_delete.insert(args[0]);
+                no_delete.insert(args[1]);
                 out.push(stmt.clone());
             }
-        } else {
-            out.push(stmt.clone());
+            None => {
+                panic!("use of dropped variable");
+            }
         }
     }
 }
@@ -76,6 +104,7 @@ impl Builtin for ReadFile {
         store: &Option<usize>,
         out: &mut Vec<Statement>,
         stmt: &Statement,
+        no_delete: &mut HashSet<usize>,
     ) {
         if let Some(Some(_)) = vars.get(&args[0]).clone() {
             if let Some(Some(path)) = vars.get(&args[1]).clone() {
@@ -92,9 +121,13 @@ impl Builtin for ReadFile {
                     o => panic!("Incorrect path type"),
                 }
             } else {
+                no_delete.insert(args[0]);
+                no_delete.insert(args[1]);
                 out.push(stmt.clone());
             }
         } else {
+            no_delete.insert(args[0]);
+            no_delete.insert(args[1]);
             out.push(stmt.clone());
         }
     }

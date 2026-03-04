@@ -1,5 +1,3 @@
 fn main(compile_io: IO, io: IO) {
-    let text = "hi";
-
     print(io, text[1]);
 }

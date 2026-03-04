@@ -1,10 +1,10 @@
-use std::{any::type_name_of_val, collections::HashMap};
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
     expression_parser::{Expr, InfoExpr},
-    typ::{Pointer, Signature, Type},
+    typ::{Signature, Type},
 };
 
 use crate::value::Value;
@@ -43,6 +43,7 @@ pub struct Function {
 pub enum Statement {
     // maybe get rid of this, there aren't any non-operation statements after introducing Terminals and Blocks
     Operation(Operation, Option<usize>),
+    Delete(usize),
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -67,7 +68,6 @@ pub enum Operation {
 
 #[derive(Debug)]
 pub enum Declaration {
-    Module(HashMap<String, Declaration>),
     Function(Signature),
     Variable(usize),
 }
@@ -136,6 +136,7 @@ pub fn to_ir(
             Ok(())
         }
         Expr::Block(statements, returns) => {
+            let delete_group_start = *next_var + 1;
             let mut i = 0;
             let len = statements.len();
             for statement in statements {
@@ -163,6 +164,12 @@ pub fn to_ir(
                     )?;
                 }
                 i += 1;
+            }
+
+            let delete_group_end = *next_var + 1;
+
+            for i in delete_group_start..delete_group_end {
+                function.ir[*block].statements.push(Statement::Delete(i));
             }
 
             if (len == 0 || !returns) && store.is_some() {
@@ -852,7 +859,7 @@ fn get_declaration<'a>(
             Some(decl) => {
                 if names.len() > 1 {
                     match decl {
-                        Declaration::Module(module) => get_declaration(&names[1..], module, idx),
+                        // Declaration::Module(module) => get_declaration(&names[1..], module, idx),
                         _ => Err(IRErrorInfo {
                             idx,
                             error: IRError::SymbolNotIndexable(name.clone()),
@@ -916,6 +923,9 @@ pub fn to_string(blocks: &Vec<Block>, indentation: usize) -> String {
                             out.push_str(&format!("${left}[${right}]"));
                         }
                     }
+                }
+                Statement::Delete(var) => {
+                    out.push_str(&format!("delete ${var}"));
                 }
             }
             out.push('\n');
