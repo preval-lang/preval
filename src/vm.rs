@@ -2,26 +2,25 @@ use std::{collections::HashMap, fs, process::exit};
 
 use serde::{Deserialize, Serialize};
 
+use crate::value::Value;
 use crate::{
     builtins::get_builtins,
     ir::{Block, Function, Module, Operation, Statement, Terminal},
 };
 
-pub type VarRepr = Vec<u8>;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RunResult {
-    Concrete(Vec<u8>),
-    Partial(Vec<Block>, HashMap<usize, Option<Vec<u8>>>),
+    Concrete(Value),
+    Partial(Vec<Block>, HashMap<usize, Option<Value>>),
     ConditionalPartial {
-        condition: (Vec<Block>, HashMap<usize, Option<Vec<u8>>>),
+        condition: (Vec<Block>, HashMap<usize, Option<Value>>),
         then: Box<RunResult>,
         els: Box<RunResult>,
     },
     ThenElseJump(bool),
 }
 
-pub fn run(module: &Module, function: Function, args: Vec<Option<Vec<u8>>>) -> RunResult {
+pub fn run(module: &Module, function: Function, args: Vec<Option<Value>>) -> RunResult {
     let mut vars = HashMap::new();
     for (idx, arg) in args.iter().enumerate() {
         vars.insert(idx, arg.clone());
@@ -32,7 +31,7 @@ pub fn run(module: &Module, function: Function, args: Vec<Option<Vec<u8>>>) -> R
 pub fn evaluate(
     module: &Module,
     mut blocks: Vec<Block>,
-    vars: &mut HashMap<usize, Option<Vec<u8>>>,
+    vars: &mut HashMap<usize, Option<Value>>,
     start_block: usize,
 ) -> RunResult {
     let mut out: Vec<Statement> = Vec::new();
@@ -44,9 +43,32 @@ pub fn evaluate(
         for stmt in &blocks[block].statements {
             match stmt {
                 Statement::Operation(op, store) => match op {
-                    Operation::LoadGlobal { src } => {
+                    Operation::Index(left, right) => match vars.get(left) {
+                        Some(None) => {
+                            out.push(stmt.clone());
+                        }
+                        None => panic!("Undefined variable in index"),
+                        Some(Some(left)) => match vars.get(right) {
+                            Some(None) => {
+                                out.push(stmt.clone());
+                            }
+                            None => panic!("Undefined variable in index"),
+                            Some(Some(right)) => match (left, right) {
+                                (Value::String(left), Value::Usize(right)) => {
+                                    if let Some(store) = store {
+                                        vars.insert(
+                                            *store,
+                                            Some(Value::Char(left.chars().nth(*right).unwrap())),
+                                        );
+                                    }
+                                }
+                                _ => todo!("more index ops"),
+                            },
+                        },
+                    },
+                    Operation::LoadLiteral(lit) => {
                         if let Some(store) = store {
-                            vars.insert(*store, Some(module.constants[*src].clone()));
+                            vars.insert(*store, Some(lit.clone()));
                         }
                     }
                     Operation::Call { function, args } => {
@@ -116,8 +138,8 @@ pub fn evaluate(
             },
             Terminal::Jump(b) => block = b,
             Terminal::CondJump { cond, then, els } => match vars.get(&cond) {
-                Some(Some(cond)) => {
-                    if cond.len() >= 1 && cond[0] != 0 {
+                Some(Some(Value::Bool(b))) => {
+                    if *b {
                         blocks[block].terminal = Terminal::Jump(then);
                         block = then;
                     } else {
@@ -125,6 +147,7 @@ pub fn evaluate(
                         block = els;
                     }
                 }
+                Some(Some(other)) => panic!("Wrong value in condition"),
                 Some(None) => {
                     let mut then_vars = vars.clone();
                     let then_result = evaluate(module, blocks.clone(), &mut then_vars, then);
@@ -143,10 +166,10 @@ pub fn evaluate(
                 None => panic!("conditional jump cond was an undefined variable"),
             },
             Terminal::ThenElseJump(var) => {
-                if let Some(Some(var)) = vars.get(&var) {
-                    return RunResult::ThenElseJump(var.len() >= 1 && var[0] != 0);
+                if let Some(Some(Value::Bool(cond))) = vars.get(&var) {
+                    return RunResult::ThenElseJump(*cond);
                 } else {
-                    panic!("variable unknown even after second pass {var}")
+                    panic!("variable unknown even after second pass {var} OR of wrong type")
                 }
             }
             ref a => panic!("Unknown {a:?}"),

@@ -7,12 +7,14 @@ use crate::{
     typ::{Signature, Type},
 };
 
+use crate::value::Value;
+
 pub trait Builtin {
     fn get_signature(&self) -> Signature;
 
     fn call(
         &self,
-        vars: &mut HashMap<usize, Option<Vec<u8>>>,
+        vars: &mut HashMap<usize, Option<Value>>,
         args: &Vec<usize>,
         store: &Option<usize>,
         out: &mut Vec<Statement>,
@@ -25,7 +27,7 @@ pub fn get_builtins() -> HashMap<String, Box<dyn Builtin>> {
     let mut map: HashMap<String, Box<dyn Builtin>> = HashMap::new();
     map.insert(String::from("print"), Box::new(Print {}));
     map.insert(String::from("read_file"), Box::new(ReadFile {}));
-    map.insert(String::from("call_native"), Box::new(CallNative {}));
+    // map.insert(String::from("call_native"), Box::new(CallNative {}));
 
     map
 }
@@ -41,7 +43,7 @@ impl Builtin for Print {
 
     fn call(
         &self,
-        vars: &mut HashMap<usize, Option<Vec<u8>>>,
+        vars: &mut HashMap<usize, Option<Value>>,
         args: &Vec<usize>,
         store: &Option<usize>,
         out: &mut Vec<Statement>,
@@ -49,7 +51,7 @@ impl Builtin for Print {
     ) {
         if let Some(Some(_)) = vars.get(&args[0]).clone() {
             if let Some(Some(message)) = vars.get(&args[1]).clone() {
-                println!("{}", String::from_utf8(message.to_vec()).unwrap())
+                println!("{}", message)
             } else {
                 out.push(stmt.clone());
             }
@@ -69,7 +71,7 @@ impl Builtin for ReadFile {
 
     fn call(
         &self,
-        vars: &mut HashMap<usize, Option<Vec<u8>>>,
+        vars: &mut HashMap<usize, Option<Value>>,
         args: &Vec<usize>,
         store: &Option<usize>,
         out: &mut Vec<Statement>,
@@ -77,9 +79,17 @@ impl Builtin for ReadFile {
     ) {
         if let Some(Some(_)) = vars.get(&args[0]).clone() {
             if let Some(Some(path)) = vars.get(&args[1]).clone() {
-                let contents = fs::read(String::from_utf8(path.clone()).unwrap()).unwrap();
-                if let Some(store) = store {
-                    vars.insert(*store, Some(contents));
+                match path {
+                    Value::String(path) => {
+                        let contents = fs::read(path).unwrap();
+                        if let Some(store) = store {
+                            vars.insert(
+                                *store,
+                                Some(Value::String(String::from_utf8(contents).unwrap())),
+                            );
+                        }
+                    }
+                    o => panic!("Incorrect path type"),
                 }
             } else {
                 out.push(stmt.clone());
@@ -90,41 +100,41 @@ impl Builtin for ReadFile {
     }
 }
 
-struct CallNative {}
-impl Builtin for CallNative {
-    fn get_signature(&self) -> Signature {
-        Signature {
-            args: vec![
-                Type::Slice(Box::new(Type::u8)),
-                Type::Slice(Box::new(Type::u8)),
-            ],
-            returns: Type::Tuple(Vec::new()),
-        }
-    }
+// struct CallNative {}
+// impl Builtin for CallNative {
+//     fn get_signature(&self) -> Signature {
+//         Signature {
+//             args: vec![
+//                 Type::Slice(Box::new(Type::u8)),
+//                 Type::Slice(Box::new(Type::u8)),
+//             ],
+//             returns: Type::Tuple(Vec::new()),
+//         }
+//     }
 
-    fn call(
-        &self,
-        vars: &mut HashMap<usize, Option<Vec<u8>>>,
-        args: &Vec<usize>,
-        store: &Option<usize>,
-        out: &mut Vec<Statement>,
-        stmt: &Statement,
-    ) {
-        if let Some(Some(libname)) = vars.get(&args[0]) {
-            if let Some(Some(function_name)) = vars.get(&args[1]) {
-                unsafe {
-                    let lib = Library::new(library_filename(
-                        OsString::from_str(&String::from_utf8(libname.clone()).unwrap()).unwrap(),
-                    ))
-                    .unwrap();
-                    let fun: Symbol<unsafe extern "C" fn()> = lib.get(&function_name).unwrap();
-                    fun();
-                }
-            } else {
-                out.push(stmt.clone());
-            }
-        } else {
-            out.push(stmt.clone());
-        }
-    }
-}
+//     fn call(
+//         &self,
+//         vars: &mut HashMap<usize, Option<Value>>,
+//         args: &Vec<usize>,
+//         store: &Option<usize>,
+//         out: &mut Vec<Statement>,
+//         stmt: &Statement,
+//     ) {
+//         if let Some(Some(libname)) = vars.get(&args[0]) {
+//             if let Some(Some(function_name)) = vars.get(&args[1]) {
+//                 unsafe {
+//                     let lib = Library::new(library_filename(
+//                         OsString::from_str(&String::from_utf8(libname.clone()).unwrap()).unwrap(),
+//                     ))
+//                     .unwrap();
+//                     let fun: Symbol<unsafe extern "C" fn()> = lib.get(&function_name).unwrap();
+//                     fun();
+//                 }
+//             } else {
+//                 out.push(stmt.clone());
+//             }
+//         } else {
+//             out.push(stmt.clone());
+//         }
+//     }
+// }

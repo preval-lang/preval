@@ -2,11 +2,13 @@ use std::{env, fs};
 
 use crate::{
     // compiler::compile,
-    ir::{Module, to_string},
+    ir::{Module, module_to_string, to_string},
     module_parser::parse_module,
     tokeniser::{get_line_and_column, tokenise},
     vm::{RunResult, evaluate, run},
 };
+
+use value::Value;
 
 // mod compiler;
 mod builtins;
@@ -15,6 +17,7 @@ mod ir;
 mod module_parser;
 mod tokeniser;
 mod typ;
+mod value;
 mod vm;
 
 fn main() {
@@ -40,11 +43,11 @@ fn main() {
             let module = parse_module(&tokens);
             match module {
                 Ok(mut module) => {
-                    fs::write("ir.ir", format!("{module:#?}")).unwrap();
+                    fs::write("ir.ir", module_to_string(&module)).unwrap();
 
-                    let mut main = module.functions.remove("main").unwrap();
+                    let main = module.functions.remove("main").unwrap();
 
-                    let eval = run(&mut module, main, vec![Some(Vec::new()), None]);
+                    let eval = run(&mut module, main, vec![Some(Value::IO), None]);
 
                     if let Some(arg1) = env::args().collect::<Vec<_>>().get(1) {
                         if arg1 == "compile" {
@@ -54,19 +57,20 @@ fn main() {
                         }
                     }
 
-                    // fs::write(
-                    //     "eval.ir",
-                    //     match eval.clone() {
-                    //         RunResult::Concrete(_) => todo!(),
-                    //         RunResult::Partial(blocks, vars) => {
-                    //             to_string(&module, &blocks, vars, 0)
-                    //         },
-                    //         RunResult::ConditionalPartial { condition, then, els } => {
-
-                    //         }
-                    //     },
-                    // )
-                    // .unwrap();
+                    fs::write(
+                        "eval.ir",
+                        match eval.clone() {
+                            RunResult::Concrete(_) => todo!(),
+                            RunResult::Partial(blocks, vars) => to_string(&blocks, 0),
+                            RunResult::ConditionalPartial {
+                                condition,
+                                then,
+                                els,
+                            } => todo!(),
+                            _ => todo!(),
+                        },
+                    )
+                    .unwrap();
 
                     run_entire_program(&module, eval);
                 }
@@ -83,7 +87,7 @@ fn run_entire_program(module: &Module, eval: RunResult) -> bool {
     match eval {
         RunResult::Concrete(_) => false,
         RunResult::Partial(blocks, mut vars) => {
-            vars.insert(1, Some(Vec::new()));
+            vars.insert(1, Some(Value::IO));
             run_entire_program(module, evaluate(module, blocks, &mut vars, 0))
         }
         RunResult::ConditionalPartial {
@@ -92,7 +96,7 @@ fn run_entire_program(module: &Module, eval: RunResult) -> bool {
             els,
         } => {
             let (cond_blocks, mut cond_vars) = condition;
-            cond_vars.insert(1, Some(Vec::new()));
+            cond_vars.insert(1, Some(Value::IO));
             run_entire_program(
                 module,
                 if run_entire_program(module, evaluate(module, cond_blocks, &mut cond_vars, 0)) {

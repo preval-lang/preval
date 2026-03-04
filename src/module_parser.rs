@@ -10,7 +10,6 @@ use crate::{
 
 pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
     let mut module = Module {
-        constants: Vec::new(),
         functions: HashMap::new(),
     };
 
@@ -65,21 +64,19 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
 
                     let body = expect_block_or_expr(tokens, &mut i)?;
 
-                    let next_var = args.len();
+                    let mut last_var = args.len();
 
                     let mut function = Function {
                         ir: vec![Block {
-                            terminal: Terminal::Return(Some(next_var)),
+                            terminal: Terminal::Return(Some(last_var)),
                             statements: Vec::new(),
                         }],
                         exported: true,
-                        variable_types: HashMap::new(),
                         signature,
                     };
 
                     let mut locals = HashMap::new();
                     for (idx, arg) in args.iter().enumerate() {
-                        function.variable_types.insert(idx, arg.1.clone());
                         locals.insert(arg.0.clone(), Declaration::Variable(idx));
                     }
 
@@ -88,9 +85,10 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                         &mut 0,
                         &mut module,
                         body,
-                        Some(next_var),
+                        Some(last_var),
                         &mut declarations,
                         &mut locals,
+                        &mut last_var,
                     )?;
 
                     if let Some(_) = module.functions.insert(name.to_string(), function) {

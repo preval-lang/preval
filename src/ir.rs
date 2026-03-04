@@ -4,9 +4,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     expression_parser::{Expr, InfoExpr},
-    tokeniser::Literal,
     typ::{Pointer, Signature, Type},
 };
+
+use crate::value::Value;
 
 #[derive(Debug)]
 pub struct IRErrorInfo {
@@ -29,14 +30,12 @@ pub enum IRError {
 #[derive(Debug, Serialize, Deserialize)]
 
 pub struct Module {
-    pub constants: Vec<Vec<u8>>,
     pub functions: HashMap<String, Function>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Function {
     pub ir: Vec<Block>,
     pub exported: bool,
-    pub variable_types: HashMap<usize, Type>,
     pub signature: Signature,
 }
 
@@ -56,15 +55,14 @@ pub enum Operation {
         pointer: usize,
         args: Vec<usize>,
     },
-    LoadGlobal {
-        src: usize,
-    },
+    LoadLiteral(Value),
     LoadLocal {
         src: usize,
     },
     Phi {
         block_to_var: HashMap<usize, usize>,
     },
+    Index(usize, usize),
 }
 
 #[derive(Debug)]
@@ -101,41 +99,37 @@ pub fn to_ir(
     store: Option<usize>,
     declarations: &HashMap<String, Declaration>,
     locals: &mut HashMap<String, Declaration>,
+    next_var: &mut usize,
 ) -> Result<(), IRErrorInfo> {
     match expr.expr {
         Expr::Literal(lit) => {
             if let Some(store) = store {
-                let (typ, value) = match lit {
-                    Literal::String(str) => (Type::Slice(Box::new(Type::u8)), str.into_bytes()),
-                    Literal::Number(n) => (Type::u8, vec![n]),
-                    Literal::Bool(v) => (Type::Bool, vec![if v {1} else {0}])
-                };
-                function.variable_types.insert(store, typ.clone());
                 function.ir[*block].statements.push(Statement::Operation(
-                    Operation::LoadGlobal {
-                        src: module.constants.len(),
-                    },
+                    Operation::LoadLiteral(lit),
                     Some(store),
                 ));
-                module.constants.push(value);
             }
             Ok(())
         }
         Expr::Let(name, value_expr) => {
-            let value_var = function.variable_types.len();
+            let new_var = {
+                *next_var += 1;
+                *next_var
+            };
             to_ir(
                 function,
                 block,
                 module,
                 *value_expr,
-                Some(value_var),
+                Some(new_var),
                 declarations,
                 locals,
+                next_var,
             )?;
-            locals.insert(name, Declaration::Variable(value_var));
+            locals.insert(name, Declaration::Variable(new_var));
             if let Some(store) = store {
                 function.ir[*block].statements.push(Statement::Operation(
-                    Operation::LoadLocal { src: value_var },
+                    Operation::LoadLocal { src: new_var },
                     Some(store),
                 ));
             }
@@ -154,6 +148,7 @@ pub fn to_ir(
                         None,
                         declarations,
                         locals,
+                        next_var,
                     )?;
                 } else {
                     to_ir(
@@ -164,6 +159,7 @@ pub fn to_ir(
                         store,
                         declarations,
                         locals,
+                        next_var,
                     )?;
                 }
                 i += 1;
@@ -171,21 +167,18 @@ pub fn to_ir(
 
             if (len == 0 || !returns) && store.is_some() {
                 function.ir[*block].statements.push(Statement::Operation(
-                    Operation::LoadGlobal {
-                        src: module.constants.len(),
-                    },
+                    Operation::LoadLiteral(Value::EmptyTuple),
                     store,
                 ));
-                module.constants.push(Vec::new());
-                function
-                    .variable_types
-                    .insert(store.unwrap(), Type::Tuple(Vec::new()));
             }
             Ok(())
         }
         Expr::Return(value_expr) => {
             function.ir[*block].terminal = Terminal::Return(if let Some(value_expr) = value_expr {
-                let return_var = function.variable_types.len();
+                let return_var = {
+                    *next_var += 1;
+                    *next_var
+                };
                 to_ir(
                     function,
                     block,
@@ -194,6 +187,7 @@ pub fn to_ir(
                     Some(return_var),
                     declarations,
                     locals,
+                    next_var,
                 )?;
                 Some(return_var)
             } else {
@@ -208,8 +202,20 @@ pub fn to_ir(
 
             let mut arg_indexes = Vec::new();
             for arg in args {
-                let i = function.variable_types.len();
-                to_ir(function, block, module, arg, Some(i), declarations, locals)?;
+                let i = {
+                    *next_var += 1;
+                    *next_var
+                };
+                to_ir(
+                    function,
+                    block,
+                    module,
+                    arg,
+                    Some(i),
+                    declarations,
+                    locals,
+                    next_var,
+                )?;
                 arg_indexes.push(i);
             }
 
@@ -223,27 +229,9 @@ pub fn to_ir(
                         });
                     }
                 };
-                for (arg_index, type_index) in arg_indexes.iter().enumerate() {
-                    if let Some(typ) = sig.args.get(arg_index) {
-                        if function.variable_types[type_index] != *typ {
-                            return Err(IRErrorInfo {
-                                idx: callee.idx,
-                                error: IRError::TypeMismatch {
-                                    got: function.variable_types[type_index].clone(),
-                                    expected: sig.args[arg_index].clone(),
-                                },
-                            });
-                        }
-                    } else {
-                        return Err(IRErrorInfo {
-                            idx: expr.idx,
-                            error: IRError::ExtraArgument(),
-                        });
-                    }
-                }
+
                 // TODO: use actual variable list to figure out function types
                 if let Some(store) = store {
-                    function.variable_types.insert(store, sig.returns.clone());
                     function.ir[*block].statements.push(Statement::Operation(
                         Operation::Call {
                             function: name,
@@ -274,12 +262,7 @@ pub fn to_ir(
                                     error: IRError::SymbolUndefined(name),
                                 });
                             }
-                            Some(Declaration::Variable(v)) => {
-                                function
-                                    .variable_types
-                                    .insert(store, function.variable_types[v].clone());
-                                *v
-                            }
+                            Some(Declaration::Variable(v)) => *v,
                             _ => {
                                 return Err(IRErrorInfo {
                                     idx: expr.idx,
@@ -296,7 +279,10 @@ pub fn to_ir(
         Expr::If { cond, then, els } => {
             // println!("IF: {store:?}");
 
-            let cond_var = function.variable_types.len();
+            let cond_var = {
+                *next_var += 1;
+                *next_var
+            };
             to_ir(
                 function,
                 block,
@@ -305,11 +291,15 @@ pub fn to_ir(
                 Some(cond_var),
                 declarations,
                 locals,
+                next_var,
             )?;
 
             let then_block_n = function.ir.len();
             let mut then_block_n_mut = function.ir.len();
-            let then_block_var = function.variable_types.len();
+            let then_block_var = {
+                *next_var += 1;
+                *next_var
+            };
             function.ir.push(Block {
                 statements: Vec::new(),
                 terminal: Terminal::Jump(function.ir.len() + 1 + if els.is_some() { 1 } else { 0 }),
@@ -322,12 +312,16 @@ pub fn to_ir(
                 Some(then_block_var),
                 declarations,
                 locals,
+                next_var,
             )?;
 
             let else_block = if let Some(els) = els {
                 let else_block_n = function.ir.len();
                 let mut else_block_n_mut = function.ir.len();
-                let else_block_var = function.variable_types.len();
+                let else_block_var = {
+                    *next_var += 1;
+                    *next_var
+                };
                 function.ir.push(Block {
                     statements: Vec::new(),
                     terminal: Terminal::Jump(function.ir.len() + 1),
@@ -340,6 +334,7 @@ pub fn to_ir(
                     Some(else_block_var),
                     declarations,
                     locals,
+                    next_var,
                 )?;
                 Some((else_block_n, else_block_var))
             } else {
@@ -369,9 +364,6 @@ pub fn to_ir(
                         Operation::Phi { block_to_var },
                         Some(store),
                     ));
-                    function
-                        .variable_types
-                        .insert(store, function.variable_types[&then_block_var].clone());
                 } else {
                     return Err(IRErrorInfo {
                         idx: expr.idx,
@@ -379,6 +371,43 @@ pub fn to_ir(
                     });
                 }
             }
+
+            Ok(())
+        }
+        Expr::Index(left, right) => {
+            let left_var = {
+                *next_var += 1;
+                *next_var
+            };
+            to_ir(
+                function,
+                block,
+                module,
+                *left,
+                Some(left_var),
+                declarations,
+                locals,
+                next_var,
+            )?;
+            let right_var = {
+                *next_var += 1;
+                *next_var
+            };
+            to_ir(
+                function,
+                block,
+                module,
+                *right,
+                Some(right_var),
+                declarations,
+                locals,
+                next_var,
+            )?;
+
+            function.ir[*block].statements.push(Statement::Operation(
+                Operation::Index(left_var, right_var),
+                store,
+            ));
 
             Ok(())
         }
@@ -798,7 +827,7 @@ fn mangle_name(list: &mut Vec<String>, expr: &InfoExpr) -> bool {
         Expr::Index(left, right) => {
             mangle_name(list, &*left);
             match &right.expr {
-                Expr::Literal(Literal::String(name)) => {
+                Expr::Literal(Value::String(name)) => {
                     list.push(name.to_string());
                     true
                 }
@@ -839,12 +868,17 @@ fn get_declaration<'a>(
     }
 }
 
-pub fn to_string(
-    module: &Module,
-    blocks: &Vec<Block>,
-    vars: HashMap<usize, Option<Vec<u8>>>,
-    indentation: usize,
-) -> String {
+pub fn module_to_string(module: &Module) -> String {
+    let mut out = String::new();
+    for (name, fun) in &module.functions {
+        out.push_str(&name);
+        out.push('\n');
+        out.push_str(&to_string(&fun.ir, 1));
+    }
+    out
+}
+
+pub fn to_string(blocks: &Vec<Block>, indentation: usize) -> String {
     let mut out = String::new();
     for (idx, block) in blocks.iter().enumerate() {
         for _ in 0..indentation {
@@ -868,12 +902,8 @@ pub fn to_string(
                             out.push_str(&format!("call {function:?}{args:?}"));
                         }
                         Operation::CallPointer { pointer, args } => todo!(),
-                        Operation::LoadGlobal { src } => {
-                            out.push_str("global \"");
-                            out.push_str(
-                                &String::from_utf8(module.constants[*src].clone()).unwrap(),
-                            );
-                            out.push('\"');
+                        Operation::LoadLiteral(lit) => {
+                            out.push_str(&format!("{lit}"));
                         }
                         Operation::LoadLocal { src } => {
                             out.push('$');
@@ -881,6 +911,9 @@ pub fn to_string(
                         }
                         Operation::Phi { block_to_var } => {
                             out.push_str(&format!("phi {block_to_var:?}"));
+                        }
+                        Operation::Index(left, right) => {
+                            out.push_str(&format!("${left}[${right}]"));
                         }
                     }
                 }

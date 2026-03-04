@@ -1,13 +1,14 @@
+use crate::value::Value;
 use crate::{
     ir::{Block, IRError, IRErrorInfo},
-    tokeniser::{InfoToken, Keyword, Literal, Operator, Token},
+    tokeniser::{InfoToken, Keyword, Operator, Token},
 };
 
 #[derive(Debug)]
 pub enum Expr {
     Index(Box<InfoExpr>, Box<InfoExpr>),
     Var(String),
-    Literal(Literal),
+    Literal(Value),
     Call(Box<InfoExpr>, Vec<InfoExpr>),
     Return(Option<Box<InfoExpr>>),
     Block(Vec<InfoExpr>, bool),
@@ -116,7 +117,7 @@ pub fn parse_expression(tokens: &[InfoToken]) -> Result<InfoExpr, InfoParseError
                                 Box::new(left),
                                 Box::new(InfoExpr {
                                     idx: tokens[hp.1 + 1].idx,
-                                    expr: Expr::Literal(Literal::String(name.clone())),
+                                    expr: Expr::Literal(Value::String(name.clone())),
                                 }),
                             ),
                         })
@@ -163,17 +164,41 @@ pub fn parse_expression(tokens: &[InfoToken]) -> Result<InfoExpr, InfoParseError
                 },
             ] => Ok(InfoExpr {
                 idx: *idx,
-                expr: Expr::Literal(Literal::Bool(*value)),
+                expr: Expr::Literal(Value::Bool(*value)),
             }),
             [
                 InfoToken {
                     token: Token::Name(name),
                     idx,
                 },
-            ] => Ok(InfoExpr {
-                idx: *idx,
-                expr: Expr::Var(name.clone()),
-            }),
+                rest @ ..,
+            ] => match rest.last() {
+                None => Ok(InfoExpr {
+                    idx: *idx,
+                    expr: Expr::Var(name.clone()),
+                }),
+                Some(InfoToken {
+                    idx,
+                    token: Token::Index(index),
+                }) => Ok(InfoExpr {
+                    idx: *idx,
+                    expr: Expr::Index(
+                        {
+                            let mut left = vec![InfoToken {
+                                token: Token::Name(name.clone()),
+                                idx: *idx,
+                            }];
+                            left.extend(rest.split_last().unwrap().1.iter().map(Clone::clone));
+                            Box::new(parse_expression(&left)?)
+                        },
+                        Box::new(parse_expression(&index)?),
+                    ),
+                }),
+                _ => Err(InfoParseError {
+                    idx: *idx,
+                    error: todo!("Make error type for incorrect indexing"),
+                }),
+            },
             [
                 InfoToken {
                     token: Token::Parens(tokens),

@@ -1,5 +1,5 @@
 fn main(compile_io: IO, io: IO) {
-    let text = read_file(compile_io, "test.txt");
+    let text = "hi";
 
-    call_native("mynative", "getmessage");
+    print(io, text[1]);
 }

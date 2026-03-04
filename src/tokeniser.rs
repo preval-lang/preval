@@ -1,3 +1,5 @@
+use crate::value::Value;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Keyword {
     Let,
@@ -43,20 +45,14 @@ impl Operator {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Literal {
-    String(String),
-    Number(u8),
-    Bool(bool),
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     Name(String),
     Keyword(Keyword),
     Operator(Operator),
-    Literal(Literal),
+    Literal(Value),
     Parens(Vec<InfoToken>),
     Block(Vec<InfoToken>),
+    Index(Vec<InfoToken>),
     Semicolon,
     Colon,
     Comma,
@@ -210,6 +206,21 @@ pub fn tokenise(input: &str, offset: usize) -> Result<Vec<InfoToken>, TokeniseEr
 
                 should_call = true;
             }
+            Some('[') => {
+                let parens = read_parens(input, &mut i, offset, '[', ']')?;
+                out.push(match parens {
+                    InfoToken {
+                        token: Token::Parens(contents),
+                        idx,
+                    } => InfoToken {
+                        token: Token::Index(contents),
+                        idx,
+                    },
+                    _ => unreachable!("read_parens returned non-parens"),
+                });
+
+                should_call = true;
+            }
             Some('"') => {
                 out.push(read_string(input, &mut i, offset)?);
                 should_call = true;
@@ -241,8 +252,8 @@ fn read_number(input: &str, i: &mut usize, offset: usize) -> Result<InfoToken, T
         if c.is_none() || !(c.unwrap().is_numeric() || c.unwrap() == '_') {
             return Ok(InfoToken {
                 idx: offset + start,
-                token: if let Ok(num) = number.parse::<u8>() {
-                    Token::Literal(Literal::Number(num))
+                token: if let Ok(num) = number.parse::<usize>() {
+                    Token::Literal(Value::Usize(num))
                 } else {
                     return Err(TokeniseErrorInfo {
                         idx: offset + start,
@@ -342,7 +353,7 @@ fn read_string(input: &str, i: &mut usize, offset: usize) -> Result<InfoToken, T
                 *i += 1;
                 return Ok(InfoToken {
                     idx: offset + start,
-                    token: Token::Literal(Literal::String(contents)),
+                    token: Token::Literal(Value::String(contents)),
                 });
             }
             Some(c) => {
