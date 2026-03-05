@@ -42,7 +42,7 @@ pub struct Print {}
 impl Builtin for Print {
     fn get_signature(&self) -> Signature {
         Signature {
-            args: vec![Type::IO, Type::Slice(Box::new(Type::u8))],
+            args: vec![Type::IO, Type::String],
             returns: Type::Tuple(vec![]),
         }
     }
@@ -56,7 +56,6 @@ impl Builtin for Print {
         stmt: &Statement,
         no_delete: &mut HashSet<usize>,
     ) {
-        println!("GOT HERE!");
         match vars.get(&args[0]).clone() {
             Some(Some(_)) => match vars.get(&args[1]).clone() {
                 Some(Some(message)) => {
@@ -92,8 +91,8 @@ pub struct ReadFile {}
 impl Builtin for ReadFile {
     fn get_signature(&self) -> Signature {
         Signature {
-            args: vec![Type::IO, Type::Slice(Box::new(Type::u8))],
-            returns: Type::Slice(Box::new(Type::u8)),
+            args: vec![Type::IO, Type::String],
+            returns: Type::String,
         }
     }
 

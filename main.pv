@@ -1,3 +1,7 @@
+fn print_first_char(io: IO, text: String) {
+    print(io, "jokes!");
+}
+
 fn main(compile_io: IO, io: IO) {
-    print(io, text[1]);
+    print_first_char(io, "hello");
 }

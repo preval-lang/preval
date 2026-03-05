@@ -7,14 +7,12 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Type {
-    usize,
+    USize,
     Tuple(Vec<Type>),
-    Pointer(Pointer),
-    u8,
-    Slice(Box<Type>),
-    Array(Box<Type>, usize),
+    Uint8,
     IO,
     Bool,
+    String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -31,7 +29,7 @@ pub struct Signature {
 
 pub fn get_type(tokens: &[InfoToken], i: &mut usize) -> Result<Type, InfoParseError> {
     let rv = match &tokens[*i].token {
-        Token::Name(name) if name == "StringSlice" => Ok(Type::Slice(Box::new(Type::u8))),
+        Token::Name(name) if name == "String" => Ok(Type::String),
         Token::Name(name) if name == "IO" => Ok(Type::IO),
         Token::Name(name) if name == "bool" => Ok(Type::Bool),
         _ => Err(InfoParseError {

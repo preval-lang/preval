@@ -47,13 +47,15 @@ pub enum Statement {
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub enum Callable {
+    ModuleFunction(String),
+    Partial(Vec<Block>),
+}
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Operation {
     Call {
-        function: Vec<String>,
-        args: Vec<usize>,
-    },
-    CallPointer {
-        pointer: usize,
+        function: Callable,
         args: Vec<usize>,
     },
     LoadLiteral(Value),
@@ -82,7 +84,6 @@ pub enum Terminal {
         then: usize,
         els: usize,
     },
-    ThenElseJump(usize),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -241,7 +242,7 @@ pub fn to_ir(
                 if let Some(store) = store {
                     function.ir[*block].statements.push(Statement::Operation(
                         Operation::Call {
-                            function: name,
+                            function: Callable::ModuleFunction(name[0].clone()),
                             args: arg_indexes,
                         },
                         Some(store),
@@ -249,7 +250,7 @@ pub fn to_ir(
                 } else {
                     function.ir[*block].statements.push(Statement::Operation(
                         Operation::Call {
-                            function: name,
+                            function: Callable::ModuleFunction(name[0].clone()),
                             args: arg_indexes,
                         },
                         None,
@@ -826,6 +827,7 @@ pub fn to_ir(
 // }
 
 fn mangle_name(list: &mut Vec<String>, expr: &InfoExpr) -> bool {
+    // really should remove this
     match &expr.expr {
         Expr::Var(name) => {
             list.push(name.to_string());
@@ -905,10 +907,8 @@ pub fn to_string(blocks: &Vec<Block>, indentation: usize) -> String {
                     }
                     match op {
                         Operation::Call { function, args } => {
-                            let function = function.join(".");
                             out.push_str(&format!("call {function:?}{args:?}"));
                         }
-                        Operation::CallPointer { pointer, args } => todo!(),
                         Operation::LoadLiteral(lit) => {
                             out.push_str(&format!("{lit}"));
                         }
@@ -957,9 +957,6 @@ pub fn to_string(blocks: &Vec<Block>, indentation: usize) -> String {
                         None => "void".to_string(),
                     }
                 ));
-            }
-            Terminal::ThenElseJump(tej) => {
-                out.push_str(&format!("then else jump {tej:?}"));
             }
         }
         out.push('\n');
