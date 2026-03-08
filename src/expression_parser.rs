@@ -1,6 +1,6 @@
 use crate::value::Value;
 use crate::{
-    ir::{Block, IRError, IRErrorInfo},
+    ir::{IRError, IRErrorInfo},
     tokeniser::{InfoToken, Keyword, Operator, Token},
 };
 
@@ -8,7 +8,7 @@ use crate::{
 pub enum Expr {
     Index(Box<InfoExpr>, Box<InfoExpr>),
     Var(String),
-    Literal(Box<dyn Value>),
+    Literal(Value),
     Call(Box<InfoExpr>, Vec<InfoExpr>),
     Return(Option<Box<InfoExpr>>),
     Block(Vec<InfoExpr>, bool),
@@ -40,7 +40,6 @@ pub enum ParseError {
     ExpectedAssign,
     DuplicateName,
     TypeUndefined(Vec<InfoToken>),
-    ExpectedBlock(Option<InfoToken>),
     IRError(IRError),
 }
 
@@ -117,7 +116,7 @@ pub fn parse_expression(tokens: &[InfoToken]) -> Result<InfoExpr, InfoParseError
                                 Box::new(left),
                                 Box::new(InfoExpr {
                                     idx: tokens[hp.1 + 1].idx,
-                                    expr: Expr::Literal(Box::new(name.to_string())),
+                                    expr: Expr::Literal(Value::new(name.to_string())),
                                 }),
                             ),
                         })
@@ -164,7 +163,7 @@ pub fn parse_expression(tokens: &[InfoToken]) -> Result<InfoExpr, InfoParseError
                 },
             ] => Ok(InfoExpr {
                 idx: *idx,
-                expr: Expr::Literal(Box::new(*value)),
+                expr: Expr::Literal(Value::new(*value)),
             }),
             [
                 InfoToken {

@@ -5,10 +5,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     expression_parser::{Expr, InfoExpr},
     typ::{Signature, Type},
-    value::EmptyTuple,
+    value::{EmptyTuple, Value},
 };
-
-use crate::value::Value;
 
 #[derive(Debug)]
 pub struct IRErrorInfo {
@@ -28,38 +26,38 @@ pub enum IRError {
     MissingElseBlock(),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 
 pub struct Module {
     pub functions: HashMap<String, Function>,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Function {
     pub ir: Vec<Block>,
     pub exported: bool,
     pub signature: Signature,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Statement {
     // maybe get rid of this, there aren't any non-operation statements after introducing Terminals and Blocks
     Operation(Operation, Option<usize>),
     Delete(usize),
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Callable {
     ModuleFunction(String),
     Partial(Vec<Block>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Operation {
     Call {
         function: Callable,
         args: Vec<usize>,
     },
-    LoadLiteral(Box<dyn Value>),
+    LoadLiteral(Value),
     LoadLocal {
         src: usize,
     },
@@ -87,7 +85,7 @@ pub enum Terminal {
     },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Block {
     pub statements: Vec<Statement>,
     pub terminal: Terminal,
@@ -176,7 +174,7 @@ pub fn to_ir(
 
             if (len == 0 || !returns) && store.is_some() {
                 function.ir[*block].statements.push(Statement::Operation(
-                    Operation::LoadLiteral(Box::new(EmptyTuple {})),
+                    Operation::LoadLiteral(Value::new(EmptyTuple {})),
                     store,
                 ));
             }
@@ -421,7 +419,6 @@ pub fn to_ir(
 
             Ok(())
         }
-        _ => panic!("other exprs"),
     }
 }
 

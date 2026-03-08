@@ -1,23 +1,28 @@
+use std::cell::OnceCell;
+use std::collections::HashMap;
 use std::collections::HashSet;
-use std::{collections::HashMap, fs, process::exit};
+use std::sync::Mutex;
+
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::ir::Callable;
 use crate::value::Value;
 use crate::{
     builtins::get_builtins,
-    ir::{Block, Function, Module, Operation, Statement, Terminal},
+    ir::{Block, Module, Operation, Statement, Terminal},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RunResult {
-    Concrete(Box<dyn Value>),
+    Concrete(Value),
     Partial(Vec<Block>, HashSet<usize>),
 }
 
 pub fn evaluate(
     module: &Module,
     mut blocks: Vec<Block>,
-    vars: &mut HashMap<usize, Option<Box<dyn Value>>>,
+    vars: &mut HashMap<usize, Option<Value>>,
     start_block: usize,
 ) -> RunResult {
     let mut out: Vec<Statement> = Vec::new();
@@ -44,7 +49,7 @@ pub fn evaluate(
                             }
                             None => panic!("Undefined variable in index"),
                             Some(Some(right)) => {
-                                let v = left.index(right.as_ref());
+                                let v = left.data.index(&right);
                                 if let Some(store) = store {
                                     vars.insert(*store, Some(v));
                                 }
@@ -53,7 +58,7 @@ pub fn evaluate(
                     },
                     Operation::LoadLiteral(lit) => {
                         if let Some(store) = store {
-                            vars.insert(*store, Some(lit.as_ref().vclone()));
+                            vars.insert(*store, Some(lit.clone()));
                         }
                     }
                     Operation::Call { function, args } => match function {
@@ -77,7 +82,7 @@ pub fn evaluate(
                                 args_map.insert(
                                     i,
                                     match vars.get(arg) {
-                                        Some(Some(v)) => Some(v.as_ref().vclone()),
+                                        Some(Some(v)) => Some(v.clone()),
                                         _ => None,
                                     },
                                 );
@@ -111,7 +116,7 @@ pub fn evaluate(
                     Operation::LoadLocal { src } => {
                         if let Some(store) = store {
                             if let Some(Some(data)) = vars.get(&src) {
-                                vars.insert(*store, Some(data.as_ref().vclone()));
+                                vars.insert(*store, Some(data.clone()));
                             } else {
                                 out.push(stmt.clone());
                                 resudual_vars.insert(*store);
@@ -130,7 +135,7 @@ pub fn evaluate(
                             vars.insert(
                                 *store,
                                 match var {
-                                    Some(v) => Some(v.as_ref().vclone()),
+                                    Some(v) => Some(v.clone()),
                                     None => None,
                                 },
                             );
@@ -157,7 +162,7 @@ pub fn evaluate(
                 Some(Some(data)) => {
                     // TODO: Dedupe the partial returns
                     if blocks[block].statements.is_empty() {
-                        return RunResult::Concrete(data.as_ref().vclone());
+                        return RunResult::Concrete(data.clone());
                     }
 
                     resudual_vars.insert(var);
@@ -168,7 +173,7 @@ pub fn evaluate(
                         .map(|var| {
                             Statement::Operation(
                                 Operation::LoadLiteral(match vars.get(var) {
-                                    Some(Some(v)) => v.as_ref().vclone(),
+                                    Some(Some(v)) => v.clone(),
                                     _ => panic!("Residualise nonexistent variable"),
                                 }),
                                 Some(*var),
@@ -187,7 +192,7 @@ pub fn evaluate(
                         .map(|var| {
                             Statement::Operation(
                                 Operation::LoadLiteral(match vars.get(var) {
-                                    Some(Some(v)) => v.as_ref().vclone(),
+                                    Some(Some(v)) => v.clone(),
                                     _ => panic!("Residualise nonexistent variable"),
                                 }),
                                 Some(*var),
@@ -221,7 +226,7 @@ pub fn evaluate(
                         .map(|var| {
                             Statement::Operation(
                                 Operation::LoadLiteral(match vars.get(var) {
-                                    Some(Some(v)) => v.as_ref().vclone(),
+                                    Some(Some(v)) => v.clone(),
                                     _ => panic!("Residualise nonexistent variable"),
                                 }),
                                 Some(*var),

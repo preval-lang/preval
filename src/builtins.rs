@@ -1,32 +1,26 @@
 use std::{
     collections::{HashMap, HashSet},
-    ffi::OsString,
     fs,
-    str::FromStr,
 };
-
-use libloading::{Library, Symbol, library_filename};
 
 use crate::{
     ir::Statement,
     typ::{Signature, Type},
+    value::Value,
 };
-
-use crate::value::Value;
 
 pub trait Builtin {
     fn get_signature(&self) -> Signature;
 
     fn call(
         &self,
-        vars: &mut HashMap<usize, Option<Box<dyn Value>>>,
+        vars: &mut HashMap<usize, Option<Value>>,
         args: &Vec<usize>,
         store: &Option<usize>,
         out: &mut Vec<Statement>,
         stmt: &Statement,
         no_delete: &mut HashSet<usize>,
-    ) {
-    }
+    );
 }
 
 pub fn get_builtins() -> HashMap<String, Box<dyn Builtin>> {
@@ -49,16 +43,16 @@ impl Builtin for Print {
 
     fn call(
         &self,
-        vars: &mut HashMap<usize, Option<Box<dyn Value>>>,
+        vars: &mut HashMap<usize, Option<Value>>,
         args: &Vec<usize>,
-        store: &Option<usize>,
+        _store: &Option<usize>,
         out: &mut Vec<Statement>,
         stmt: &Statement,
         no_delete: &mut HashSet<usize>,
     ) {
         match vars.get(&args[0]).clone() {
             Some(Some(_)) => match vars.get(&args[1]).clone() {
-                Some(Some(message)) => {
+                Some(Some(_)) => {
                     if let Some(Some(message)) = vars.get(&args[1]).clone() {
                         println!("{:?}", message)
                     } else {
@@ -98,7 +92,7 @@ impl Builtin for ReadFile {
 
     fn call(
         &self,
-        vars: &mut HashMap<usize, Option<Box<dyn Value>>>,
+        vars: &mut HashMap<usize, Option<Value>>,
         args: &Vec<usize>,
         store: &Option<usize>,
         out: &mut Vec<Statement>,
@@ -107,17 +101,17 @@ impl Builtin for ReadFile {
     ) {
         if let Some(Some(_)) = vars.get(&args[0]).clone() {
             if let Some(Some(path)) = vars.get(&args[1]).clone() {
-                match path.as_any().downcast_ref::<String>() {
+                match path.data.as_any().downcast_ref::<String>() {
                     Some(path) => {
                         let contents = fs::read(path).unwrap();
                         if let Some(store) = store {
                             vars.insert(
                                 *store,
-                                Some(Box::new(String::from_utf8(contents).unwrap())),
+                                Some(Value::new(String::from_utf8(contents).unwrap())),
                             );
                         }
                     }
-                    o => panic!("Incorrect path type"),
+                    _ => panic!("Incorrect path type"),
                 }
             } else {
                 no_delete.insert(args[0]);

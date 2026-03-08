@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
+use std::sync::Mutex;
+use std::{cell::OnceCell, collections::HashMap};
 
+use crate::value::{EmptyTuple, ValueData};
 use crate::{
     expression_parser::{InfoParseError, ParseError},
     tokeniser::{InfoToken, Token},
@@ -33,4 +36,12 @@ pub fn get_type(tokens: &[InfoToken], i: &mut usize) -> Result<Type, InfoParseEr
     };
     *i += 1;
     rv
+}
+
+pub fn deserialize_type(type_name: &str, data: serde_value::Value) -> Box<dyn ValueData> {
+    match type_name {
+        "String" => Box::new(data.deserialize_into::<String>().unwrap()),
+        "EmptyTuple" => Box::new(data.deserialize_into::<EmptyTuple>().unwrap()),
+        _ => todo!(),
+    }
 }

@@ -1,1 +1,6 @@
-EmptyTuple
+0:
+	$2 = EmptyTuple
+	$3 = $1
+	call Partial([Block { statements: [Operation(LoadLiteral(EmptyTuple), Some(2)), Operation(LoadLiteral("jokes!"), Some(4)), Operation(LoadLocal { src: 0 }, Some(3)), Operation(Call { function: ModuleFunction("print"), args: [3, 4] }, None), Delete(3), Delete(4)], terminal: Return(Some(2)) }])[3, 4]
+	delete $3
+	return $2

@@ -3,5 +3,5 @@ fn print_first_char(io: IO, text: String) {
 }
 
 fn main(compile_io: IO, io: IO) {
-    print_first_char(compile_io, "hello");
+    print_first_char(io, "hello");
 }

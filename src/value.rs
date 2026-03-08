@@ -1,13 +1,15 @@
 use std::{
     any::{Any, type_name},
-    collections::HashMap,
-    fmt::{Debug, Display},
-    ops::Index,
-    process::Output,
-    sync::Arc,
+    fmt::Debug,
 };
 
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize, Serialize,
+    de::Visitor,
+    ser::{SerializeMap, SerializeSeq, SerializeStruct},
+};
+
+use crate::typ::deserialize_type;
 
 // #[derive(Debug, Clone, PartialEq)]
 // pub enum Value {
@@ -20,24 +22,46 @@ use serde::{Deserialize, Serialize};
 //     Struct(HashMap<String, Value>, Arc<StructDescriptor>),
 // }
 
-pub trait Value: Debug {
-    fn vclone(&self) -> Box<dyn Value>;
-    fn index(&self, value: &dyn Value) -> Box<dyn Value> {
+#[derive(Clone)]
+pub struct Value {
+    pub typ: String,
+    pub data: Box<dyn ValueData>,
+}
+
+impl Value {
+    pub fn new<T: ValueData>(value: T) -> Value {
+        Value {
+            typ: value.get_type(),
+            data: value.vclone(),
+        }
+    }
+}
+
+impl Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(&self.data, f)
+    }
+}
+
+pub trait ValueData: Debug {
+    fn vclone(&self) -> Box<dyn ValueData>;
+    fn index(&self, value: &Value) -> Value {
         panic!("Type is not indexable")
     }
     fn vto_string(&self) -> String;
-    fn veq(&self, other: &Box<dyn Value>) -> bool;
+    fn veq(&self, other: &Value) -> bool;
     fn as_any(&self) -> &dyn Any;
     fn pre_serialize<'a>(&'a self) -> Option<&'a dyn erased_serde::Serialize>;
+    fn get_type(&self) -> String;
 }
 
-impl PartialEq for Box<dyn Value> {
+impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
-        self.as_ref().veq(other)
+        self.data.veq(other)
     }
 }
 
-impl Clone for Box<dyn Value> {
+impl Clone for Box<dyn ValueData> {
     fn clone(&self) -> Self {
         self.as_ref().vclone()
     }
@@ -57,15 +81,46 @@ impl Clone for Box<dyn Value> {
 // }
 
 trait PrevalValue: PreSerialize {
-    fn vindex(&self, value: &dyn Value) -> Box<dyn Value> {
+    fn vindex(&self, value: &Value) -> Value {
         panic!("Not indexable: {}", type_name::<Self>())
     }
 
-    fn deserializer_id(&self) -> Option<String> {
-        None
+    fn get_type(&self) -> String;
+}
+
+#[derive(serde::Deserialize)]
+struct RawValue(String, serde_value::Value);
+
+impl<'de> serde::Deserialize<'de> for Value {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let RawValue(typ, data) = RawValue::deserialize(deserializer)?;
+
+        Ok(Value {
+            data: deserialize_type(&typ, data),
+            typ,
+        })
     }
 }
 
+impl serde::Serialize for Value {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeTuple;
+
+        let mut tup = serializer.serialize_tuple(2)?;
+        tup.serialize_element(&self.typ)?;
+
+        let data = self.data.pre_serialize();
+
+        tup.serialize_element(&data)?;
+        tup.end()
+    }
+}
 trait PreSerialize {
     fn pre_serialize<'a>(&'a self) -> Option<&'a dyn erased_serde::Serialize>;
 }
@@ -76,14 +131,14 @@ impl<T: erased_serde::Serialize> PreSerialize for T {
     }
 }
 
-impl<T: PartialEq + Clone + Debug + PrevalValue + 'static> Value for T {
-    fn vclone(&self) -> Box<dyn Value> {
+impl<T: PartialEq + Clone + Debug + PrevalValue + 'static> ValueData for T {
+    fn vclone(&self) -> Box<dyn ValueData> {
         let c = self.clone();
         Box::new(c)
     }
 
-    fn veq(&self, other: &Box<dyn Value>) -> bool {
-        match other.as_any().downcast_ref::<T>() {
+    fn veq(&self, other: &Value) -> bool {
+        match other.data.as_any().downcast_ref::<T>() {
             Some(other) => self == other,
             None => panic!("Can't compare string to non-string"),
         }
@@ -93,7 +148,7 @@ impl<T: PartialEq + Clone + Debug + PrevalValue + 'static> Value for T {
         self
     }
 
-    fn index(&self, value: &dyn Value) -> Box<dyn Value> {
+    fn index(&self, value: &Value) -> Value {
         self.vindex(value)
     }
 
@@ -104,41 +159,49 @@ impl<T: PartialEq + Clone + Debug + PrevalValue + 'static> Value for T {
     fn pre_serialize<'a>(&'a self) -> Option<&'a dyn erased_serde::Serialize> {
         PreSerialize::pre_serialize(self)
     }
+
+    fn get_type(&self) -> String {
+        PrevalValue::get_type(self)
+    }
 }
 
 impl PrevalValue for String {
-    fn vindex(&self, value: &dyn Value) -> Box<dyn Value> {
-        match value.as_any().downcast_ref::<usize>() {
-            Some(other) => Box::new(self.chars().nth(*other).unwrap().to_string()),
+    fn vindex(&self, value: &Value) -> Value {
+        match value.data.as_any().downcast_ref::<usize>() {
+            Some(other) => Value::new(self.chars().nth(*other).unwrap().to_string()),
             None => panic!("Index string with non-usize"),
         }
+    }
+
+    fn get_type(&self) -> String {
+        "String".to_string()
     }
 }
 
 impl PrevalValue for usize {
-    fn deserializer_id(&self) -> Option<String> {
-        Some("usize".to_string())
+    fn get_type(&self) -> String {
+        "usize".to_string()
     }
 }
 
 impl PrevalValue for bool {
-    fn deserializer_id(&self) -> Option<String> {
-        Some("bool".to_string())
+    fn get_type(&self) -> String {
+        "bool".to_string()
     }
 }
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct IO;
 impl PrevalValue for IO {
-    fn deserializer_id(&self) -> Option<String> {
-        Some("nop".to_string())
+    fn get_type(&self) -> String {
+        "IO".to_string()
     }
 }
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct EmptyTuple;
 impl PrevalValue for EmptyTuple {
-    fn deserializer_id(&self) -> Option<String> {
-        Some("nop".to_string())
+    fn get_type(&self) -> String {
+        "EmptyTuple".to_string()
     }
 }

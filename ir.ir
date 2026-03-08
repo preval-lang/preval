@@ -9,7 +9,7 @@ print_first_char
 		return $2
 main
 	0:
-		$3 = $0
+		$3 = $1
 		$4 = "hello"
 		call ModuleFunction("print_first_char")[3, 4]
 		delete $3
