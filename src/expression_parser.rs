@@ -8,7 +8,7 @@ use crate::{
 pub enum Expr {
     Index(Box<InfoExpr>, Box<InfoExpr>),
     Var(String),
-    Literal(Value),
+    Literal(Box<dyn Value>),
     Call(Box<InfoExpr>, Vec<InfoExpr>),
     Return(Option<Box<InfoExpr>>),
     Block(Vec<InfoExpr>, bool),
@@ -117,7 +117,7 @@ pub fn parse_expression(tokens: &[InfoToken]) -> Result<InfoExpr, InfoParseError
                                 Box::new(left),
                                 Box::new(InfoExpr {
                                     idx: tokens[hp.1 + 1].idx,
-                                    expr: Expr::Literal(Value::String(name.clone())),
+                                    expr: Expr::Literal(Box::new(name.to_string())),
                                 }),
                             ),
                         })
@@ -164,7 +164,7 @@ pub fn parse_expression(tokens: &[InfoToken]) -> Result<InfoExpr, InfoParseError
                 },
             ] => Ok(InfoExpr {
                 idx: *idx,
-                expr: Expr::Literal(Value::Bool(*value)),
+                expr: Expr::Literal(Box::new(*value)),
             }),
             [
                 InfoToken {

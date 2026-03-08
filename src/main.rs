@@ -5,6 +5,7 @@ use crate::{
     ir::{Module, module_to_string, to_string},
     module_parser::parse_module,
     tokeniser::{get_line_and_column, tokenise},
+    value::IO,
     vm::{RunResult, evaluate},
 };
 
@@ -21,21 +22,6 @@ mod value;
 mod vm;
 
 fn main() {
-    if let Some(arg1) = env::args().collect::<Vec<_>>().get(1) {
-        if arg1 == "run" {
-            let mut vars = HashMap::new();
-
-            vars.insert(0, Some(Value::IO));
-            vars.insert(1, Some(Value::IO));
-
-            let (module, runresult): (Module, RunResult) =
-                postcard::from_bytes(&fs::read("main.pvc").unwrap()).unwrap();
-
-            run_entire_program(&module, runresult, &mut vars);
-            return;
-        }
-    }
-
     let file = "main.pv";
     let src = String::from_utf8(fs::read(file).unwrap()).unwrap();
     let tokens = tokenise(&src, 0);
@@ -50,31 +36,23 @@ fn main() {
                 Ok(mut module) => {
                     fs::write("ir.ir", module_to_string(&module)).unwrap();
 
-                    let mut vars = HashMap::new();
+                    let mut vars: HashMap<usize, Option<Box<dyn Value>>> = HashMap::new();
 
-                    vars.insert(0, Some(Value::IO));
+                    vars.insert(0, Some(Box::new(IO {})));
                     vars.insert(1, None);
 
                     let eval = evaluate(&module, module.functions["main"].ir.clone(), &mut vars, 0);
 
-                    if let Some(arg1) = env::args().collect::<Vec<_>>().get(1) {
-                        if arg1 == "compile" {
-                            let vec = postcard::to_stdvec(&(module, eval)).unwrap();
-                            fs::write("main.pvc", vec).unwrap();
-                            return;
-                        }
-                    }
-
                     fs::write(
                         "eval.ir",
                         match eval.clone() {
-                            RunResult::Concrete(value) => format!("{value}"),
+                            RunResult::Concrete(value) => format!("{value:?}"),
                             RunResult::Partial(blocks, _) => to_string(&blocks, 0),
                         },
                     )
                     .unwrap();
 
-                    vars.insert(1, Some(Value::IO));
+                    vars.insert(1, Some(Box::new(IO {})));
 
                     run_entire_program(&module, eval, &mut vars);
                 }
@@ -90,12 +68,12 @@ fn main() {
 fn run_entire_program(
     module: &Module,
     eval: RunResult,
-    vars: &mut HashMap<usize, Option<Value>>,
+    vars: &mut HashMap<usize, Option<Box<dyn Value>>>,
 ) -> bool {
     match eval {
         RunResult::Concrete(_) => false,
         RunResult::Partial(blocks, _) => {
-            vars.insert(1, Some(Value::IO));
+            vars.insert(1, Some(Box::new(IO {})));
             run_entire_program(module, evaluate(module, blocks, vars, 0), vars)
         }
     }

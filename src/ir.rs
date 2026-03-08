@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     expression_parser::{Expr, InfoExpr},
     typ::{Signature, Type},
+    value::EmptyTuple,
 };
 
 use crate::value::Value;
@@ -27,38 +28,38 @@ pub enum IRError {
     MissingElseBlock(),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 
 pub struct Module {
     pub functions: HashMap<String, Function>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Function {
     pub ir: Vec<Block>,
     pub exported: bool,
     pub signature: Signature,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
     // maybe get rid of this, there aren't any non-operation statements after introducing Terminals and Blocks
     Operation(Operation, Option<usize>),
     Delete(usize),
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Callable {
     ModuleFunction(String),
     Partial(Vec<Block>),
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Operation {
     Call {
         function: Callable,
         args: Vec<usize>,
     },
-    LoadLiteral(Value),
+    LoadLiteral(Box<dyn Value>),
     LoadLocal {
         src: usize,
     },
@@ -86,7 +87,7 @@ pub enum Terminal {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Block {
     pub statements: Vec<Statement>,
     pub terminal: Terminal,
@@ -175,7 +176,7 @@ pub fn to_ir(
 
             if (len == 0 || !returns) && store.is_some() {
                 function.ir[*block].statements.push(Statement::Operation(
-                    Operation::LoadLiteral(Value::EmptyTuple),
+                    Operation::LoadLiteral(Box::new(EmptyTuple {})),
                     store,
                 ));
             }
@@ -204,8 +205,6 @@ pub fn to_ir(
             Ok(())
         }
         Expr::Call(callee, args) => {
-            let mut name = Vec::new();
-
             let callee = *callee;
 
             let mut arg_indexes = Vec::new();
@@ -227,35 +226,38 @@ pub fn to_ir(
                 arg_indexes.push(i);
             }
 
-            if mangle_name(&mut name, &callee) {
-                let sig = match get_declaration(&name, &declarations, callee.idx)? {
-                    Declaration::Function(sig) => sig,
-                    _ => {
-                        return Err(IRErrorInfo {
-                            idx: callee.idx,
-                            error: IRError::SymbolNotCallable(name.last().unwrap().to_string()),
-                        });
-                    }
-                };
+            match &callee.expr {
+                Expr::Var(name) => {
+                    let sig = match get_declaration(&[name.clone()], &declarations, callee.idx)? {
+                        Declaration::Function(sig) => sig,
+                        _ => {
+                            return Err(IRErrorInfo {
+                                idx: callee.idx,
+                                error: IRError::SymbolNotCallable(name.to_string()),
+                            });
+                        }
+                    };
 
-                // TODO: use actual variable list to figure out function types
-                if let Some(store) = store {
-                    function.ir[*block].statements.push(Statement::Operation(
-                        Operation::Call {
-                            function: Callable::ModuleFunction(name[0].clone()),
-                            args: arg_indexes,
-                        },
-                        Some(store),
-                    ));
-                } else {
-                    function.ir[*block].statements.push(Statement::Operation(
-                        Operation::Call {
-                            function: Callable::ModuleFunction(name[0].clone()),
-                            args: arg_indexes,
-                        },
-                        None,
-                    ));
+                    // TODO: use actual variable list to figure out function types
+                    if let Some(store) = store {
+                        function.ir[*block].statements.push(Statement::Operation(
+                            Operation::Call {
+                                function: Callable::ModuleFunction(name.clone()),
+                                args: arg_indexes,
+                            },
+                            Some(store),
+                        ));
+                    } else {
+                        function.ir[*block].statements.push(Statement::Operation(
+                            Operation::Call {
+                                function: Callable::ModuleFunction(name.clone()),
+                                args: arg_indexes,
+                            },
+                            None,
+                        ));
+                    }
                 }
+                _ => todo!("First class functions"),
             }
             Ok(())
         }
@@ -826,27 +828,6 @@ pub fn to_ir(
 //     a
 // }
 
-fn mangle_name(list: &mut Vec<String>, expr: &InfoExpr) -> bool {
-    // really should remove this
-    match &expr.expr {
-        Expr::Var(name) => {
-            list.push(name.to_string());
-            true
-        }
-        Expr::Index(left, right) => {
-            mangle_name(list, &*left);
-            match &right.expr {
-                Expr::Literal(Value::String(name)) => {
-                    list.push(name.to_string());
-                    true
-                }
-                _ => false,
-            }
-        }
-        _ => false,
-    }
-}
-
 fn get_declaration<'a>(
     names: &[String],
     declarations: &'a HashMap<String, Declaration>,
@@ -910,7 +891,7 @@ pub fn to_string(blocks: &Vec<Block>, indentation: usize) -> String {
                             out.push_str(&format!("call {function:?}{args:?}"));
                         }
                         Operation::LoadLiteral(lit) => {
-                            out.push_str(&format!("{lit}"));
+                            out.push_str(&format!("{lit:?}"));
                         }
                         Operation::LoadLocal { src } => {
                             out.push('$');

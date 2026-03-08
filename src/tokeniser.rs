@@ -49,7 +49,7 @@ pub enum Token {
     Name(String),
     Keyword(Keyword),
     Operator(Operator),
-    Literal(Value),
+    Literal(Box<dyn Value>),
     Parens(Vec<InfoToken>),
     Block(Vec<InfoToken>),
     Index(Vec<InfoToken>),
@@ -253,7 +253,7 @@ fn read_number(input: &str, i: &mut usize, offset: usize) -> Result<InfoToken, T
             return Ok(InfoToken {
                 idx: offset + start,
                 token: if let Ok(num) = number.parse::<usize>() {
-                    Token::Literal(Value::Usize(num))
+                    Token::Literal(Box::new(num))
                 } else {
                     return Err(TokeniseErrorInfo {
                         idx: offset + start,
@@ -353,7 +353,7 @@ fn read_string(input: &str, i: &mut usize, offset: usize) -> Result<InfoToken, T
                 *i += 1;
                 return Ok(InfoToken {
                     idx: offset + start,
-                    token: Token::Literal(Value::String(contents)),
+                    token: Token::Literal(Box::new(contents)),
                 });
             }
             Some(c) => {

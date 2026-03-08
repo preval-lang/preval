@@ -10,16 +10,16 @@ use crate::{
     ir::{Block, Function, Module, Operation, Statement, Terminal},
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum RunResult {
-    Concrete(Value),
+    Concrete(Box<dyn Value>),
     Partial(Vec<Block>, HashSet<usize>),
 }
 
 pub fn evaluate(
     module: &Module,
     mut blocks: Vec<Block>,
-    vars: &mut HashMap<usize, Option<Value>>,
+    vars: &mut HashMap<usize, Option<Box<dyn Value>>>,
     start_block: usize,
 ) -> RunResult {
     let mut out: Vec<Statement> = Vec::new();
@@ -45,22 +45,17 @@ pub fn evaluate(
                                 resudual_vars.insert(*rightn);
                             }
                             None => panic!("Undefined variable in index"),
-                            Some(Some(right)) => match (left, right) {
-                                (Value::String(left), Value::Usize(right)) => {
-                                    if let Some(store) = store {
-                                        vars.insert(
-                                            *store,
-                                            Some(Value::Char(left.chars().nth(*right).unwrap())),
-                                        );
-                                    }
+                            Some(Some(right)) => {
+                                let v = left.index(right.as_ref());
+                                if let Some(store) = store {
+                                    vars.insert(*store, Some(v));
                                 }
-                                _ => todo!("more index ops"),
-                            },
+                            }
                         },
                     },
                     Operation::LoadLiteral(lit) => {
                         if let Some(store) = store {
-                            vars.insert(*store, Some(lit.clone()));
+                            vars.insert(*store, Some(lit.as_ref().vclone()));
                         }
                     }
                     Operation::Call { function, args } => match function {
@@ -81,7 +76,13 @@ pub fn evaluate(
                             };
                             let mut args_map = HashMap::new();
                             for (i, arg) in args.iter().enumerate() {
-                                args_map.insert(i, vars.get(arg).unwrap_or(&None).clone());
+                                args_map.insert(
+                                    i,
+                                    match vars.get(arg) {
+                                        Some(Some(v)) => Some(v.as_ref().vclone()),
+                                        _ => None,
+                                    },
+                                );
                             }
                             match evaluate(module, blocks, &mut args_map, 0) {
                                 RunResult::Concrete(res) => {
@@ -112,7 +113,7 @@ pub fn evaluate(
                     Operation::LoadLocal { src } => {
                         if let Some(store) = store {
                             if let Some(Some(data)) = vars.get(&src) {
-                                vars.insert(*store, Some(data.clone()));
+                                vars.insert(*store, Some(data.as_ref().vclone()));
                             } else {
                                 out.push(stmt.clone());
                                 resudual_vars.insert(*store);
@@ -126,7 +127,15 @@ pub fn evaluate(
                             let var_num = block_to_var.get(&last_block).expect(&format!(
                                 "Block {block} did not expect to be jumped into by {last_block}"
                             ));
-                            vars.insert(*store, vars.get(var_num).expect("Phi evaluated to undefined variable, must have forgot to store the result of the block").clone());
+                            let var = vars.get(var_num).expect("Phi evaluated to undefined variable, must have forgot to store the result of the block");
+
+                            vars.insert(
+                                *store,
+                                match var {
+                                    Some(v) => Some(v.as_ref().vclone()),
+                                    None => None,
+                                },
+                            );
                         }
                     }
                 },
@@ -148,8 +157,9 @@ pub fn evaluate(
         match blocks[block].terminal {
             Terminal::Evaluate(Some(var)) | Terminal::Return(Some(var)) => match vars.get(&var) {
                 Some(Some(data)) => {
+                    // TODO: Dedupe the partial returns
                     if blocks[block].statements.is_empty() {
-                        return RunResult::Concrete(data.clone());
+                        return RunResult::Concrete(data.as_ref().vclone());
                     }
 
                     resudual_vars.insert(var);
@@ -159,7 +169,10 @@ pub fn evaluate(
                         .filter(|var| vars.get(var).unwrap().is_some())
                         .map(|var| {
                             Statement::Operation(
-                                Operation::LoadLiteral(vars.get(var).unwrap().clone().unwrap()),
+                                Operation::LoadLiteral(match vars.get(var) {
+                                    Some(Some(v)) => v.as_ref().vclone(),
+                                    _ => panic!("Residualise nonexistent variable"),
+                                }),
                                 Some(*var),
                             )
                         })
@@ -175,7 +188,10 @@ pub fn evaluate(
                         .filter(|var| vars.get(var).unwrap().is_some())
                         .map(|var| {
                             Statement::Operation(
-                                Operation::LoadLiteral(vars.get(var).unwrap().clone().unwrap()),
+                                Operation::LoadLiteral(match vars.get(var) {
+                                    Some(Some(v)) => v.as_ref().vclone(),
+                                    _ => panic!("Residualise nonexistent variable"),
+                                }),
                                 Some(*var),
                             )
                         })
@@ -188,23 +204,28 @@ pub fn evaluate(
             },
             Terminal::Jump(b) => block = b,
             Terminal::CondJump { cond, then, els } => match vars.get(&cond) {
-                Some(Some(Value::Bool(b))) => {
-                    if *b {
-                        blocks[block].terminal = Terminal::Jump(then);
-                        block = then;
-                    } else {
-                        blocks[block].terminal = Terminal::Jump(els);
-                        block = els;
-                    }
-                }
+                _ => todo!("downcast bools"),
+                // Some(Some(Value::Bool(b))) => {
+                //     if *b {
+                //         blocks[block].terminal = Terminal::Jump(then);
+                //         block = then;
+                //     } else {
+                //         blocks[block].terminal = Terminal::Jump(els);
+                //         block = els;
+                //     }
+                // }
                 Some(Some(other)) => panic!("Wrong value in condition"),
                 Some(None) => {
                     resudual_vars.insert(cond);
                     let mut vars_statements: Vec<_> = resudual_vars
                         .iter()
+                        .filter(|var| vars.get(var).unwrap().is_some())
                         .map(|var| {
                             Statement::Operation(
-                                Operation::LoadLiteral(vars.get(var).unwrap().clone().unwrap()),
+                                Operation::LoadLiteral(match vars.get(var) {
+                                    Some(Some(v)) => v.as_ref().vclone(),
+                                    _ => panic!("Residualise nonexistent variable"),
+                                }),
                                 Some(*var),
                             )
                         })

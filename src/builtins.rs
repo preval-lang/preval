@@ -19,7 +19,7 @@ pub trait Builtin {
 
     fn call(
         &self,
-        vars: &mut HashMap<usize, Option<Value>>,
+        vars: &mut HashMap<usize, Option<Box<dyn Value>>>,
         args: &Vec<usize>,
         store: &Option<usize>,
         out: &mut Vec<Statement>,
@@ -49,7 +49,7 @@ impl Builtin for Print {
 
     fn call(
         &self,
-        vars: &mut HashMap<usize, Option<Value>>,
+        vars: &mut HashMap<usize, Option<Box<dyn Value>>>,
         args: &Vec<usize>,
         store: &Option<usize>,
         out: &mut Vec<Statement>,
@@ -60,7 +60,7 @@ impl Builtin for Print {
             Some(Some(_)) => match vars.get(&args[1]).clone() {
                 Some(Some(message)) => {
                     if let Some(Some(message)) = vars.get(&args[1]).clone() {
-                        println!("{}", message)
+                        println!("{:?}", message)
                     } else {
                         no_delete.insert(args[0]);
                         no_delete.insert(args[1]);
@@ -98,7 +98,7 @@ impl Builtin for ReadFile {
 
     fn call(
         &self,
-        vars: &mut HashMap<usize, Option<Value>>,
+        vars: &mut HashMap<usize, Option<Box<dyn Value>>>,
         args: &Vec<usize>,
         store: &Option<usize>,
         out: &mut Vec<Statement>,
@@ -107,13 +107,13 @@ impl Builtin for ReadFile {
     ) {
         if let Some(Some(_)) = vars.get(&args[0]).clone() {
             if let Some(Some(path)) = vars.get(&args[1]).clone() {
-                match path {
-                    Value::String(path) => {
+                match path.as_any().downcast_ref::<String>() {
+                    Some(path) => {
                         let contents = fs::read(path).unwrap();
                         if let Some(store) = store {
                             vars.insert(
                                 *store,
-                                Some(Value::String(String::from_utf8(contents).unwrap())),
+                                Some(Box::new(String::from_utf8(contents).unwrap())),
                             );
                         }
                     }
