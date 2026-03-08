@@ -5,7 +5,7 @@ use crate::{
     ir::{Module, module_to_string, to_string},
     module_parser::parse_module,
     tokeniser::{get_line_and_column, tokenise},
-    value::IO,
+    value::{EmptyTuple, IO},
     vm::{RunResult, evaluate},
 };
 

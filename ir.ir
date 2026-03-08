@@ -9,12 +9,10 @@ print_first_char
 		return $2
 main
 	0:
-		$3 = $1
-		$4 = $3
-		$5 = "hello"
-		call ModuleFunction("print_first_char")[4, 5]
+		$3 = $0
+		$4 = "hello"
+		call ModuleFunction("print_first_char")[3, 4]
 		delete $3
 		delete $4
-		delete $5
 		$2 = EmptyTuple
 		return $2

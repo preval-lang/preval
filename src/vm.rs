@@ -1,8 +1,6 @@
 use std::collections::HashSet;
 use std::{collections::HashMap, fs, process::exit};
 
-use serde::{Deserialize, Serialize};
-
 use crate::ir::Callable;
 use crate::value::Value;
 use crate::{

@@ -16,12 +16,6 @@ pub enum Type {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum Pointer {
-    Function(Box<Signature>),
-    Value(Box<Type>),
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Signature {
     pub(crate) args: Vec<Type>,
     pub(crate) returns: Type,

@@ -3,8 +3,11 @@ use std::{
     collections::HashMap,
     fmt::{Debug, Display},
     ops::Index,
+    process::Output,
     sync::Arc,
 };
+
+use serde::{Deserialize, Serialize};
 
 // #[derive(Debug, Clone, PartialEq)]
 // pub enum Value {
@@ -25,6 +28,7 @@ pub trait Value: Debug {
     fn vto_string(&self) -> String;
     fn veq(&self, other: &Box<dyn Value>) -> bool;
     fn as_any(&self) -> &dyn Any;
+    fn pre_serialize<'a>(&'a self) -> Option<&'a dyn erased_serde::Serialize>;
 }
 
 impl PartialEq for Box<dyn Value> {
@@ -52,15 +56,30 @@ impl Clone for Box<dyn Value> {
 //     }
 // }
 
-trait PrevalValue {
+trait PrevalValue: PreSerialize {
     fn vindex(&self, value: &dyn Value) -> Box<dyn Value> {
         panic!("Not indexable: {}", type_name::<Self>())
+    }
+
+    fn deserializer_id(&self) -> Option<String> {
+        None
+    }
+}
+
+trait PreSerialize {
+    fn pre_serialize<'a>(&'a self) -> Option<&'a dyn erased_serde::Serialize>;
+}
+
+impl<T: erased_serde::Serialize> PreSerialize for T {
+    fn pre_serialize<'a>(&'a self) -> Option<&'a dyn erased_serde::Serialize> {
+        Some(self)
     }
 }
 
 impl<T: PartialEq + Clone + Debug + PrevalValue + 'static> Value for T {
     fn vclone(&self) -> Box<dyn Value> {
-        Box::new(self.clone())
+        let c = self.clone();
+        Box::new(c)
     }
 
     fn veq(&self, other: &Box<dyn Value>) -> bool {
@@ -81,6 +100,10 @@ impl<T: PartialEq + Clone + Debug + PrevalValue + 'static> Value for T {
     fn vto_string(&self) -> String {
         format!("{self:?}")
     }
+
+    fn pre_serialize<'a>(&'a self) -> Option<&'a dyn erased_serde::Serialize> {
+        PreSerialize::pre_serialize(self)
+    }
 }
 
 impl PrevalValue for String {
@@ -92,13 +115,30 @@ impl PrevalValue for String {
     }
 }
 
-impl PrevalValue for usize {}
-impl PrevalValue for bool {}
+impl PrevalValue for usize {
+    fn deserializer_id(&self) -> Option<String> {
+        Some("usize".to_string())
+    }
+}
 
-#[derive(PartialEq, Debug, Clone)]
-pub struct IO {}
-impl PrevalValue for IO {}
+impl PrevalValue for bool {
+    fn deserializer_id(&self) -> Option<String> {
+        Some("bool".to_string())
+    }
+}
 
-#[derive(PartialEq, Debug, Clone)]
-pub struct EmptyTuple {}
-impl PrevalValue for EmptyTuple {}
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+pub struct IO;
+impl PrevalValue for IO {
+    fn deserializer_id(&self) -> Option<String> {
+        Some("nop".to_string())
+    }
+}
+
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+pub struct EmptyTuple;
+impl PrevalValue for EmptyTuple {
+    fn deserializer_id(&self) -> Option<String> {
+        Some("nop".to_string())
+    }
+}

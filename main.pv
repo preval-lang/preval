@@ -3,6 +3,5 @@ fn print_first_char(io: IO, text: String) {
 }
 
 fn main(compile_io: IO, io: IO) {
-    let cio = io;
-    print_first_char(cio, "hello");
+    print_first_char(compile_io, "hello");
 }
