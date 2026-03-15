@@ -1,1 +1,11 @@
-Partial([Block { statements: [Operation(LoadLiteral(Print), Some(5)), Operation(LoadLiteral(StructConstructor { typ: "Person" }), Some(4)), Operation(LoadLocal { src: 1 }, Some(3)), Operation(Call { function: Var(5), args: [3, 4] }, Some(2))], terminal: Return(Some(2)) }], {5, 4, 3, 1, 2})
+Partial([Block { statements: [Operation(LoadLocal { src: 1 }, Some(5)), Operation(Call { function: Partial(	0:
+		$4 = "RUN"
+		$5 = Print
+		$2 = EmptyTuple
+		$3 = $1
+		call Var(5)[3, 4]
+		delete $3
+		delete $4
+		delete $5
+		return $2
+), args: [4, 5] }, Some(2)), Delete(5)], terminal: Return(Some(2)) }], {1, 2, 5})

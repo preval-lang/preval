@@ -1,11 +1,48 @@
+main
+	0:
+		$3 = 	0:
+		$3 = $1
+		$4 = "RUN"
+		$5 = Print
+		call Var(5)[3, 4]
+		$6 = $0
+		$7 = "COMP"
+		$8 = Print
+		call Var(8)[6, 7]
+		delete $3
+		delete $4
+		delete $5
+		delete $6
+		delete $7
+		delete $8
+		$2 = EmptyTuple
+		return $2
+
+		$4 = $0
+		$5 = $1
+		$6 = $3
+		$2 = call Var(6)[4, 5]
+		delete $3
+		delete $4
+		delete $5
+		delete $6
+		return $2
 print
-Printmain
+Printdo_it
 	0:
 		$3 = $1
-		$5 = StructConstructor { typ: "Person" }
-		$4 = call Var(5)[]
-		$6 = Print
-		$2 = call Var(6)[3, 4]
+		$4 = "RUN"
+		$5 = Print
+		call Var(5)[3, 4]
+		$6 = $0
+		$7 = "COMP"
+		$8 = Print
+		call Var(8)[6, 7]
+		delete $3
+		delete $4
+		delete $5
+		delete $6
+		delete $7
+		delete $8
+		$2 = EmptyTuple
 		return $2
-Person
-StructConstructor { typ: "Person" }

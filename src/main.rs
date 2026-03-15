@@ -59,7 +59,7 @@ fn main() {
 
                     if let Some(arg1) = env::args().collect::<Vec<_>>().get(1) {
                         if arg1 == "compile" {
-                            let vec = serde_json::to_string(&module).unwrap();
+                            let vec = serde_json::to_string(&eval).unwrap();
                             fs::write("main.pvc", vec).unwrap();
                             return;
                         }

@@ -126,9 +126,6 @@ pub fn evaluate(
                                 if let Some(store) = store {
                                     resudual_vars.insert(*store);
                                 }
-                                if let Some(funcvar) = funcvar {
-                                    resudual_vars.insert(*funcvar);
-                                }
                             }
                         }
                     }

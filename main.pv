@@ -1,6 +1,10 @@
-struct Person(
-    name: String,
-)
+fn do_it(compile_io: IO, io: IO) {
+    print(io,"RUN");
+    print(compile_io,"COMP");
+}
 
-fn main(compile_io: IO, io: IO) 
-    print(io, Person());
+fn main(compile_io: IO, io: IO) {
+    let a = do_it;
+
+    a(compile_io, io)
+}
