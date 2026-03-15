@@ -1,26 +1,22 @@
-use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::sync::Mutex;
 
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::ir::Callable;
+use crate::ir::Partial;
+use crate::ir::{Block, Module, Operation, Statement, Terminal};
 use crate::value::Value;
-use crate::{
-    builtins::get_builtins,
-    ir::{Block, Module, Operation, Statement, Terminal},
-};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RunResult {
     Concrete(Value),
     Partial(Vec<Block>, HashSet<usize>),
+    Residualise,
 }
 
 pub fn evaluate(
-    module: &Module,
     mut blocks: Vec<Block>,
     vars: &mut HashMap<usize, Option<Value>>,
     start_block: usize,
@@ -61,58 +57,82 @@ pub fn evaluate(
                             vars.insert(*store, Some(lit.clone()));
                         }
                     }
-                    Operation::Call { function, args } => match function {
-                        Callable::ModuleFunction(name) if get_builtins().contains_key(name) => {
-                            get_builtins().get(name).unwrap().call(
-                                vars,
-                                args,
-                                store,
-                                &mut out,
-                                stmt,
-                                &mut resudual_vars,
-                            );
-                        }
-                        function => {
-                            let blocks = match function {
-                                Callable::ModuleFunction(name) => module.functions[name].ir.clone(),
-                                Callable::Partial(partial) => partial.clone(),
-                            };
-                            let mut args_map = HashMap::new();
-                            for (i, arg) in args.iter().enumerate() {
-                                args_map.insert(
-                                    i,
-                                    match vars.get(arg) {
-                                        Some(Some(v)) => Some(v.clone()),
-                                        _ => None,
+                    Operation::Call { function, args } => {
+                        let funcvar = if let Callable::Var(v) = function {
+                            Some(v)
+                        } else {
+                            None
+                        };
+                        let function = match function {
+                            Callable::Partial(function) => &function,
+                            Callable::Var(function) => match vars.get(function) {
+                                Some(None) => {
+                                    out.push(stmt.clone());
+                                    for arg in args {
+                                        resudual_vars.insert(*arg);
+                                    }
+                                    resudual_vars.insert(*function);
+                                    continue;
+                                }
+                                None => panic!("Undefined variable in call"),
+                                Some(Some(function)) => function,
+                            },
+                        };
+                        let args_list = args
+                            .iter()
+                            .map(|v| vars.get(v).unwrap_or(&None))
+                            .collect::<Vec<_>>();
+
+                        match function.data.call(args_list) {
+                            RunResult::Concrete(v) => {
+                                if let Some(store) = store {
+                                    vars.insert(*store, Some(v));
+                                }
+                            }
+                            RunResult::Residualise => {
+                                out.push(stmt.clone());
+
+                                for arg in args {
+                                    resudual_vars.insert(*arg);
+                                }
+                                if let Some(store) = store {
+                                    resudual_vars.insert(*store);
+                                }
+                                if let Some(funcvar) = funcvar {
+                                    resudual_vars.insert(*funcvar);
+                                }
+                                if let Some(store) = store {
+                                    vars.insert(*store, None);
+                                }
+                            }
+                            RunResult::Partial(function, residuals) => {
+                                out.push(Statement::Operation(
+                                    Operation::Call {
+                                        function: Callable::Partial(Value::new(Partial {
+                                            blocks: function,
+                                        })),
+                                        args: args.clone(),
                                     },
-                                );
-                            }
-                            match evaluate(module, blocks, &mut args_map, 0) {
-                                RunResult::Concrete(res) => {
-                                    if let Some(store) = store {
-                                        vars.insert(*store, Some(res));
+                                    *store,
+                                ));
+                                if let Some(store) = store {
+                                    vars.insert(*store, None);
+                                }
+                                for (i, arg) in args.iter().enumerate() {
+                                    if residuals.contains(&i) {
+                                        resudual_vars.insert(*arg);
                                     }
                                 }
-                                RunResult::Partial(func, residuals) => {
-                                    if let Some(store) = store {
-                                        resudual_vars.insert(*store);
-                                    }
-                                    for (i, arg) in args.iter().enumerate() {
-                                        if residuals.contains(&i) {
-                                            resudual_vars.insert(*arg);
-                                        }
-                                    }
-                                    out.push(Statement::Operation(
-                                        Operation::Call {
-                                            function: Callable::Partial(func),
-                                            args: args.clone(),
-                                        },
-                                        *store,
-                                    ));
+                                if let Some(store) = store {
+                                    resudual_vars.insert(*store);
+                                }
+                                if let Some(funcvar) = funcvar {
+                                    resudual_vars.insert(*funcvar);
                                 }
                             }
                         }
-                    },
+                    }
+
                     Operation::LoadLocal { src } => {
                         if let Some(store) = store {
                             if let Some(Some(data)) = vars.get(&src) {

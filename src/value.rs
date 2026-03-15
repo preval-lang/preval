@@ -1,30 +1,20 @@
 use std::{
     any::{Any, type_name},
+    collections::{HashMap, HashSet},
     fmt::Debug,
 };
 
-use serde::{
-    Deserialize, Serialize,
-    de::Visitor,
-    ser::{SerializeMap, SerializeSeq, SerializeStruct},
+use serde::{Deserialize, Serialize};
+
+use crate::{
+    ir::Block,
+    typ::{Type, deserialize_type},
+    vm::RunResult,
 };
-
-use crate::typ::deserialize_type;
-
-// #[derive(Debug, Clone, PartialEq)]
-// pub enum Value {
-//     String(String),
-//     Usize(usize),
-//     Bool(bool),
-//     Char(char),
-//     EmptyTuple,
-//     IO,
-//     Struct(HashMap<String, Value>, Arc<StructDescriptor>),
-// }
 
 #[derive(Clone)]
 pub struct Value {
-    pub typ: String,
+    pub typ: Type,
     pub data: Box<dyn ValueData>,
 }
 
@@ -48,11 +38,12 @@ pub trait ValueData: Debug {
     fn index(&self, value: &Value) -> Value {
         panic!("Type is not indexable")
     }
+    fn call(&self, args: Vec<&Option<Value>>) -> RunResult;
     fn vto_string(&self) -> String;
     fn veq(&self, other: &Value) -> bool;
     fn as_any(&self) -> &dyn Any;
     fn pre_serialize<'a>(&'a self) -> Option<&'a dyn erased_serde::Serialize>;
-    fn get_type(&self) -> String;
+    fn get_type(&self) -> Type;
 }
 
 impl PartialEq for Value {
@@ -80,16 +71,20 @@ impl Clone for Box<dyn ValueData> {
 //     }
 // }
 
-trait PrevalValue: PreSerialize {
+pub trait PrevalValue: PreSerialize {
     fn vindex(&self, value: &Value) -> Value {
         panic!("Not indexable: {}", type_name::<Self>())
     }
 
-    fn get_type(&self) -> String;
+    fn vcall(&self, args: Vec<&Option<Value>>) -> RunResult {
+        panic!("Not callable: {}", type_name::<Self>())
+    }
+
+    fn get_type(&self) -> Type;
 }
 
 #[derive(serde::Deserialize)]
-struct RawValue(String, serde_value::Value);
+struct RawValue(Type, serde_value::Value);
 
 impl<'de> serde::Deserialize<'de> for Value {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -152,6 +147,10 @@ impl<T: PartialEq + Clone + Debug + PrevalValue + 'static> ValueData for T {
         self.vindex(value)
     }
 
+    fn call(&self, args: Vec<&Option<Value>>) -> RunResult {
+        self.vcall(args)
+    }
+
     fn vto_string(&self) -> String {
         format!("{self:?}")
     }
@@ -160,7 +159,7 @@ impl<T: PartialEq + Clone + Debug + PrevalValue + 'static> ValueData for T {
         PreSerialize::pre_serialize(self)
     }
 
-    fn get_type(&self) -> String {
+    fn get_type(&self) -> Type {
         PrevalValue::get_type(self)
     }
 }
@@ -173,35 +172,75 @@ impl PrevalValue for String {
         }
     }
 
-    fn get_type(&self) -> String {
-        "String".to_string()
+    fn get_type(&self) -> Type {
+        Type::String
     }
 }
 
 impl PrevalValue for usize {
-    fn get_type(&self) -> String {
-        "usize".to_string()
+    fn get_type(&self) -> Type {
+        Type::USize
     }
 }
 
 impl PrevalValue for bool {
-    fn get_type(&self) -> String {
-        "bool".to_string()
+    fn get_type(&self) -> Type {
+        Type::Bool
     }
 }
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct IO;
 impl PrevalValue for IO {
-    fn get_type(&self) -> String {
-        "IO".to_string()
+    fn get_type(&self) -> Type {
+        Type::IO
     }
 }
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct EmptyTuple;
 impl PrevalValue for EmptyTuple {
-    fn get_type(&self) -> String {
-        "EmptyTuple".to_string()
+    fn get_type(&self) -> Type {
+        Type::Tuple(Vec::new())
+    }
+}
+
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+pub struct Struct {
+    fields: HashMap<String, Value>,
+    typ: String,
+}
+impl PrevalValue for Struct {
+    fn get_type(&self) -> Type {
+        Type::Struct(self.typ.clone())
+    }
+}
+
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+pub struct StructConstructor {
+    pub typ: String,
+}
+
+impl PrevalValue for StructConstructor {
+    fn get_type(&self) -> Type {
+        Type::StructConstructor(self.typ.clone())
+    }
+}
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+pub struct Print;
+impl PrevalValue for Print {
+    fn vcall(&self, args: Vec<&Option<Value>>) -> RunResult {
+        match [args[0], args[1]] {
+            [Some(_), Some(v)] => {
+                println!("{v:?}");
+                RunResult::Concrete(Value::new(EmptyTuple))
+            }
+            [Some(_), None] => panic!("IO is present but message is not"),
+            _ => RunResult::Residualise,
+        }
+    }
+
+    fn get_type(&self) -> Type {
+        Type::Print
     }
 }

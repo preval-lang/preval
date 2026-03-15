@@ -8,6 +8,7 @@ pub enum Keyword {
     If,
     Else,
     Bool(bool),
+    Struct,
 }
 
 impl TryFrom<&str> for Keyword {
@@ -22,6 +23,7 @@ impl TryFrom<&str> for Keyword {
             "else" => Ok(Keyword::Else),
             "true" => Ok(Keyword::Bool(true)),
             "false" => Ok(Keyword::Bool(false)),
+            "struct" => Ok(Keyword::Struct),
             _ => Err(()),
         }
     }

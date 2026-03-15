@@ -1,7 +1,6 @@
-fn print_first_char(io: IO, text: String) {
-    print(io, "jokes!");
-}
+struct Person(
+    name: String,
+)
 
-fn main(compile_io: IO, io: IO) {
-    print_first_char(io, "hello");
-}
+fn main(compile_io: IO, io: IO) 
+    print(io, Person());

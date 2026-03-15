@@ -3,21 +3,24 @@ use std::{collections::HashMap, usize};
 use crate::{
     builtins::get_builtins,
     expression_parser::{InfoExpr, InfoParseError, ParseError, parse_expression},
-    ir::{Block, Declaration, Function, Module, Terminal, to_ir},
+    ir::{Block, Declaration, Function, Module, StructDescriptor, Terminal, to_ir},
     tokeniser::{InfoToken, Keyword, Operator, Token},
     typ::{Signature, Type, get_type},
+    value::{Print, StructConstructor, Value},
 };
 
 pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
     let mut module = Module {
-        functions: HashMap::new(),
+        objects: HashMap::new(),
+        structs: HashMap::new(),
     };
 
     let mut declarations = HashMap::new();
 
-    for (name, builtin) in get_builtins() {
-        declarations.insert(name, Declaration::Function(builtin.get_signature()));
-    }
+    module
+        .objects
+        .insert("print".to_string(), Value::new(Print));
+    declarations.insert("print".to_string(), Declaration::Constant);
 
     let mut i = 0;
 
@@ -60,7 +63,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                         args: args.iter().map(|arg| arg.1.clone()).collect(),
                         returns,
                     };
-                    declarations.insert(name.clone(), Declaration::Function(signature.clone()));
+                    declarations.insert(name.clone(), Declaration::Constant);
 
                     let body = expect_block_or_expr(tokens, &mut i)?;
 
@@ -91,7 +94,10 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                         &mut last_var,
                     )?;
 
-                    if let Some(_) = module.functions.insert(name.to_string(), function) {
+                    if let Some(_) = module
+                        .objects
+                        .insert(name.to_string(), Value::new(function))
+                    {
                         return Err(InfoParseError {
                             idx: tokens[i].idx,
                             error: ParseError::DuplicateName,
@@ -103,6 +109,57 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                         error: ParseError::ExpectedName,
                     });
                 }
+            }
+            Token::Keyword(Keyword::Struct) => {
+                i += 1;
+                let name = if let Token::Name(name) = &tokens[i].token {
+                    Ok(name)
+                } else {
+                    Err(InfoParseError {
+                        idx: tokens[i].idx,
+                        error: ParseError::ExpectedName,
+                    })
+                }?;
+                i += 1;
+                let block = if let Token::Operator(Operator::Call(block)) = &tokens[i].token {
+                    Ok(block)
+                } else {
+                    Err(InfoParseError {
+                        idx: tokens[i].idx,
+                        error: ParseError::ExpectedExpression(tokens[i..].to_vec()),
+                    })
+                }?;
+
+                let mut fields = HashMap::new();
+
+                for field_colon_type in block {
+                    if let [
+                        InfoToken {
+                            token: Token::Name(name),
+                            idx: name_idx,
+                        },
+                        InfoToken {
+                            token: Token::Colon,
+                            idx: colon_idx,
+                        },
+                        typ @ ..,
+                    ] = field_colon_type.as_slice()
+                    {
+                        fields.insert(name.clone(), get_type(typ, &mut 0)?);
+                    }
+                }
+                i += 1;
+
+                module
+                    .structs
+                    .insert(name.clone(), StructDescriptor { fields });
+
+                declarations.insert(name.clone(), Declaration::Constant);
+
+                module.objects.insert(
+                    name.clone(),
+                    Value::new(StructConstructor { typ: name.clone() }),
+                );
             }
             tk => {
                 return Err(InfoParseError {
