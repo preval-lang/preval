@@ -1,18 +1,13 @@
 use std::{collections::HashMap, env, fs};
 
 use crate::{
-    // compiler::compile,
-    ir::{Module, module_to_string, to_string},
+    ir::module_to_string,
     module_parser::parse_module,
     tokeniser::{get_line_and_column, tokenise},
-    value::{EmptyTuple, IO, Value},
+    value::{IO, Value},
     vm::{RunResult, evaluate},
 };
 
-use value::ValueData;
-
-// mod compiler;
-mod builtins;
 mod expression_parser;
 mod ir;
 mod module_parser;

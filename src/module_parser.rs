@@ -1,7 +1,6 @@
 use std::{collections::HashMap, usize};
 
 use crate::{
-    builtins::get_builtins,
     expression_parser::{InfoExpr, InfoParseError, ParseError, parse_expression},
     ir::{Block, Declaration, Function, Module, StructDescriptor, Terminal, to_ir},
     tokeniser::{InfoToken, Keyword, Operator, Token},
