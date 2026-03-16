@@ -2,17 +2,15 @@ use std::{collections::HashMap, env, fs};
 
 use crate::{
     ir::{Module, module_to_string},
-    module_parser::parse_module,
+    parser::module::parse_module,
     tokeniser::{get_line_and_column, tokenise},
-    value::{IO, Value},
+    value::{Value, primitive::IO},
     vm::{RunResult, evaluate},
 };
 
-mod expression_parser;
 mod ir;
-mod module_parser;
+mod parser;
 mod tokeniser;
-mod typ;
 mod value;
 mod vm;
 

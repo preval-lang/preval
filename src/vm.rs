@@ -225,17 +225,20 @@ pub fn evaluate(
             },
             Terminal::Jump(b) => block = b,
             Terminal::CondJump { cond, then, els } => match vars.get(&cond) {
-                _ => todo!("downcast bools"),
-                // Some(Some(Value::Bool(b))) => {
-                //     if *b {
-                //         blocks[block].terminal = Terminal::Jump(then);
-                //         block = then;
-                //     } else {
-                //         blocks[block].terminal = Terminal::Jump(els);
-                //         block = els;
-                //     }
-                // }
-                Some(Some(other)) => panic!("Wrong value in condition"),
+                Some(Some(b)) => {
+                    let b = if let Some(b) = b.data.as_any().downcast_ref::<bool>() {
+                        b
+                    } else {
+                        panic!("Wrong condition")
+                    };
+                    if *b {
+                        blocks[block].terminal = Terminal::Jump(then);
+                        block = then;
+                    } else {
+                        blocks[block].terminal = Terminal::Jump(els);
+                        block = els;
+                    }
+                }
                 Some(None) => {
                     resudual_vars.insert(cond);
                     let mut vars_statements: Vec<_> = resudual_vars
