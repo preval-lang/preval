@@ -17,6 +17,7 @@ pub enum RunResult {
 }
 
 pub fn evaluate(
+    module: &Module,
     mut blocks: Vec<Block>,
     vars: &mut HashMap<usize, Option<Value>>,
     start_block: usize,
@@ -83,7 +84,7 @@ pub fn evaluate(
                             .map(|v| vars.get(v).unwrap_or(&None))
                             .collect::<Vec<_>>();
 
-                        match function.data.call(args_list) {
+                        match function.data.call(&module, args_list) {
                             RunResult::Concrete(v) => {
                                 if let Some(store) = store {
                                     vars.insert(*store, Some(v));

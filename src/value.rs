@@ -7,7 +7,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ir::Block,
+    ir::{Block, Module},
     typ::{Type, deserialize_type},
     vm::RunResult,
 };
@@ -38,7 +38,7 @@ pub trait ValueData: Debug {
     fn index(&self, value: &Value) -> Value {
         panic!("Type is not indexable")
     }
-    fn call(&self, args: Vec<&Option<Value>>) -> RunResult;
+    fn call(&self, module: &Module, args: Vec<&Option<Value>>) -> RunResult;
     fn vto_string(&self) -> String;
     fn veq(&self, other: &Value) -> bool;
     fn as_any(&self) -> &dyn Any;
@@ -76,7 +76,7 @@ pub trait PrevalValue: PreSerialize {
         panic!("Not indexable: {}", type_name::<Self>())
     }
 
-    fn vcall(&self, args: Vec<&Option<Value>>) -> RunResult {
+    fn vcall(&self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
         panic!("Not callable: {}", type_name::<Self>())
     }
 
@@ -116,7 +116,7 @@ impl serde::Serialize for Value {
         tup.end()
     }
 }
-trait PreSerialize {
+pub trait PreSerialize {
     fn pre_serialize<'a>(&'a self) -> Option<&'a dyn erased_serde::Serialize>;
 }
 
@@ -147,8 +147,8 @@ impl<T: PartialEq + Clone + Debug + PrevalValue + 'static> ValueData for T {
         self.vindex(value)
     }
 
-    fn call(&self, args: Vec<&Option<Value>>) -> RunResult {
-        self.vcall(args)
+    fn call(&self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
+        self.vcall(module, args)
     }
 
     fn vto_string(&self) -> String {
@@ -214,6 +214,14 @@ impl PrevalValue for Struct {
     fn get_type(&self) -> Type {
         Type::Struct(self.typ.clone())
     }
+
+    fn vindex(&self, value: &Value) -> Value {
+        if let Some(name) = value.data.as_any().downcast_ref::<String>() {
+            self.fields[name].clone()
+        } else {
+            todo!("Index structs by number")
+        }
+    }
 }
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
@@ -225,11 +233,28 @@ impl PrevalValue for StructConstructor {
     fn get_type(&self) -> Type {
         Type::StructConstructor(self.typ.clone())
     }
+
+    fn vcall(&self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
+        let st = &module.structs[&self.typ];
+        let field_names: Vec<_> = st.fields.keys().collect();
+        let mut v = HashMap::new();
+        for i in 0..field_names.len() {
+            if let Some(arg) = args[i] {
+                v.insert(field_names[i].clone(), arg.clone());
+            } else {
+                return RunResult::Residualise;
+            }
+        }
+        RunResult::Concrete(Value::new(Struct {
+            typ: self.typ.clone(),
+            fields: v,
+        }))
+    }
 }
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct Print;
 impl PrevalValue for Print {
-    fn vcall(&self, args: Vec<&Option<Value>>) -> RunResult {
+    fn vcall(&self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
         match [args[0], args[1]] {
             [Some(_), Some(v)] => {
                 println!("{v:?}");

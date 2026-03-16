@@ -86,50 +86,48 @@ pub fn parse_expression(tokens: &[InfoToken]) -> Result<InfoExpr, InfoParseError
         }
     }
 
-    let mut highest_precedence: Option<(i32, usize)> = None;
+    let mut lowest_precendence: Option<(i32, usize)> = None;
 
     for (i, token) in tokens.iter().enumerate() {
         if let Token::Operator(op) = &token.token {
-            if let Some(hp) = highest_precedence {
-                if op.precidence() > hp.0 {
-                    highest_precedence = Some((op.precidence(), i));
+            if let Some(hp) = lowest_precendence {
+                if op.precidence() < hp.0 {
+                    lowest_precendence = Some((op.precidence(), i));
                 }
             } else {
-                highest_precedence = Some((op.precidence(), i));
+                lowest_precendence = Some((op.precidence(), i));
             }
         }
     }
 
-    if let Some(hp) = highest_precedence {
-        match &tokens[hp.1].token {
+    if let Some(lp) = lowest_precendence {
+        match &tokens[lp.1].token {
             Token::Operator(op) => match op {
                 Operator::Assign => {
                     todo!("Mutability");
                 }
                 Operator::Dot => {
-                    let left = parse_expression(&tokens[0..hp.1]).unwrap();
-
-                    if let Token::Name(name) = &tokens[hp.1 + 1].token {
+                    let left = parse_expression(&tokens[0..lp.1]).unwrap();
+                    if let Token::Name(name) = &tokens[lp.1 + 1].token {
                         Ok(InfoExpr {
                             idx: left.idx,
                             expr: Expr::Index(
                                 Box::new(left),
                                 Box::new(InfoExpr {
-                                    idx: tokens[hp.1 + 1].idx,
+                                    idx: tokens[lp.1 + 1].idx,
                                     expr: Expr::Literal(Value::new(name.to_string())),
                                 }),
                             ),
                         })
                     } else {
                         Err(InfoParseError {
-                            idx: tokens[hp.1 + 1].idx,
+                            idx: tokens[lp.1 + 1].idx,
                             error: ParseError::ExpectedName,
                         })
                     }
                 }
                 Operator::Call(args) => {
-                    let left = parse_expression(&tokens[0..hp.1]).unwrap();
-
+                    let left = parse_expression(&tokens[0..lp.1]).unwrap();
                     Ok(InfoExpr {
                         idx: left.idx,
                         expr: Expr::Call(

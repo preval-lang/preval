@@ -1,5 +1,7 @@
 use std::{collections::HashMap, usize};
 
+use indexmap::IndexMap;
+
 use crate::{
     expression_parser::{InfoExpr, InfoParseError, ParseError, parse_expression},
     ir::{Block, Declaration, Function, Module, StructDescriptor, Terminal, to_ir},
@@ -129,7 +131,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                     })
                 }?;
 
-                let mut fields = HashMap::new();
+                let mut fields = IndexMap::new();
 
                 for field_colon_type in block {
                     if let [

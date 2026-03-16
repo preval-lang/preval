@@ -1,10 +1,5 @@
-fn do_it(compile_io: IO, io: IO) {
-    print(io,"RUN");
-    print(compile_io,"COMP");
-}
+struct Person(name: String)
 
 fn main(compile_io: IO, io: IO) {
-    let a = do_it;
-
-    a(compile_io, io)
+    print(io, Person("Finnbar").name);
 }

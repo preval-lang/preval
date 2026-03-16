@@ -1,5 +1,6 @@
 use std::{collections::HashMap, fmt::Debug};
 
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -35,7 +36,7 @@ pub struct Module {
 }
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StructDescriptor {
-    pub fields: HashMap<String, Type>,
+    pub fields: IndexMap<String, Type>,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
@@ -50,12 +51,12 @@ impl PrevalValue for Function {
         Type::Function(Box::new(self.signature.clone()))
     }
 
-    fn vcall(&self, args: Vec<&Option<Value>>) -> RunResult {
+    fn vcall(&self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
         let mut args_map = HashMap::new();
         for (i, arg) in args.iter().enumerate() {
             args_map.insert(i, arg.clone().clone());
         }
-        evaluate(self.ir.clone(), &mut args_map, 0)
+        evaluate(module, self.ir.clone(), &mut args_map, 0)
     }
 }
 
@@ -68,12 +69,12 @@ impl PrevalValue for Partial {
         Type::Partial
     }
 
-    fn vcall(&self, args: Vec<&Option<Value>>) -> RunResult {
+    fn vcall(&self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
         let mut args_map = HashMap::new();
         for (i, arg) in args.iter().enumerate() {
             args_map.insert(i, arg.clone().clone());
         }
-        evaluate(self.blocks.clone(), &mut args_map, 0)
+        evaluate(module, self.blocks.clone(), &mut args_map, 0)
     }
 }
 impl Debug for Partial {

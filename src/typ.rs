@@ -1,7 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::ops::Deref;
-use std::sync::{Arc, Mutex};
-use std::{cell::OnceCell, collections::HashMap};
 
 use crate::ir::{Function, Partial};
 use crate::value::{EmptyTuple, IO, Print, Struct, StructConstructor, ValueData};

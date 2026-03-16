@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 erased-serde = "0.4.10"
+indexmap = {version="2.13.0", features = ["serde"]}
 libloading = "0.8.9"
 serde = { version = "1.0.228", features = ["derive"] }
 serde-value = "0.7.0"
