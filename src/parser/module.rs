@@ -4,8 +4,11 @@ use indexmap::IndexMap;
 
 use crate::{
     ir::{Block, Declaration, Function, Module, StructDescriptor, Terminal, to_ir},
-    parser::expression::{InfoExpr, InfoParseError, ParseError, parse_expression},
-    tokeniser::{InfoToken, Keyword, Operator, Token},
+    parser::{
+        expression::{InfoExpr, InfoParseError, ParseError, parse_expression},
+        utility::{self, read_punctuated},
+    },
+    tokeniser::{InfoToken, Keyword, Token},
     value::{
         Print, Value,
         structure::StructConstructor,
@@ -37,8 +40,8 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
 
                     let mut args = Vec::new();
 
-                    if let Token::Operator(Operator::Call(arg_colon_types)) = &tokens[i].token {
-                        for arg_colon_type in arg_colon_types {
+                    if let Token::Parens(contents) = &tokens[i].token {
+                        for arg_colon_type in read_punctuated(contents, Token::Comma)? {
                             if let [
                                 InfoToken {
                                     token: Token::Name(name),
@@ -49,9 +52,10 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                                     idx: colon_idx,
                                 },
                                 typ @ ..,
-                            ] = arg_colon_type.as_slice()
+                            ] = &arg_colon_type[..]
                             {
-                                args.push((name, get_type(typ, &mut 0)?));
+                                let typ = get_type(&typ, &mut 0)?;
+                                args.push((name.clone(), typ));
                             }
                         }
                         i += 1;
@@ -125,7 +129,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                     })
                 }?;
                 i += 1;
-                let block = if let Token::Operator(Operator::Call(block)) = &tokens[i].token {
+                let block = if let Token::Braces(block) = &tokens[i].token {
                     Ok(block)
                 } else {
                     Err(InfoParseError {
@@ -136,7 +140,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
 
                 let mut fields = IndexMap::new();
 
-                for field_colon_type in block {
+                for field_colon_type in read_punctuated(block, Token::Comma)? {
                     if let [
                         InfoToken {
                             token: Token::Name(name),
@@ -182,7 +186,7 @@ pub fn expect_block_or_expr(
     i: &mut usize,
 ) -> Result<InfoExpr, InfoParseError> {
     if let Some(InfoToken {
-        token: Token::Block(_),
+        token: Token::Braces(_),
         idx: _,
     }) = tokens.get(*i)
     {

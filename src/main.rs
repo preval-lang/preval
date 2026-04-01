@@ -1,5 +1,7 @@
 use std::{collections::HashMap, env, fs};
 
+use ron::ser::PrettyConfig;
+
 use crate::{
     ir::{Module, module_to_string},
     parser::module::parse_module,
@@ -18,7 +20,7 @@ fn main() {
     if let Some(arg1) = env::args().collect::<Vec<_>>().get(1) {
         if arg1 == "run" {
             let (module, runresult): (Module, RunResult) =
-                serde_json::from_slice(&fs::read("main.pvc").unwrap()).unwrap();
+                ron::de::from_bytes(&fs::read("main.pvc").unwrap()).unwrap();
 
             let mut vars: HashMap<usize, Option<Value>> = HashMap::new();
 
@@ -52,7 +54,11 @@ fn main() {
 
                     if let Some(arg1) = env::args().collect::<Vec<_>>().get(1) {
                         if arg1 == "compile" {
-                            let vec = serde_json::to_string(&(module, eval)).unwrap();
+                            let vec = ron::ser::to_string_pretty(
+                                &(module, eval),
+                                PrettyConfig::default(),
+                            )
+                            .unwrap();
                             fs::write("main.pvc", vec).unwrap();
                             return;
                         }
@@ -62,6 +68,10 @@ fn main() {
 
                     vars.insert(0, Some(Value::new(IO {})));
                     vars.insert(1, Some(Value::new(IO {})));
+
+                    println!("-----");
+                    println!("PASS 1 COMPLETE");
+                    println!("-----");
 
                     run_entire_program(&module, eval, &mut vars);
                 }

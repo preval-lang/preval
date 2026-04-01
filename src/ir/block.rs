@@ -51,7 +51,7 @@ pub fn compile_block(
         i += 1;
     }
 
-    let delete_group_end = *next_var + 1;
+    let delete_group_end = *next_var;
 
     for i in delete_group_start..delete_group_end {
         function.ir[*block].statements.push(Statement::Delete(i));

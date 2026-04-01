@@ -19,7 +19,6 @@ impl PrevalValue for Struct {
     }
 
     fn vindex(&self, value: &Value) -> Value {
-        println!("HERE!");
         if let Some(name) = value.data.as_any().downcast_ref::<String>() {
             self.fields[name].clone()
         } else {

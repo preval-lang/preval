@@ -55,6 +55,7 @@ pub fn evaluate(
                     },
                     Operation::LoadLiteral(lit) => {
                         if let Some(store) = store {
+                            println!("STORE {:?} in var {:?}", lit, store);
                             vars.insert(*store, Some(lit.clone()));
                         }
                     }
@@ -75,7 +76,10 @@ pub fn evaluate(
                                     resudual_vars.insert(*function);
                                     continue;
                                 }
-                                None => panic!("Undefined variable in call"),
+                                None => panic!(
+                                    "Undefined variable {} in call, vars is {vars:?}",
+                                    function
+                                ),
                                 Some(Some(function)) => function,
                             },
                         };
