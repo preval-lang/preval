@@ -1,5 +1,5 @@
 struct Person(name: String)
 
 fn main(compile_io: IO, io: IO) {
-    print(io, Person("Finnbar").name);
+    print(io, (Person("Finnbar"))["name"]);
 }

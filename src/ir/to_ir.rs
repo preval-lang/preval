@@ -1,0 +1,105 @@
+use std::collections::HashMap;
+
+use crate::{
+    ir::{Declaration, Function, Module, error::IRErrorInfo},
+    parser::expression::{Expr, InfoExpr},
+};
+
+use crate::ir::{
+    block::compile_block, call::call, conditional::conditional, index::index, literal::literal,
+    returns::returns, variable::variable, variable_declaration::variable_declaration,
+};
+
+pub fn to_ir(
+    function: &mut Function,
+    block: &mut usize,
+    module: &mut Module,
+    expr: InfoExpr,
+    store: Option<usize>,
+    declarations: &HashMap<String, Declaration>,
+    locals: &mut HashMap<String, Declaration>,
+    next_var: &mut usize,
+) -> Result<(), IRErrorInfo> {
+    match expr.expr {
+        Expr::Literal(lit) => literal(lit, function, block, store),
+        Expr::Let(name, value_expr) => variable_declaration(
+            name,
+            value_expr,
+            function,
+            block,
+            module,
+            store,
+            declarations,
+            locals,
+            next_var,
+        ),
+        Expr::Block(statements, returns) => compile_block(
+            statements,
+            returns,
+            function,
+            block,
+            module,
+            store,
+            declarations,
+            locals,
+            next_var,
+        ),
+        Expr::Return(value_expr) => returns(
+            value_expr,
+            function,
+            block,
+            module,
+            store,
+            declarations,
+            locals,
+            next_var,
+        ),
+        Expr::Call(callee, args) => call(
+            callee,
+            args,
+            function,
+            block,
+            module,
+            store,
+            declarations,
+            locals,
+            next_var,
+        ),
+        Expr::Var(name) => variable(
+            name,
+            expr.idx,
+            function,
+            block,
+            module,
+            store,
+            declarations,
+            locals,
+            next_var,
+        ),
+        Expr::If { cond, then, els } => conditional(
+            cond,
+            then,
+            els,
+            expr.idx,
+            function,
+            block,
+            module,
+            store,
+            declarations,
+            locals,
+            next_var,
+        ),
+        Expr::Index(left, right) => index(
+            left,
+            right,
+            expr.idx,
+            function,
+            block,
+            module,
+            store,
+            declarations,
+            locals,
+            next_var,
+        ),
+    }
+}
