@@ -9,6 +9,5 @@ indexmap = {version="2.13.0", features = ["serde"]}
 libloading = "0.8.9"
 ron = "0.12.1"
 serde = { version = "1.0.228", features = ["derive"] }
-serde-value = "0.7.0"
 serde_json = "1.0.149"
 x86_64builder = { path = "x86_64builder" }

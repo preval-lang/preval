@@ -1,95 +1,29 @@
 ((
     objects: {
-        "print": (Print, ()),
+        "print": (Print, "()"),
         "main": (Function((
             args: [
                 IO,
                 IO,
             ],
             returns: Tuple([]),
-        )), (
-            ir: [
-                (
-                    statements: [
-                        Operation(LoadLiteral((Bool, false)), Some(3)),
-                    ],
-                    terminal: CondJump(
-                        cond: 3,
-                        then: 1,
-                        els: 2,
-                    ),
-                ),
-                (
-                    statements: [
-                        Operation(LoadLocal(
-                            src: 1,
-                        ), Some(5)),
-                        Operation(LoadLiteral((String, "fail")), Some(6)),
-                        Operation(LoadLiteral((Print, ())), Some(7)),
-                        Operation(Call(
-                            function: Var(7),
-                            args: [
-                                5,
-                                6,
-                            ],
-                        ), Some(4)),
-                    ],
-                    terminal: Jump(3),
-                ),
-                (
-                    statements: [
-                        Operation(LoadLocal(
-                            src: 1,
-                        ), Some(9)),
-                        Operation(LoadLiteral((String, "hi")), Some(10)),
-                        Operation(LoadLiteral((Print, ())), Some(11)),
-                        Operation(Call(
-                            function: Var(11),
-                            args: [
-                                9,
-                                10,
-                            ],
-                        ), Some(8)),
-                    ],
-                    terminal: Jump(3),
-                ),
-                (
-                    statements: [
-                        Operation(Phi(
-                            block_to_var: {
-                                1: 4,
-                                2: 8,
-                            },
-                        ), Some(2)),
-                    ],
-                    terminal: Return(2),
-                ),
-            ],
-            exported: true,
-            signature: (
-                args: [
-                    IO,
-                    IO,
-                ],
-                returns: Tuple([]),
-            ),
-        )),
+        )), "(ir:[(statements:[Operation(LoadLiteral((Bool,\"false\")),Some(3))],terminal:CondJump(cond:3,then:1,els:2)),(statements:[Operation(LoadLocal(src:0),Some(5)),Operation(LoadLiteral((String,\"\\\"should run\\\"\")),Some(6)),Operation(LoadLiteral((Print,\"()\")),Some(7)),Operation(Call(function:Var(7),args:[5,6]),Some(4))],terminal:Jump(3)),(statements:[Operation(LoadLocal(src:1),Some(9)),Operation(LoadLiteral((String,\"\\\"hi\\\"\")),Some(10)),Operation(LoadLiteral((Print,\"()\")),Some(11)),Operation(Call(function:Var(11),args:[9,10]),Some(8))],terminal:Jump(3)),(statements:[Operation(Phi(block_to_var:{2:8,1:4}),Some(2))],terminal:Return(2))],exported:true,signature:(args:[IO,IO],returns:Tuple([])))"),
     },
     structs: {},
 ), Partial([
     (
         statements: [
-            Operation(LoadLiteral((Bool, false)), Some(3)),
+            Operation(LoadLiteral((Bool, "false")), Some(3)),
         ],
         terminal: Jump(2),
     ),
     (
         statements: [
             Operation(LoadLocal(
-                src: 1,
+                src: 0,
             ), Some(5)),
-            Operation(LoadLiteral((String, "fail")), Some(6)),
-            Operation(LoadLiteral((Print, ())), Some(7)),
+            Operation(LoadLiteral((String, "\"should run\"")), Some(6)),
+            Operation(LoadLiteral((Print, "()")), Some(7)),
             Operation(Call(
                 function: Var(7),
                 args: [
@@ -105,10 +39,10 @@
             Operation(LoadLocal(
                 src: 1,
             ), Some(9)),
-            Operation(LoadLiteral((String, "hi")), Some(10)),
-            Operation(LoadLiteral((Print, ())), Some(11)),
+            Operation(LoadLiteral((String, "\"hi\"")), Some(10)),
+            Operation(LoadLiteral((Print, "()")), Some(11)),
             Operation(Call(
-                function: Partial((Print, ())),
+                function: Partial((Print, "()")),
                 args: [
                     9,
                     10,
@@ -121,8 +55,8 @@
         statements: [
             Operation(Phi(
                 block_to_var: {
-                    1: 4,
                     2: 8,
+                    1: 4,
                 },
             ), Some(2)),
         ],

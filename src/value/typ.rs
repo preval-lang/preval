@@ -45,19 +45,19 @@ pub fn get_type(tokens: &[InfoToken], i: &mut usize) -> Result<Type, InfoParseEr
     rv
 }
 
-pub fn deserialize_type(typ: &Type, data: serde_value::Value) -> Box<dyn ValueData> {
+pub fn deserialize_type(typ: &Type, data: String) -> Box<dyn ValueData> {
     match typ {
-        Type::String => Box::new(data.deserialize_into::<String>().unwrap()),
-        Type::Tuple(_) => Box::new(data.deserialize_into::<EmptyTuple>().unwrap()),
-        Type::IO => Box::new(data.deserialize_into::<IO>().unwrap()),
-        Type::Bool => Box::new(data.deserialize_into::<bool>().unwrap()),
-        Type::USize => Box::new(data.deserialize_into::<usize>().unwrap()),
-        Type::Struct(_) => Box::new(data.deserialize_into::<Struct>().unwrap()),
-        Type::Function(f) => Box::new(data.deserialize_into::<Function>().unwrap()),
-        Type::Partial => Box::new(data.deserialize_into::<Partial>().unwrap()),
-        Type::Print => Box::new(data.deserialize_into::<Print>().unwrap()),
+        Type::String => Box::new(ron::de::from_str::<String>(&data).unwrap()),
+        Type::Tuple(_) => Box::new(ron::de::from_str::<EmptyTuple>(&data).unwrap()),
+        Type::IO => Box::new(ron::de::from_str::<IO>(&data).unwrap()),
+        Type::Bool => Box::new(ron::de::from_str::<bool>(&data).unwrap()),
+        Type::USize => Box::new(ron::de::from_str::<usize>(&data).unwrap()),
+        Type::Struct(_) => Box::new(ron::de::from_str::<Struct>(&data).unwrap()),
+        Type::Function(f) => Box::new(ron::de::from_str::<Function>(&data).unwrap()),
+        Type::Partial => Box::new(ron::de::from_str::<Partial>(&data).unwrap()),
+        Type::Print => Box::new(ron::de::from_str::<Print>(&data).unwrap()),
         Type::StructConstructor(f) => {
-            Box::new(data.deserialize_into::<StructConstructor>().unwrap())
+            Box::new(ron::de::from_str::<StructConstructor>(&data).unwrap())
         }
     }
 }

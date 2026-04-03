@@ -86,8 +86,8 @@ pub trait PrevalValue: PreSerialize {
     fn get_type(&self) -> Type;
 }
 
-#[derive(serde::Deserialize)]
-struct RawValue(Type, serde_value::Value);
+#[derive(serde::Deserialize, serde::Serialize)]
+struct RawValue(Type, String);
 
 impl<'de> serde::Deserialize<'de> for Value {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -108,15 +108,11 @@ impl serde::Serialize for Value {
     where
         S: serde::Serializer,
     {
-        use serde::ser::SerializeTuple;
-
-        let mut tup = serializer.serialize_tuple(2)?;
-        tup.serialize_element(&self.typ)?;
-
         let data = self.data.pre_serialize().expect("NOT SERIALIZABLE");
 
-        tup.serialize_element(&data)?;
-        tup.end()
+        let raw_value = RawValue(self.typ.clone(), ron::ser::to_string(data).unwrap());
+
+        raw_value.serialize(serializer)
     }
 }
 pub trait PreSerialize {
