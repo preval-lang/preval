@@ -154,6 +154,12 @@ pub fn evaluate(
                             ));
                             let var = vars.get(var_num).expect("Phi evaluated to undefined variable, must have forgot to store the result of the block");
 
+                            if var.is_none() {
+                                resudual_vars.insert(*store);
+                                resudual_vars.insert(*var_num);
+                                out.push(stmt.clone());
+                            }
+
                             vars.insert(
                                 *store,
                                 match var {
@@ -161,6 +167,8 @@ pub fn evaluate(
                                     None => None,
                                 },
                             );
+
+                            println!("PHI {var_num} into {store}");
                         }
                     }
                 },
@@ -168,6 +176,7 @@ pub fn evaluate(
                     if resudual_vars.contains(var) {
                         out.push(stmt.clone());
                     } else {
+                        println!("DELETE {var}");
                         vars.remove(var);
                     }
                 }

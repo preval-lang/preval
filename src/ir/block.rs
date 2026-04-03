@@ -21,7 +21,6 @@ pub fn compile_block(
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
 ) -> Result<(), IRErrorInfo> {
-    let delete_group_start = *next_var + 1;
     let mut i = 0;
     let len = statements.len();
     for statement in statements {
@@ -49,12 +48,6 @@ pub fn compile_block(
             )?;
         }
         i += 1;
-    }
-
-    let delete_group_end = *next_var;
-
-    for i in delete_group_start..delete_group_end {
-        function.ir[*block].statements.push(Statement::Delete(i));
     }
 
     if (len == 0 || !returns) && store.is_some() {

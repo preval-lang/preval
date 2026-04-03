@@ -91,9 +91,9 @@ fn run_entire_program(
 ) -> bool {
     match eval {
         RunResult::Concrete(_) => false,
-        RunResult::Partial(blocks, _) => {
+        RunResult::Partial(blocks, next_block) => {
             // vars.insert(1, Some(Box::new(IO {})));
-            run_entire_program(module, evaluate(module, blocks, vars, 0), vars)
+            run_entire_program(module, evaluate(module, blocks, vars, next_block), vars)
         }
         RunResult::Residualise => panic!(),
     }

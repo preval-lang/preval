@@ -61,6 +61,7 @@ impl PrevalValue for Function {
 #[derive(PartialEq, Clone, Serialize, Deserialize)]
 pub struct Partial {
     pub blocks: Vec<Block>,
+    pub start_block: usize,
 }
 impl PrevalValue for Partial {
     fn get_type(&self) -> Type {
@@ -72,7 +73,7 @@ impl PrevalValue for Partial {
         for (i, arg) in args.iter().enumerate() {
             args_map.insert(i, arg.clone().clone());
         }
-        evaluate(module, self.blocks.clone(), &mut args_map, 0)
+        evaluate(module, self.blocks.clone(), &mut args_map, self.start_block)
     }
 }
 
@@ -112,13 +113,17 @@ pub enum Declaration {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Terminal {
-    Return(Option<usize>),
-    Evaluate(Option<usize>),
+    Return(usize),
     Jump(usize),
     CondJump {
         cond: usize,
         then: usize,
         els: usize,
+    },
+    Branch {
+        cond: usize,
+        then: RunResult,
+        els: RunResult,
     },
 }
 

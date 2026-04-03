@@ -113,7 +113,7 @@ impl serde::Serialize for Value {
         let mut tup = serializer.serialize_tuple(2)?;
         tup.serialize_element(&self.typ)?;
 
-        let data = self.data.pre_serialize();
+        let data = self.data.pre_serialize().expect("NOT SERIALIZABLE");
 
         tup.serialize_element(&data)?;
         tup.end()

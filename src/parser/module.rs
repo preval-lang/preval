@@ -79,7 +79,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
 
                     let mut function = Function {
                         ir: vec![Block {
-                            terminal: Terminal::Return(Some(last_var)),
+                            terminal: Terminal::Return(last_var),
                             statements: Vec::new(),
                         }],
                         exported: true,

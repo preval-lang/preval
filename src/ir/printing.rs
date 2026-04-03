@@ -66,7 +66,7 @@ pub fn to_string(blocks: &Vec<Block>, indentation: usize) -> String {
         for _ in 0..indentation + 1 {
             out.push_str("\t");
         }
-        match block.terminal {
+        match block.terminal.clone() {
             Terminal::CondJump { cond, then, els } => {
                 out.push_str(&format!("if ${} then {} else {}", cond, then, els));
             }
@@ -74,22 +74,10 @@ pub fn to_string(blocks: &Vec<Block>, indentation: usize) -> String {
                 out.push_str(&format!("jump {}", target));
             }
             Terminal::Return(ret) => {
-                out.push_str(&format!(
-                    "return {}",
-                    match ret {
-                        Some(var) => format!("${}", var),
-                        None => "void".to_string(),
-                    }
-                ));
+                out.push_str(&format!("return {}", format!("${}", ret),));
             }
-            Terminal::Evaluate(ret) => {
-                out.push_str(&format!(
-                    "evaluate {}",
-                    match ret {
-                        Some(var) => format!("${}", var),
-                        None => "void".to_string(),
-                    }
-                ));
+            Terminal::Branch { cond, then, els } => {
+                out.push_str(&format!("branch ${} then {:?} else {:?}", cond, then, els));
             }
         }
         out.push('\n');

@@ -1,3 +1,7 @@
 fn main(compile_io: IO, io: IO) {
-    print(io, "hi")
+    if false {
+        print(compile_io, "should run")
+    } else {
+        print(io, "hi")
+    }
 }

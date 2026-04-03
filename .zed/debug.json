@@ -1,0 +1,13 @@
+[
+  {
+    "label": "Build Binary",
+    "adapter": "CodeLLDB",
+    "program": ".\\target\\debug\\purepreval.exe",
+    "request": "launch",
+    "cwd": ".",
+    "build": {
+      "command": "cargo",
+      "args": ["build"],
+    },
+  },
+]
