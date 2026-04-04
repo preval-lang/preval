@@ -1,1 +1,0 @@
-Partial([Block { statements: [Operation(LoadLiteral(EmptyTuple), Some(9)), Operation(LoadLocal { src: 1 }, Some(8)), Operation(Call { function: Partial(Print), args: [8, 9] }, Some(7)), Operation(LoadLocal { src: 7 }, Some(2))], terminal: Return(2) }], 0)
