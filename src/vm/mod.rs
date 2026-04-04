@@ -1,6 +1,6 @@
 mod operation;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -29,6 +29,8 @@ pub fn evaluate(
     loop {
         let mut out: Vec<Statement> = Vec::new();
 
+        let old_vars: Vec<_> = vars.keys().cloned().collect();
+
         for stmt in blocks[block_num].statements.clone() {
             match stmt {
                 Statement::Delete(_) => todo!("Add delete statements"),
@@ -39,7 +41,6 @@ pub fn evaluate(
                     if let Some(store) = store {
                         vars.insert(store, Some(value.clone()));
                     }
-                    out.push(Statement::Operation(Operation::LoadLiteral(value), store));
                 }
                 Statement::Operation(Operation::LoadLocal { src }, store) => {
                     load_local(src, store, &mut out, vars);
@@ -50,6 +51,17 @@ pub fn evaluate(
                 Statement::Operation(Operation::Phi { block_to_var }, store) => {
                     phi(block_to_var, store, last_block_num, &mut out, vars);
                 }
+            }
+        }
+
+        let new_vars: Vec<_> = vars.keys().filter(|k| !old_vars.contains(k)).collect();
+
+        for var_num in new_vars {
+            if let Some(Some(var)) = vars.get(var_num) {
+                out.insert(
+                    0,
+                    Statement::Operation(Operation::LoadLiteral(var.clone()), Some(*var_num)),
+                );
             }
         }
 
@@ -116,7 +128,11 @@ pub fn evaluate(
                 block_num = dest;
             }
             Terminal::Return(var) => {
-                if out.is_empty() {
+                blocks[block_num] = Block {
+                    statements: out,
+                    terminal: Terminal::Return(var),
+                };
+                if blocks[block_num].statements.is_empty() {
                     match vars.get(&var) {
                         Some(Some(var)) => {
                             return RunResult::Concrete(var.clone());

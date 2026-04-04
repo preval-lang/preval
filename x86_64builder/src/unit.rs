@@ -7,6 +7,7 @@ use std::{
 use crate::{
     mathop::MathOp,
     mem::{MemoryAddress, MemoryReference},
+    prelude::{qword, rax, rdi, rsp},
 };
 
 pub struct Unit {

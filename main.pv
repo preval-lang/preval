@@ -1,3 +1,4 @@
 fn main(compile_io: IO, io: IO) {
-
+    let a = print(compile_io, "hi");
+    let b = print(io, a);
 }

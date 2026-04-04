@@ -12,16 +12,16 @@ pub fn load_local(
     vars: &mut HashMap<usize, Option<Value>>,
 ) {
     if let Some(store) = store {
-        out.push(Statement::Operation(
-            Operation::LoadLocal { src },
-            Some(store),
-        ));
         match vars.get(&src) {
             Some(Some(value)) => {
                 vars.insert(store, Some(value.clone()));
             }
             Some(None) => {
                 vars.insert(store, None);
+                out.push(Statement::Operation(
+                    Operation::LoadLocal { src },
+                    Some(store),
+                ));
             }
             None => {
                 panic!("Load undefined local variable {src}");

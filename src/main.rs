@@ -4,6 +4,7 @@ use ron::ser::PrettyConfig;
 
 use crate::{
     ir::{Module, module_to_string},
+    optimizations::remove_unused::remove_unused,
     parser::module::parse_module,
     tokeniser::{get_line_and_column, tokenise},
     value::{Value, primitive::IO},
@@ -11,6 +12,7 @@ use crate::{
 };
 
 mod ir;
+mod optimizations;
 mod parser;
 mod tokeniser;
 mod value;
@@ -50,12 +52,20 @@ fn main() {
                         .data
                         .call(&module, vec![&Some(Value::new(IO)), &None]);
 
-                    fs::write("eval.ir", format!("{eval:?}")).unwrap();
+                    let optimized = match eval {
+                        RunResult::Residualise => unreachable!(),
+                        RunResult::Concrete(c) => RunResult::Concrete(c),
+                        RunResult::Partial(blocks, start_block) => {
+                            RunResult::Partial(remove_unused(&blocks, start_block), start_block)
+                        }
+                    };
+
+                    fs::write("eval.ir", format!("{optimized:?}")).unwrap();
 
                     if let Some(arg1) = env::args().collect::<Vec<_>>().get(1) {
                         if arg1 == "compile" {
                             let vec = ron::ser::to_string_pretty(
-                                &(module, eval),
+                                &(module, optimized),
                                 PrettyConfig::default(),
                             )
                             .unwrap();
@@ -73,7 +83,7 @@ fn main() {
                     println!("PASS 1 COMPLETE");
                     println!("-----");
 
-                    run_entire_program(&module, eval, &mut vars);
+                    run_entire_program(&module, optimized, &mut vars);
                 }
                 Err(err) => {
                     let (line, column) = get_line_and_column(&src, err.idx).unwrap();
