@@ -1,5 +1,4 @@
-print
-Printmain
+main
 	0:
 		$3 = false
 		if $3 then 1 else 2
@@ -18,3 +17,5 @@ Printmain
 	3:
 		$2 = phi {2: 8, 1: 4}
 		return $2
+print
+Print

@@ -339,25 +339,25 @@ fn try_parse_if(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError
             idx: if_idx,
         },
         condition @ ..,
-        InfoToken {
-            token: Token::Braces(then_block),
-            idx: then_idx,
+        then_block @ InfoToken {
+            token: Token::Braces(_),
+            idx: _,
         },
         InfoToken {
             token: Token::Keyword(Keyword::Else),
-            idx: else_kw_idx,
+            idx: _,
         },
-        InfoToken {
-            token: Token::Braces(else_block),
-            idx: else_idx,
+        else_block @ InfoToken {
+            token: Token::Braces(_),
+            idx: _,
         },
     ] = tokens
     {
         return Ok(Some(InfoExpr {
             expr: Expr::If {
                 cond: Box::new(parse_expression(condition)?),
-                then: Box::new(parse_expression(then_block)?),
-                els: Some(Box::new(parse_expression(else_block)?)),
+                then: Box::new(parse_expression(&[then_block.clone()])?),
+                els: Some(Box::new(parse_expression(&[else_block.clone()])?)),
             },
             idx: *if_idx,
         }));
@@ -391,7 +391,7 @@ fn try_parse_return(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseE
 fn try_parse_index(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
         left @ ..,
-        right @ InfoToken {
+        InfoToken {
             idx,
             token: Token::Index(index),
         },
@@ -410,9 +410,9 @@ fn try_parse_index(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseEr
 
 fn try_parse_parens(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
-        parens @ InfoToken {
+        InfoToken {
             token: Token::Parens(contents),
-            idx,
+            idx: _,
         },
     ] = tokens
     {
