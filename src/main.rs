@@ -45,10 +45,14 @@ fn main() {
         Ok(tokens) => {
             let module = parse_module(&tokens);
             match module {
-                Ok(module) => {
+                Ok(mut module) => {
                     fs::write("ir.ir", module_to_string(&module)).unwrap();
 
-                    let eval = module.objects["main"]
+                    let eval = module
+                        .objects
+                        .get_mut("main")
+                        .unwrap()
+                        .clone()
                         .data
                         .call(&module, vec![&Some(Value::new(IO)), &None]);
 

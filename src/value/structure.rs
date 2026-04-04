@@ -18,7 +18,7 @@ impl PrevalValue for Struct {
         Type::Struct(self.typ.clone())
     }
 
-    fn vindex(&self, value: &Value) -> Value {
+    fn vindex(&mut self, value: &Value) -> Value {
         if let Some(name) = value.data.as_any().downcast_ref::<String>() {
             self.fields[name].clone()
         } else {
@@ -37,7 +37,7 @@ impl PrevalValue for StructConstructor {
         Type::StructConstructor(self.typ.clone())
     }
 
-    fn vcall(&self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
+    fn vcall(&mut self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
         let st = &module.structs[&self.typ];
         let field_names: Vec<_> = st.fields.keys().collect();
         let mut v = HashMap::new();

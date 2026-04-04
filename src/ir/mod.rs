@@ -49,7 +49,7 @@ impl PrevalValue for Function {
         Type::Function(Box::new(self.signature.clone()))
     }
 
-    fn vcall(&self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
+    fn vcall(&mut self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
         let mut args_map = HashMap::new();
         for (i, arg) in args.iter().enumerate() {
             args_map.insert(i, arg.clone().clone());
@@ -68,7 +68,7 @@ impl PrevalValue for Partial {
         Type::Partial
     }
 
-    fn vcall(&self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
+    fn vcall(&mut self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
         let mut args_map = HashMap::new();
         for (i, arg) in args.iter().enumerate() {
             args_map.insert(i, arg.clone().clone());

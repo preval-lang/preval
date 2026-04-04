@@ -10,7 +10,8 @@ use crate::{
     },
     tokeniser::{InfoToken, Keyword, Token},
     value::{
-        Print, Value,
+        Value,
+        native::LibraryConstructor,
         structure::StructConstructor,
         typ::{Signature, Type, get_type},
     },
@@ -26,8 +27,8 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
 
     module
         .objects
-        .insert("print".to_string(), Value::new(Print));
-    declarations.insert("print".to_string(), Declaration::Constant);
+        .insert("Library".to_string(), Value::new(LibraryConstructor));
+    declarations.insert("Library".to_string(), Declaration::Constant);
 
     let mut i = 0;
 

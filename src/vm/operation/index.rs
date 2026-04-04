@@ -12,12 +12,13 @@ pub fn index(
     out: &mut Vec<Statement>,
     vars: &mut HashMap<usize, Option<Value>>,
 ) {
-    match vars.get(&leftn) {
+    let r = vars.get(&rightn).cloned();
+    match vars.get_mut(&leftn) {
         Some(None) => {
             out.push(Statement::Operation(Operation::Index(leftn, rightn), store));
         }
         None => panic!("Undefined variable in left of index"),
-        Some(Some(left)) => match vars.get(&rightn) {
+        Some(Some(left)) => match r {
             Some(None) => {
                 out.push(Statement::Operation(Operation::Index(leftn, rightn), store));
             }

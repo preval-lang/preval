@@ -38,10 +38,10 @@ impl Debug for Value {
 
 pub trait ValueData: Debug {
     fn vclone(&self) -> Box<dyn ValueData>;
-    fn index(&self, value: &Value) -> Value {
+    fn index(&mut self, value: &Value) -> Value {
         panic!("Type is not indexable")
     }
-    fn call(&self, module: &Module, args: Vec<&Option<Value>>) -> RunResult;
+    fn call(&mut self, module: &Module, args: Vec<&Option<Value>>) -> RunResult;
     fn vto_string(&self) -> String;
     fn veq(&self, other: &Value) -> bool;
     fn as_any(&self) -> &dyn Any;
@@ -75,11 +75,11 @@ impl Clone for Box<dyn ValueData> {
 // }
 
 pub trait PrevalValue: PreSerialize {
-    fn vindex(&self, value: &Value) -> Value {
+    fn vindex(&mut self, value: &Value) -> Value {
         panic!("Not indexable: {}", type_name::<Self>())
     }
 
-    fn vcall(&self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
+    fn vcall(&mut self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
         panic!("Not callable: {}", type_name::<Self>())
     }
 
@@ -142,11 +142,11 @@ impl<T: PartialEq + Clone + Debug + PrevalValue + 'static> ValueData for T {
         self
     }
 
-    fn index(&self, value: &Value) -> Value {
+    fn index(&mut self, value: &Value) -> Value {
         self.vindex(value)
     }
 
-    fn call(&self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
+    fn call(&mut self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
         self.vcall(module, args)
     }
 
@@ -163,22 +163,22 @@ impl<T: PartialEq + Clone + Debug + PrevalValue + 'static> ValueData for T {
     }
 }
 
-// TODO: Remove and replace with proper native functions when types are done
-#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
-pub struct Print;
-impl PrevalValue for Print {
-    fn vcall(&self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
-        match [args[0], args[1]] {
-            [Some(_), Some(v)] => {
-                println!("{v:?}");
-                RunResult::Concrete(Value::new(EmptyTuple))
-            }
-            [Some(_), None] => panic!("IO is present but message is not"),
-            _ => RunResult::Residualise,
-        }
-    }
+// // TODO: Remove and replace with proper native functions when types are done
+// #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+// pub struct Print;
+// impl PrevalValue for Print {
+//     fn vcall(&mut self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
+//         match [args[0], args[1]] {
+//             [Some(_), Some(v)] => {
+//                 println!("{v:?}");
+//                 RunResult::Concrete(Value::new(EmptyTuple))
+//             }
+//             [Some(_), None] => panic!("IO is present but message is not"),
+//             _ => RunResult::Residualise,
+//         }
+//     }
 
-    fn get_type(&self) -> Type {
-        Type::Print
-    }
-}
+//     fn get_type(&self) -> Type {
+//         Type::Print
+//     }
+// }

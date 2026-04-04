@@ -14,7 +14,7 @@ pub fn call(
     module: &Module,
     vars: &mut HashMap<usize, Option<Value>>,
 ) {
-    let function_value = match function {
+    let mut function_value = match function {
         Callable::Partial(function) => function,
         Callable::Var(function_var) => match vars.get(&function_var) {
             Some(None) => {

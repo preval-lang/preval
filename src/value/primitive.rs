@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::value::{PrevalValue, Value, typ::Type};
 
 impl PrevalValue for String {
-    fn vindex(&self, value: &Value) -> Value {
+    fn vindex(&mut self, value: &Value) -> Value {
         match value.data.as_any().downcast_ref::<usize>() {
             Some(other) => Value::new(self.chars().nth(*other).unwrap().to_string()),
             None => panic!("Index string with non-usize"),
