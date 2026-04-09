@@ -1,8 +1,6 @@
 use std::{collections::HashMap, env, fs};
 
-use ron::ser::PrettyConfig;
-
-use crate::{
+use preval_lib::{
     ir::{Module, module_to_string},
     optimizations::remove_unused::remove_unused,
     parser::module::parse_module,
@@ -10,13 +8,7 @@ use crate::{
     value::{Value, primitive::IO},
     vm::{RunResult, evaluate},
 };
-
-mod ir;
-mod optimizations;
-mod parser;
-mod tokeniser;
-mod value;
-mod vm;
+use ron::ser::PrettyConfig;
 
 fn main() {
     if let Some(arg1) = env::args().collect::<Vec<_>>().get(1) {
@@ -26,8 +18,8 @@ fn main() {
 
             let mut vars: HashMap<usize, Option<Value>> = HashMap::new();
 
-            vars.insert(0, Some(Value::new(IO {})));
-            vars.insert(1, Some(Value::new(IO {})));
+            vars.insert(0, Some(Value::new(IO)));
+            vars.insert(1, Some(Value::new(IO)));
 
             run_entire_program(&module, runresult, &mut vars);
             return;
@@ -82,10 +74,6 @@ fn main() {
 
                     vars.insert(0, Some(Value::new(IO {})));
                     vars.insert(1, Some(Value::new(IO {})));
-
-                    println!("-----");
-                    println!("PASS 1 COMPLETE");
-                    println!("-----");
 
                     run_entire_program(&module, optimized, &mut vars);
                 }

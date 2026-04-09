@@ -9,6 +9,7 @@ pub enum Keyword {
     Else,
     Bool(bool),
     Struct,
+    Dylib,
 }
 
 impl TryFrom<&str> for Keyword {
@@ -24,6 +25,7 @@ impl TryFrom<&str> for Keyword {
             "true" => Ok(Keyword::Bool(true)),
             "false" => Ok(Keyword::Bool(false)),
             "struct" => Ok(Keyword::Struct),
+            "dylib" => Ok(Keyword::Dylib),
             _ => Err(()),
         }
     }

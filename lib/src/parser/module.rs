@@ -1,0 +1,266 @@
+use std::{collections::HashMap, usize};
+
+use indexmap::IndexMap;
+
+use crate::{
+    ir::{Block, Declaration, Function, Module, StructDescriptor, Terminal, to_ir},
+    parser::{
+        expression::{InfoExpr, InfoParseError, ParseError, parse_expression},
+        utility::{self, read_punctuated},
+    },
+    tokeniser::{InfoToken, Keyword, Token},
+    value::{
+        Value,
+        native::NativeFunction,
+        structure::StructConstructor,
+        typ::{Signature, Type, get_type},
+    },
+};
+
+pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
+    let mut module = Module {
+        objects: HashMap::new(),
+        structs: HashMap::new(),
+    };
+
+    let mut declarations = HashMap::new();
+
+    let mut i = 0;
+
+    while i < tokens.len() {
+        match tokens[i].token.clone() {
+            Token::Keyword(Keyword::Fn) => {
+                let ((name, name_idx), args, signature) =
+                    expect_function_signature(tokens, &mut i)?;
+                declarations.insert(name.clone(), Declaration::Constant);
+
+                let body = expect_block_or_expr(tokens, &mut i)?;
+
+                let mut last_var = signature.args.len();
+
+                let mut function = Function {
+                    ir: vec![Block {
+                        terminal: Terminal::Return(last_var),
+                        statements: Vec::new(),
+                    }],
+                    exported: true,
+                    signature,
+                };
+
+                let mut locals = HashMap::new();
+                for (idx, arg) in args.iter().enumerate() {
+                    locals.insert(arg.clone(), Declaration::Variable(idx));
+                }
+
+                to_ir(
+                    &mut function,
+                    &mut 0,
+                    &mut module,
+                    body,
+                    Some(last_var),
+                    &mut declarations,
+                    &mut locals,
+                    &mut last_var,
+                )?;
+
+                if let Some(_) = module
+                    .objects
+                    .insert(name.to_string(), Value::new(function))
+                {
+                    return Err(InfoParseError {
+                        idx: name_idx,
+                        error: ParseError::DuplicateName,
+                    });
+                }
+            }
+            Token::Keyword(Keyword::Struct) => {
+                i += 1;
+                let name = if let Token::Name(name) = &tokens[i].token {
+                    Ok(name)
+                } else {
+                    Err(InfoParseError {
+                        idx: tokens[i].idx,
+                        error: ParseError::ExpectedName,
+                    })
+                }?;
+                i += 1;
+                let block = if let Token::Braces(block) = &tokens[i].token {
+                    Ok(block)
+                } else {
+                    Err(InfoParseError {
+                        idx: tokens[i].idx,
+                        error: ParseError::ExpectedExpression(tokens[i..].to_vec()),
+                    })
+                }?;
+
+                let mut fields = IndexMap::new();
+
+                for field_colon_type in read_punctuated(block, Token::Comma)? {
+                    if let [
+                        InfoToken {
+                            token: Token::Name(name),
+                            idx: name_idx,
+                        },
+                        InfoToken {
+                            token: Token::Colon,
+                            idx: colon_idx,
+                        },
+                        typ @ ..,
+                    ] = field_colon_type.as_slice()
+                    {
+                        fields.insert(name.clone(), get_type(typ, &mut 0)?);
+                    }
+                }
+                i += 1;
+
+                module
+                    .structs
+                    .insert(name.clone(), StructDescriptor { fields });
+
+                declarations.insert(name.clone(), Declaration::Constant);
+
+                module.objects.insert(
+                    name.clone(),
+                    Value::new(StructConstructor { typ: name.clone() }),
+                );
+            }
+            Token::Keyword(Keyword::Dylib) => {
+                i += 1;
+                let lib_name = if let InfoToken {
+                    idx: _,
+                    token:
+                        Token::Literal(Value {
+                            typ: Type::String,
+                            data,
+                        }),
+                } = &tokens[i]
+                {
+                    data.as_any().downcast_ref::<String>().unwrap().clone()
+                } else {
+                    return Err(InfoParseError {
+                        idx: tokens[i].idx,
+                        error: ParseError::ExpectedString(tokens[i].clone()),
+                    });
+                };
+
+                i += 1;
+
+                let ((name, name_idx), _, signature) = expect_function_signature(tokens, &mut i)?;
+
+                if tokens[i].token != Token::Semicolon {
+                    return Err(InfoParseError {
+                        idx: tokens[i].idx,
+                        error: ParseError::ExpectedSemicolon(tokens[i].clone()),
+                    });
+                }
+                i += 1;
+
+                declarations.insert(name.clone(), Declaration::Constant);
+                if let Some(v) = module.objects.insert(
+                    name.clone(),
+                    Value::new(NativeFunction {
+                        lib_name,
+                        func_name: name.clone(),
+                        signature,
+                    }),
+                ) {
+                    return Err(InfoParseError {
+                        idx: name_idx,
+                        error: ParseError::DuplicateName,
+                    });
+                }
+            }
+            tk => {
+                return Err(InfoParseError {
+                    idx: tokens[i].idx,
+                    error: ParseError::ExpectedTopLevel,
+                });
+            }
+        }
+    }
+
+    Ok(module)
+}
+
+pub fn expect_function_signature(
+    tokens: &[InfoToken],
+    i: &mut usize,
+) -> Result<((String, usize), Vec<String>, Signature), InfoParseError> {
+    *i += 1;
+    if let Token::Name(name) = &tokens[*i].token {
+        let name_idx = tokens[*i].idx;
+        *i += 1;
+
+        let mut args = Vec::new();
+
+        if let Token::Parens(contents) = &tokens[*i].token {
+            for arg_colon_type in read_punctuated(contents, Token::Comma)? {
+                if let [
+                    InfoToken {
+                        token: Token::Name(name),
+                        idx: name_idx,
+                    },
+                    InfoToken {
+                        token: Token::Colon,
+                        idx: colon_idx,
+                    },
+                    typ @ ..,
+                ] = &arg_colon_type[..]
+                {
+                    let typ = get_type(&typ, &mut 0)?;
+                    args.push((name.clone(), typ));
+                }
+            }
+            *i += 1;
+        } else {
+            panic!("Missing function parameters, got {:?}", tokens[*i]);
+        }
+        let mut returns = Type::Tuple(Vec::new());
+        if let Token::Colon = &tokens[*i].token {
+            *i += 1;
+            returns = get_type(tokens, i)?;
+        }
+        Ok((
+            (name.clone(), name_idx),
+            args.iter().map(|arg| arg.0.clone()).collect(),
+            Signature {
+                args: args.iter().map(|arg| arg.1.clone()).collect(),
+                returns,
+            },
+        ))
+    } else {
+        Err(InfoParseError {
+            idx: *i,
+            error: ParseError::ExpectedFunctionSignature(tokens[*i].clone()),
+        })
+    }
+}
+
+pub fn expect_block_or_expr(
+    tokens: &[InfoToken],
+    i: &mut usize,
+) -> Result<InfoExpr, InfoParseError> {
+    if let Some(InfoToken {
+        token: Token::Braces(_),
+        idx: _,
+    }) = tokens.get(*i)
+    {
+        *i += 1;
+        return parse_expression(&tokens[*i - 1..*i]);
+    } else {
+        let mut out = Vec::new();
+        loop {
+            let token = tokens[*i].clone();
+
+            if token.token == Token::Semicolon {
+                *i += 1;
+                break;
+            }
+
+            out.push(token);
+
+            *i += 1;
+        }
+        return parse_expression(&out);
+    }
+}

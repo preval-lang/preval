@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ir::{Function, Partial};
 use crate::value::ValueData;
-use crate::value::native::{Library, LibraryConstructor, Symbol};
+use crate::value::native::NativeFunction;
 use crate::value::primitive::{EmptyTuple, IO};
 use crate::value::structure::{Struct, StructConstructor};
 use crate::{
@@ -21,9 +21,7 @@ pub enum Type {
     Function(Box<Signature>),
     StructConstructor(String),
     Partial,
-    Library,
-    Symbol,
-    LibraryConstructor,
+    NativeFunction,
 }
 
 impl Type {}
@@ -50,11 +48,7 @@ pub fn get_type(tokens: &[InfoToken], i: &mut usize) -> Result<Type, InfoParseEr
 
 pub fn deserialize_type(typ: &Type, data: String) -> Box<dyn ValueData> {
     match typ {
-        Type::Symbol => Box::new(ron::de::from_str::<Symbol>(&data).unwrap()),
-        Type::LibraryConstructor => {
-            Box::new(ron::de::from_str::<LibraryConstructor>(&data).unwrap())
-        }
-        Type::Library => Box::new(ron::de::from_str::<Library>(&data).unwrap()),
+        Type::NativeFunction => Box::new(ron::de::from_str::<NativeFunction>(&data).unwrap()),
         Type::String => Box::new(ron::de::from_str::<String>(&data).unwrap()),
         Type::Tuple(_) => Box::new(ron::de::from_str::<EmptyTuple>(&data).unwrap()),
         Type::IO => Box::new(ron::de::from_str::<IO>(&data).unwrap()),

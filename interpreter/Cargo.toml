@@ -1,0 +1,8 @@
+[package]
+name = "preval"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+preval_lib = { path = "../lib" }
+ron = "0.12.1"

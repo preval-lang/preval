@@ -1,4 +1,5 @@
+dylib "print" fn print();
+
 fn main(compile_io: IO, io: IO) {
-    let lib = Library("print");
-    lib.print(io);
+    print();
 }
