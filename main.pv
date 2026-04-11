@@ -1,5 +1,6 @@
-dylib "print" fn print();
+dylib "stdlib/print" fn print(io: IO, args: String);
 
 fn main(compile_io: IO, io: IO) {
-    print();
+    print(compile_io, "Hello, compile time world!");
+    print(io, "Hello, world!");
 }

@@ -10,6 +10,7 @@ use crate::{
     vm::operation::{call, index, load_local, phi},
 };
 
+#[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum RunResult {
     Concrete(Value),

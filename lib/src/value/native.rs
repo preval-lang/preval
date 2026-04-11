@@ -1,4 +1,7 @@
-use std::ffi::{CString, c_void};
+use std::{
+    ffi::{CString, c_void},
+    ops::DerefMut,
+};
 
 use crate::value::{
     PrevalValue, Value,
@@ -28,14 +31,71 @@ impl PrevalValue for NativeFunction {
         unsafe {
             let lib = Library::new(libloading::library_filename(self.lib_name.clone())).unwrap();
 
-            let symbol = lib
-                .get::<extern "C" fn(args: Vec<&Option<super::Value>>) -> crate::vm::RunResult>(
-                    self.func_name.as_bytes(),
-                )
-                .unwrap();
+            let symbol =
+                lib.get::<extern "C" fn(
+                    api: *const API,
+                    argc: usize,
+                    args: *const *const Value,
+                ) -> *mut Value>(self.func_name.as_bytes())
+                    .unwrap();
 
-            symbol(args);
-            crate::vm::RunResult::Concrete(Value::new(EmptyTuple))
+            let mut args_c = Vec::new();
+            for arg in args {
+                match arg {
+                    Some(value) => args_c.push(value as *const Value),
+                    None => args_c.push(std::ptr::null_mut()),
+                }
+            }
+            let args_ptr = args_c.as_ptr();
+            let argc = args_c.len();
+
+            let api = API {
+                drop_value,
+                string_value_length,
+                string_value_start,
+                new_tuple_value,
+            };
+
+            match symbol(&api, argc, args_ptr) {
+                p if std::ptr::null() == p => crate::vm::RunResult::Residualise,
+                ptr => crate::vm::RunResult::Concrete(*Box::from_raw(ptr)),
+            }
         }
     }
+}
+
+#[repr(C)]
+pub struct API {
+    drop_value: extern "C" fn(*mut Value),
+    string_value_length: extern "C" fn(*const Value) -> usize,
+    string_value_start: extern "C" fn(*const Value) -> *const u8,
+    new_tuple_value: extern "C" fn() -> *mut Value,
+}
+
+extern "C" fn drop_value(value: *mut Value) {
+    unsafe {
+        drop(Box::from_raw(value));
+    }
+}
+
+extern "C" fn string_value_length(value: *const Value) -> usize {
+    unsafe {
+        match (*value).data.as_any().downcast_ref::<String>() {
+            Some(s) => s.len(),
+            None => panic!("Value is not a string"),
+        }
+    }
+}
+
+extern "C" fn string_value_start(value: *const Value) -> *const u8 {
+    unsafe {
+        match (*value).data.as_any().downcast_ref::<String>() {
+            Some(s) => s.as_ptr(),
+            None => panic!("Value is not a string"),
+        }
+    }
+}
+
+extern "C" fn new_tuple_value() -> *mut Value {
+    Box::into_raw(Box::new(Value::new(EmptyTuple)))
 }

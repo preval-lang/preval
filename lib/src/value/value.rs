@@ -15,6 +15,7 @@ use crate::{
     vm::RunResult,
 };
 
+#[repr(C)]
 #[derive(Clone)]
 pub struct Value {
     pub typ: Type,
