@@ -67,23 +67,3 @@ Preval plans to support reflection and generics. Reflection allows code to itera
 Reflection is not typically included in performance-focused programming languages because of its poor runtime performance. 
 In Preval, this doesn't matter since the reflection can be automatically moved to compile time by the partial evaluator.
 Reflection is by far the easiest metaprogramming technique to use and was only avoided in mainstream languages for performance reasons.
-## Roadmap
-### 0.1
-- [x] Local variables
-- [ ] Primitives u8-64 i8-64 String IO
-- [x] If statements
-- [ ] C interop
-### 0.2
-- [ ] Mutable state type
-- [ ] First class functions
-- [ ] `unsafe` marking
-- [ ] Unsafe global io variable for calls to pure FFI functions
-### 0.3
-- [ ] Structs
-- [ ] Tagged unions
-- [ ] Traits
-### 0.4
-- [ ] Reflection
-- [ ] Generics
-### Beyond
-- [ ] Native compilation
