@@ -1,2 +1,2 @@
 
-workspace = { members = ["interpreter", "lib"], resolver = "3" }
+workspace = { members = ["interpreter", "lib", "preval_api"], resolver = "3" }

@@ -3,3 +3,6 @@ x86_64builder/target
 eval.ir
 ir.ir
 main.pvc
+lib/target
+preval_api/target
+interpreter/target

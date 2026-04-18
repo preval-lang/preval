@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::parser::utility::read_punctuated;
 use crate::value::Value;
 use crate::{
@@ -19,6 +21,8 @@ pub enum Expr {
         then: Box<InfoExpr>,
         els: Option<Box<InfoExpr>>,
     },
+    InitializeStruct(String, HashMap<String, InfoExpr>),
+    Access(Box<InfoExpr>, String),
 }
 
 #[derive(Debug)]
@@ -86,6 +90,10 @@ pub fn parse_expression(tokens: &[InfoToken]) -> Result<InfoExpr, InfoParseError
     }
 
     if let Some(expr) = try_parse_dot(tokens)? {
+        return Ok(expr);
+    }
+
+    if let Some(expr) = try_parse_struct(tokens)? {
         return Ok(expr);
     }
 
@@ -176,6 +184,45 @@ fn try_parse_if(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError
     Ok(None)
 }
 
+fn try_parse_struct(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError> {
+    if let [
+        InfoToken {
+            token: Token::Name(name),
+            idx: name_idx,
+        },
+        InfoToken {
+            token: Token::Braces(contents),
+            idx: brace_idx,
+        },
+    ] = tokens
+    {
+        let mut fields = HashMap::new();
+        for name_colon_value in read_punctuated(contents, Token::Comma)? {
+            if let [
+                InfoToken {
+                    token: Token::Name(name),
+                    idx: name_idx,
+                },
+                InfoToken {
+                    token: Token::Colon,
+                    idx: colon_idx,
+                },
+                value @ ..,
+            ] = &name_colon_value[..]
+            {
+                let value = parse_expression(value)?;
+                fields.insert(name.clone(), value);
+            }
+        }
+        Ok(Some(InfoExpr {
+            expr: Expr::InitializeStruct(name.clone(), fields),
+            idx: *name_idx,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
 fn try_parse_return(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
         InfoToken {
@@ -246,13 +293,7 @@ fn try_parse_dot(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseErro
     ] = tokens
     {
         return Ok(Some(InfoExpr {
-            expr: Expr::Index(
-                Box::new(parse_expression(left)?),
-                Box::new(InfoExpr {
-                    expr: Expr::Literal(Value::new(name.clone())),
-                    idx: *name_idx,
-                }),
-            ),
+            expr: Expr::Access(Box::new(parse_expression(left)?), name.clone()),
             idx: *idx,
         }));
     }

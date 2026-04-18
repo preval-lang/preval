@@ -14,12 +14,6 @@ pub fn module_to_string(module: &Module) -> String {
     out
 }
 
-impl Debug for Function {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&to_string(&self.ir, 1))
-    }
-}
-
 pub fn to_string(blocks: &Vec<Block>, indentation: usize) -> String {
     let mut out = String::new();
     for (idx, block) in blocks.iter().enumerate() {
@@ -39,6 +33,9 @@ pub fn to_string(blocks: &Vec<Block>, indentation: usize) -> String {
                         out.push_str(" = ");
                     }
                     match op {
+                        Operation::InitializeStruct(name, fields) => {
+                            out.push_str(&format!("struct {name:?}({fields:?})"));
+                        }
                         Operation::Call { function, args } => {
                             out.push_str(&format!("call {function:?}{args:?}"));
                         }
@@ -54,6 +51,9 @@ pub fn to_string(blocks: &Vec<Block>, indentation: usize) -> String {
                         }
                         Operation::Index(left, right) => {
                             out.push_str(&format!("${left}[${right}]"));
+                        }
+                        Operation::Access(left, right) => {
+                            out.push_str(&format!("${left}.${right}"));
                         }
                     }
                 }

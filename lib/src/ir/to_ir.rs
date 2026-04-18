@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{
-    ir::{Declaration, Function, Module, error::IRErrorInfo},
+    ir::{
+        Declaration, Function, Module, access::access, error::IRErrorInfo,
+        initialize_struct::initialize_struct,
+    },
     parser::expression::{Expr, InfoExpr},
 };
 
@@ -22,6 +25,18 @@ pub fn to_ir(
 ) -> Result<(), IRErrorInfo> {
     match expr.expr {
         Expr::Literal(lit) => literal(lit, function, block, store),
+        Expr::Access(left, right) => access(
+            left,
+            right,
+            expr.idx,
+            function,
+            block,
+            module,
+            store,
+            declarations,
+            locals,
+            next_var,
+        ),
         Expr::Let(name, value_expr) => variable_declaration(
             name,
             value_expr,
@@ -36,6 +51,17 @@ pub fn to_ir(
         Expr::Block(statements, returns) => compile_block(
             statements,
             returns,
+            function,
+            block,
+            module,
+            store,
+            declarations,
+            locals,
+            next_var,
+        ),
+        Expr::InitializeStruct(name, fields) => initialize_struct(
+            name,
+            fields,
             function,
             block,
             module,

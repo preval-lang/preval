@@ -1,6 +1,22 @@
 dylib "stdlib/print" fn print(io: IO, args: String);
+dylib "stdlib/print" fn input(io: IO): String;
+
+struct File {
+    io: IO,
+    name: String
+}
+
+fn fopen(io: IO, name: String): File File {
+    io: io,
+    name: name,
+};
+
+fn print_name(file: File) print(file.io, file.name);
 
 fn main(compile_io: IO, io: IO) {
-    print(compile_io, "Hello, compile time world!");
-    print(io, "Hello, world!");
+    let file2 = fopen(io, "runtime.txt");
+    print_name(file2);
+
+    let file = fopen(compile_io, "comptime.txt");
+    print_name(file);
 }

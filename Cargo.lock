@@ -299,13 +299,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "preval_lib"
+name = "preval_api"
 version = "0.1.0"
 dependencies = [
  "cbindgen",
+]
+
+[[package]]
+name = "preval_lib"
+version = "0.1.0"
+dependencies = [
  "erased-serde",
  "indexmap",
  "libloading",
+ "preval_api",
  "ron",
  "serde",
  "serde_json",

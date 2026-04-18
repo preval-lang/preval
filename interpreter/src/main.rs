@@ -1,9 +1,12 @@
-use std::{collections::HashMap, env, fs};
+use std::{
+    collections::{HashMap, HashSet},
+    env, fs,
+};
 
 use preval_lib::{
     ir::{Module, module_to_string},
-    optimizations::remove_unused::remove_unused,
     parser::module::parse_module,
+    passes::remove_unused::{Poison, remove_unused},
     tokeniser::{get_line_and_column, tokenise},
     value::{Value, primitive::IO},
     vm::{RunResult, evaluate},
@@ -38,7 +41,7 @@ fn main() {
             let module = parse_module(&tokens);
             match module {
                 Ok(mut module) => {
-                    fs::write("ir.ir", module_to_string(&module)).unwrap();
+                    fs::write("ir.ir", format!("{module:#?}")).unwrap();
 
                     let eval = module
                         .objects
@@ -48,15 +51,19 @@ fn main() {
                         .data
                         .call(&module, vec![&Some(Value::new(IO)), &None]);
 
+                    let mut poisoned_vars = HashMap::new();
+                    poisoned_vars.insert(0, Poison::Value);
+
                     let optimized = match eval {
                         RunResult::Residualise => unreachable!(),
                         RunResult::Concrete(c) => RunResult::Concrete(c),
-                        RunResult::Partial(blocks, start_block) => {
-                            RunResult::Partial(remove_unused(&blocks, start_block), start_block)
-                        }
+                        RunResult::Partial(blocks, start_block) => RunResult::Partial(
+                            remove_unused(&module, &blocks, start_block, poisoned_vars),
+                            start_block,
+                        ),
                     };
 
-                    fs::write("eval.ir", format!("{optimized:?}")).unwrap();
+                    fs::write("eval.ir", format!("{optimized:#?}")).unwrap();
 
                     if let Some(arg1) = env::args().collect::<Vec<_>>().get(1) {
                         if arg1 == "compile" {

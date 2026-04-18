@@ -48,6 +48,7 @@ pub trait ValueData: Debug {
     fn as_any(&self) -> &dyn Any;
     fn pre_serialize<'a>(&'a self) -> Option<&'a dyn erased_serde::Serialize>;
     fn get_type(&self) -> Type;
+    fn should_poison(&self) -> bool;
 }
 
 impl PartialEq for Value {
@@ -82,6 +83,10 @@ pub trait PrevalValue: PreSerialize {
 
     fn vcall(&mut self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
         panic!("Not callable: {}", type_name::<Self>())
+    }
+
+    fn vshould_poison(&self) -> bool {
+        false
     }
 
     fn get_type(&self) -> Type;
@@ -161,6 +166,10 @@ impl<T: PartialEq + Clone + Debug + PrevalValue + 'static> ValueData for T {
 
     fn get_type(&self) -> Type {
         PrevalValue::get_type(self)
+    }
+
+    fn should_poison(&self) -> bool {
+        self.vshould_poison()
     }
 }
 

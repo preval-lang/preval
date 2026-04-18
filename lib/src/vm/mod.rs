@@ -6,8 +6,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ir::{Block, Module, Operation, Statement, Terminal},
-    value::Value,
-    vm::operation::{call, index, load_local, phi},
+    value::{
+        Value,
+        structure::Struct,
+        typ::{Poison, Type},
+    },
+    vm::operation::{access, call, index, initialize_struct, load_local, phi},
 };
 
 #[repr(C)]
@@ -52,17 +56,44 @@ pub fn evaluate(
                 Statement::Operation(Operation::Phi { block_to_var }, store) => {
                     phi(block_to_var, store, last_block_num, &mut out, vars);
                 }
+                Statement::Operation(Operation::InitializeStruct(name, fields), store) => {
+                    initialize_struct(name, fields, store, module, &mut out, vars);
+                }
+                Statement::Operation(Operation::Access(left, right), store) => {
+                    access(left, right, store, &mut out, vars);
+                }
             }
         }
 
         let new_vars: Vec<_> = vars.keys().filter(|k| !old_vars.contains(k)).collect();
 
+        let residualise = out.len() != 0;
+
         for var_num in new_vars {
             if let Some(Some(var)) = vars.get(var_num) {
-                out.insert(
-                    0,
-                    Statement::Operation(Operation::LoadLiteral(var.clone()), Some(*var_num)),
-                );
+                if let Some(struc) = var.data.as_any().downcast_ref::<Struct>() {
+                    let mut complete = true;
+                    for field in &struc.fields {
+                        if field.1.is_none() {
+                            complete = false;
+                            break;
+                        }
+                    }
+                    if complete {
+                        out.insert(
+                            0,
+                            Statement::Operation(
+                                Operation::LoadLiteral(var.clone()),
+                                Some(*var_num),
+                            ),
+                        );
+                    }
+                } else {
+                    out.insert(
+                        0,
+                        Statement::Operation(Operation::LoadLiteral(var.clone()), Some(*var_num)),
+                    );
+                }
             }
         }
 
@@ -133,7 +164,7 @@ pub fn evaluate(
                     statements: out,
                     terminal: Terminal::Return(var),
                 };
-                if blocks[block_num].statements.is_empty() {
+                if !residualise {
                     match vars.get(&var) {
                         Some(Some(var)) => {
                             return RunResult::Concrete(var.clone());

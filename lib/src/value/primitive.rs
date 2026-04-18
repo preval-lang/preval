@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::value::{PrevalValue, Value, typ::Type};
+use crate::value::{
+    PreSerialize, PrevalValue, Value,
+    typ::{Poison, Type},
+};
 
 impl PrevalValue for String {
     fn vindex(&mut self, value: &Value) -> Value {
@@ -32,6 +35,10 @@ pub struct IO;
 impl PrevalValue for IO {
     fn get_type(&self) -> Type {
         Type::IO
+    }
+
+    fn vshould_poison(&self) -> bool {
+        true
     }
 }
 

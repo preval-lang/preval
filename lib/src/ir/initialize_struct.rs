@@ -1,0 +1,45 @@
+use std::collections::HashMap;
+
+use crate::{
+    ir::{Declaration, Function, Module, Operation, Statement, error::IRErrorInfo, to_ir},
+    parser::expression::InfoExpr,
+};
+
+pub fn initialize_struct(
+    name: String,
+    fields: HashMap<String, InfoExpr>,
+    function: &mut Function,
+    block: &mut usize,
+    module: &mut Module,
+    store: Option<usize>,
+    declarations: &HashMap<String, Declaration>,
+    locals: &mut HashMap<String, Declaration>,
+    next_var: &mut usize,
+) -> Result<(), IRErrorInfo> {
+    if let Some(store) = store {
+        let mut field_vars: HashMap<String, usize> = HashMap::new();
+        for (field_name, field_expr) in fields {
+            let field_var = {
+                *next_var += 1;
+                *next_var
+            };
+            field_vars.insert(field_name, field_var);
+
+            to_ir(
+                function,
+                block,
+                module,
+                field_expr,
+                Some(field_var),
+                declarations,
+                locals,
+                next_var,
+            )?;
+        }
+        function.ir[*block].statements.push(Statement::Operation(
+            Operation::InitializeStruct(name, field_vars),
+            Some(store),
+        ));
+    }
+    Ok(())
+}

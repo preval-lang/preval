@@ -14,8 +14,8 @@ pub fn call(
     module: &Module,
     vars: &mut HashMap<usize, Option<Value>>,
 ) {
-    let mut function_value = match function {
-        Callable::Partial(function) => function,
+    let mut function_value = match &function {
+        Callable::Partial(function) => Value::new(function.clone()),
         Callable::Var(function_var) => match vars.get(&function_var) {
             Some(None) => {
                 out.push(Statement::Operation(
@@ -55,10 +55,10 @@ pub fn call(
         RunResult::Partial(blocks, start_block) => {
             out.push(Statement::Operation(
                 Operation::Call {
-                    function: Callable::Partial(Value::new(Partial {
+                    function: Callable::Partial(Partial {
                         blocks,
                         start_block,
-                    })),
+                    }),
                     args,
                 },
                 store,
@@ -69,10 +69,7 @@ pub fn call(
         }
         RunResult::Residualise => {
             out.push(Statement::Operation(
-                Operation::Call {
-                    function: Callable::Partial(function_value),
-                    args,
-                },
+                Operation::Call { function, args },
                 store,
             ));
             if let Some(store) = store {

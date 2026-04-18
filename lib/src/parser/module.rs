@@ -6,13 +6,12 @@ use crate::{
     ir::{Block, Declaration, Function, Module, StructDescriptor, Terminal, to_ir},
     parser::{
         expression::{InfoExpr, InfoParseError, ParseError, parse_expression},
-        utility::{self, read_punctuated},
+        utility::read_punctuated,
     },
     tokeniser::{InfoToken, Keyword, Token},
     value::{
         Value,
         native::NativeFunction,
-        structure::StructConstructor,
         typ::{Signature, Type, get_type},
     },
 };
@@ -31,7 +30,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
         match tokens[i].token.clone() {
             Token::Keyword(Keyword::Fn) => {
                 let ((name, name_idx), args, signature) =
-                    expect_function_signature(tokens, &mut i)?;
+                    expect_function_signature(&module, tokens, &mut i)?;
                 declarations.insert(name.clone(), Declaration::Constant);
 
                 let body = expect_block_or_expr(tokens, &mut i)?;
@@ -108,7 +107,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                         typ @ ..,
                     ] = field_colon_type.as_slice()
                     {
-                        fields.insert(name.clone(), get_type(typ, &mut 0)?);
+                        fields.insert(name.clone(), get_type(&module, typ, &mut 0)?);
                     }
                 }
                 i += 1;
@@ -118,11 +117,6 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                     .insert(name.clone(), StructDescriptor { fields });
 
                 declarations.insert(name.clone(), Declaration::Constant);
-
-                module.objects.insert(
-                    name.clone(),
-                    Value::new(StructConstructor { typ: name.clone() }),
-                );
             }
             Token::Keyword(Keyword::Dylib) => {
                 i += 1;
@@ -145,7 +139,8 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
 
                 i += 1;
 
-                let ((name, name_idx), _, signature) = expect_function_signature(tokens, &mut i)?;
+                let ((name, name_idx), _, signature) =
+                    expect_function_signature(&module, tokens, &mut i)?;
 
                 if tokens[i].token != Token::Semicolon {
                     return Err(InfoParseError {
@@ -183,6 +178,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
 }
 
 pub fn expect_function_signature(
+    module: &Module,
     tokens: &[InfoToken],
     i: &mut usize,
 ) -> Result<((String, usize), Vec<String>, Signature), InfoParseError> {
@@ -207,7 +203,7 @@ pub fn expect_function_signature(
                     typ @ ..,
                 ] = &arg_colon_type[..]
                 {
-                    let typ = get_type(&typ, &mut 0)?;
+                    let typ = get_type(&module, &typ, &mut 0)?;
                     args.push((name.clone(), typ));
                 }
             }
@@ -218,7 +214,7 @@ pub fn expect_function_signature(
         let mut returns = Type::Tuple(Vec::new());
         if let Token::Colon = &tokens[*i].token {
             *i += 1;
-            returns = get_type(tokens, i)?;
+            returns = get_type(&module, tokens, i)?;
         }
         Ok((
             (name.clone(), name_idx),

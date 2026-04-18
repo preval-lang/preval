@@ -15,6 +15,9 @@ pub fn index(
     let r = vars.get(&rightn).cloned();
     match vars.get_mut(&leftn) {
         Some(None) => {
+            if let Some(store) = store {
+                vars.insert(store, None);
+            }
             out.push(Statement::Operation(Operation::Index(leftn, rightn), store));
         }
         None => panic!("Undefined variable in left of index"),
@@ -25,6 +28,7 @@ pub fn index(
             None => panic!("Undefined variable in left of index"),
             Some(Some(right)) => {
                 let v = left.data.index(&right);
+
                 if let Some(store) = store {
                     vars.insert(store, Some(v));
                 }

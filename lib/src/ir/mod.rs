@@ -1,8 +1,10 @@
+mod access;
 mod block;
 mod call;
 mod conditional;
 pub mod error;
 mod index;
+mod initialize_struct;
 mod literal;
 mod printing;
 mod returns;
@@ -37,7 +39,7 @@ pub struct StructDescriptor {
     pub fields: IndexMap<String, Type>,
 }
 
-#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Function {
     pub ir: Vec<Block>,
     pub exported: bool,
@@ -97,12 +99,14 @@ pub enum Operation {
         block_to_var: HashMap<usize, usize>,
     },
     Index(usize, usize),
+    Access(usize, String),
+    InitializeStruct(String, HashMap<String, usize>),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Callable {
     Var(usize),
-    Partial(Value),
+    Partial(Partial),
 }
 
 #[derive(Debug)]
