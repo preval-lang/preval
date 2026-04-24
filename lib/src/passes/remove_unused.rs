@@ -7,19 +7,17 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-pub enum Poison {
+pub enum Usage {
     Value,
-    Fields(HashMap<String, Poison>),
+    Fields(HashMap<String, Usage>),
 }
 
 pub fn remove_unused(
     module: &Module,
     blocks: &Vec<Block>,
     start_block: usize,
-    mut poison_vars: HashMap<usize, Poison>,
+    mut poison_vars: HashMap<usize, Usage>,
 ) -> Vec<Block> {
-    return blocks.clone();
-
     let mut used_vars = HashSet::new();
     let mut used_blocks = HashSet::new();
 
@@ -47,6 +45,16 @@ pub fn remove_unused(
                         used_vars.insert(*src);
                     }
                 }
+                Statement::Operation(Operation::GuardPhi { block: _, var }, store) => {
+                    // we don't have to think about unused variables making others used because the partial evaluator will already remove them
+                    if let Some(store) = store {
+                        if let Some(poison) = poison_vars.get(var) {
+                            poison_vars.insert(*store, poison.clone());
+                        }
+                        used_vars.insert(*var);
+                    }
+                }
+                Statement::Operation(Operation::LoadConstant(_), _) => {}
                 Statement::Operation(Operation::InitializeStruct(_, fields), store) => {
                     if let Some(store) = store {
                         let mut pf = HashMap::new();
@@ -60,7 +68,7 @@ pub fn remove_unused(
                                 used_vars.insert(fields[field_name]);
                             }
                         }
-                        poison_vars.insert(*store, Poison::Fields(pf));
+                        poison_vars.insert(*store, Usage::Fields(pf));
                     }
                 }
                 Statement::Operation(Operation::Call { function, args }, _) => {
@@ -83,8 +91,8 @@ pub fn remove_unused(
                         used_vars.insert(*left);
                         match poison_vars.get(left) {
                             None => {}
-                            Some(Poison::Value) => panic!("Use of poisoned var as left of access"),
-                            Some(Poison::Fields(poisoned_fields)) => {
+                            Some(Usage::Value) => panic!("Use of poisoned var as left of access"),
+                            Some(Usage::Fields(poisoned_fields)) => {
                                 if poisoned_fields.contains_key(right) {
                                     poison_vars.insert(*store, poisoned_fields[right].clone());
                                 }
@@ -94,9 +102,9 @@ pub fn remove_unused(
                 }
                 Statement::Operation(Operation::LoadLiteral(v), store) => {
                     if let Some(store) = store {
-                        fn get_poison(v: &Value) -> Option<Poison> {
+                        fn get_poison(v: &Value) -> Option<Usage> {
                             if v.data.should_poison() {
-                                Some(Poison::Value)
+                                Some(Usage::Value)
                             } else if let Some(struc) = v.data.as_any().downcast_ref::<Struct>() {
                                 let mut poison_fields = HashMap::new();
                                 for (field_name, value) in &struc.fields {
@@ -111,7 +119,7 @@ pub fn remove_unused(
                                         )
                                     }
                                 }
-                                Some(Poison::Fields(poison_fields))
+                                Some(Usage::Fields(poison_fields))
                             } else {
                                 None
                             }
@@ -144,6 +152,13 @@ pub fn remove_unused(
                 used_vars.insert(*cond);
                 // we will remove unused variables from the then and els branches when we're constructing the new block list
             }
+            Terminal::Guard {
+                dependency,
+                body,
+                continuation,
+            } => {
+                panic!("Guard block should not reach this stage!")
+            }
             Terminal::Jump(new_block) => {
                 block_queue.push(*new_block);
             }
@@ -163,7 +178,7 @@ pub fn remove_unused(
 
     for (var, poison) in &poison_vars {
         match poison {
-            Poison::Value => {
+            Usage::Value => {
                 if used_vars.contains(var) {
                     panic!("Use of poisoned var {var}")
                 }

@@ -20,6 +20,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
     let mut module = Module {
         objects: HashMap::new(),
         structs: HashMap::new(),
+        partials: HashMap::new(),
     };
 
     let mut declarations = HashMap::new();
@@ -115,8 +116,6 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                 module
                     .structs
                     .insert(name.clone(), StructDescriptor { fields });
-
-                declarations.insert(name.clone(), Declaration::Constant);
             }
             Token::Keyword(Keyword::Dylib) => {
                 i += 1;

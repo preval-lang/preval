@@ -4,9 +4,9 @@ use std::{
 };
 
 use preval_lib::{
-    ir::{Module, module_to_string},
+    ir::Module,
     parser::module::parse_module,
-    passes::remove_unused::{Poison, remove_unused},
+    passes::remove_unused::{Usage, remove_unused},
     tokeniser::{get_line_and_column, tokenise},
     value::{Value, primitive::IO},
     vm::{RunResult, evaluate},
@@ -52,7 +52,7 @@ fn main() {
                         .call(&module, vec![&Some(Value::new(IO)), &None]);
 
                     let mut poisoned_vars = HashMap::new();
-                    poisoned_vars.insert(0, Poison::Value);
+                    poisoned_vars.insert(0, Usage::Value);
 
                     let optimized = match eval {
                         RunResult::Residualise => unreachable!(),

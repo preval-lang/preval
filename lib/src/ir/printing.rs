@@ -33,6 +33,7 @@ pub fn to_string(blocks: &Vec<Block>, indentation: usize) -> String {
                         out.push_str(" = ");
                     }
                     match op {
+                        Operation::LoadConstant(name) => out.push_str(&format!("const {name:?}")),
                         Operation::InitializeStruct(name, fields) => {
                             out.push_str(&format!("struct {name:?}({fields:?})"));
                         }
@@ -48,6 +49,9 @@ pub fn to_string(blocks: &Vec<Block>, indentation: usize) -> String {
                         }
                         Operation::Phi { block_to_var } => {
                             out.push_str(&format!("phi {block_to_var:?}"));
+                        }
+                        Operation::GuardPhi { block, var } => {
+                            out.push_str(&format!("phi {block}: ${var}"));
                         }
                         Operation::Index(left, right) => {
                             out.push_str(&format!("${left}[${right}]"));
@@ -67,6 +71,13 @@ pub fn to_string(blocks: &Vec<Block>, indentation: usize) -> String {
             out.push_str("\t");
         }
         match block.terminal.clone() {
+            Terminal::Guard {
+                dependency,
+                body,
+                continuation,
+            } => {
+                out.push_str(&format!("guard ${dependency}: {body} / {continuation}"));
+            }
             Terminal::CondJump { cond, then, els } => {
                 out.push_str(&format!("if ${} then {} else {}", cond, then, els));
             }

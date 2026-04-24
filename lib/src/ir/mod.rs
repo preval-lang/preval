@@ -3,6 +3,7 @@ mod block;
 mod call;
 mod conditional;
 pub mod error;
+mod guard;
 mod index;
 mod initialize_struct;
 mod literal;
@@ -32,6 +33,7 @@ use crate::{
 pub struct Module {
     pub objects: HashMap<String, Value>,
     pub structs: HashMap<String, StructDescriptor>,
+    pub partials: HashMap<String, Partial>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -98,9 +100,14 @@ pub enum Operation {
     Phi {
         block_to_var: HashMap<usize, usize>,
     },
+    GuardPhi {
+        block: usize,
+        var: usize,
+    },
     Index(usize, usize),
     Access(usize, String),
     InitializeStruct(String, HashMap<String, usize>),
+    LoadConstant(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -128,6 +135,11 @@ pub enum Terminal {
         cond: usize,
         then: RunResult,
         els: RunResult,
+    },
+    Guard {
+        dependency: usize,
+        body: usize,
+        continuation: usize,
     },
 }
 

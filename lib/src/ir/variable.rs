@@ -32,9 +32,7 @@ pub fn variable(
             }
             Some(Declaration::Constant) => {
                 function.ir[*block].statements.push(Statement::Operation(
-                    Operation::LoadLiteral(
-                        module.objects.get(&name).expect("Valid constant").clone(),
-                    ),
+                    Operation::LoadConstant(name),
                     Some(store),
                 ));
             }

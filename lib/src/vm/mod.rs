@@ -11,7 +11,7 @@ use crate::{
         structure::Struct,
         typ::{Poison, Type},
     },
-    vm::operation::{access, call, index, initialize_struct, load_local, phi},
+    vm::operation::{access, call, guard_phi, index, initialize_struct, load_local, phi},
 };
 
 #[repr(C)]
@@ -39,8 +39,18 @@ pub fn evaluate(
         for stmt in blocks[block_num].statements.clone() {
             match stmt {
                 Statement::Delete(_) => todo!("Add delete statements"),
+                Statement::Operation(Operation::GuardPhi { block, var }, store) => {
+                    guard_phi(block, var, store, last_block_num, &mut out, vars)
+                }
                 Statement::Operation(Operation::Call { function, args }, store) => {
                     call(function, args, store, &mut out, module, vars)
+                }
+                Statement::Operation(Operation::LoadConstant(name), store) => {
+                    if let Some(value) = module.objects.get(&name) {
+                        if let Some(store) = store {
+                            vars.insert(store, Some(value.clone()));
+                        }
+                    }
                 }
                 Statement::Operation(Operation::LoadLiteral(value), store) => {
                     if let Some(store) = store {
@@ -98,6 +108,29 @@ pub fn evaluate(
         }
 
         match blocks[block_num].terminal.clone() {
+            Terminal::Guard {
+                dependency,
+                body,
+                continuation,
+            } => match vars.get(&dependency) {
+                Some(Some(_)) => {
+                    blocks[block_num] = Block {
+                        statements: out,
+                        terminal: Terminal::Jump(body),
+                    };
+                    last_block_num = block_num;
+                    block_num = body;
+                }
+                Some(None) => {
+                    blocks[block_num] = Block {
+                        statements: out,
+                        terminal: Terminal::Jump(body),
+                    };
+                    last_block_num = block_num;
+                    block_num = continuation;
+                }
+                None => panic!("undefined variable in guard"),
+            },
             Terminal::CondJump { cond, then, els } => match vars.get(&cond) {
                 Some(Some(value)) => {
                     if let Some(cond_bool) = value.data.as_any().downcast_ref::<bool>() {

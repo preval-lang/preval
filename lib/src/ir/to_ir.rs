@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ir::{
-        Declaration, Function, Module, access::access, error::IRErrorInfo,
+        Declaration, Function, Module, access::access, error::IRErrorInfo, guard::guard,
         initialize_struct::initialize_struct,
     },
     parser::expression::{Expr, InfoExpr},
@@ -106,6 +106,18 @@ pub fn to_ir(
             cond,
             then,
             els,
+            expr.idx,
+            function,
+            block,
+            module,
+            store,
+            declarations,
+            locals,
+            next_var,
+        ),
+        Expr::Guard { dependency, body } => guard(
+            dependency,
+            body,
             expr.idx,
             function,
             block,

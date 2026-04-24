@@ -23,6 +23,10 @@ pub enum Expr {
     },
     InitializeStruct(String, HashMap<String, InfoExpr>),
     Access(Box<InfoExpr>, String),
+    Guard {
+        dependency: Box<InfoExpr>,
+        body: Box<InfoExpr>,
+    },
 }
 
 #[derive(Debug)]
@@ -78,6 +82,10 @@ pub fn parse_expression(tokens: &[InfoToken]) -> Result<InfoExpr, InfoParseError
     }
 
     if let Some(expr) = try_parse_if(tokens)? {
+        return Ok(expr);
+    }
+
+    if let Some(expr) = try_parse_guard(tokens)? {
         return Ok(expr);
     }
 
@@ -147,6 +155,30 @@ fn try_parse_let(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseErro
                 error: ParseError::ExpectedName,
             });
         }
+    }
+    Ok(None)
+}
+
+fn try_parse_guard(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError> {
+    if let [
+        InfoToken {
+            token: Token::Keyword(Keyword::Guard),
+            idx: guard_idx,
+        },
+        InfoToken {
+            token: Token::Parens(dependency),
+            idx: _,
+        },
+        rest @ ..,
+    ] = tokens
+    {
+        return Ok(Some(InfoExpr {
+            idx: *guard_idx,
+            expr: Expr::Guard {
+                dependency: Box::new(parse_expression(dependency)?),
+                body: Box::new(parse_expression(rest)?),
+            },
+        }));
     }
     Ok(None)
 }

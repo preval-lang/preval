@@ -10,7 +10,7 @@ use crate::{
     tokeniser::{InfoToken, Token},
 };
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Eq)]
 pub enum Type {
     USize,
     Tuple(Vec<Type>),
@@ -26,7 +26,7 @@ pub enum Type {
 
 impl Type {}
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Eq)]
 pub struct Signature {
     pub(crate) args: Vec<Type>,
     pub(crate) returns: Type,
@@ -38,9 +38,10 @@ pub fn get_type(
     i: &mut usize,
 ) -> Result<Type, InfoParseError> {
     let rv = match &tokens[*i].token {
-        Token::Name(name) if name == "String" => Ok(Type::String),
+        Token::Name(name) if name == "string" => Ok(Type::String),
         Token::Name(name) if name == "IO" => Ok(Type::IO),
         Token::Name(name) if name == "bool" => Ok(Type::Bool),
+        Token::Name(name) if name == "usize" => Ok(Type::USize),
         Token::Name(name) if module.structs.contains_key(name) => Ok(Type::Struct(name.clone())),
         _ => Err(InfoParseError {
             idx: tokens[*i].idx,

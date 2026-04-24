@@ -57,6 +57,8 @@ impl PartialEq for Value {
     }
 }
 
+impl Eq for Value {}
+
 impl Clone for Box<dyn ValueData> {
     fn clone(&self) -> Self {
         self.as_ref().vclone()
