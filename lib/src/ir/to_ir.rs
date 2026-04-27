@@ -22,6 +22,7 @@ pub fn to_ir(
     declarations: &HashMap<String, Declaration>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
+    tail: bool,
 ) -> Result<(), IRErrorInfo> {
     match expr.expr {
         Expr::Literal(lit) => literal(lit, function, block, store),
@@ -58,6 +59,7 @@ pub fn to_ir(
             declarations,
             locals,
             next_var,
+            tail,
         ),
         Expr::InitializeStruct(name, fields) => initialize_struct(
             name,
@@ -90,6 +92,7 @@ pub fn to_ir(
             declarations,
             locals,
             next_var,
+            tail,
         ),
         Expr::Var(name) => variable(
             name,
@@ -114,6 +117,7 @@ pub fn to_ir(
             declarations,
             locals,
             next_var,
+            tail,
         ),
         Expr::Guard { dependency, body } => guard(
             dependency,
@@ -126,6 +130,7 @@ pub fn to_ir(
             declarations,
             locals,
             next_var,
+            tail,
         ),
         Expr::Index(left, right) => index(
             left,

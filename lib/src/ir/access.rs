@@ -33,12 +33,13 @@ pub fn access(
         declarations,
         locals,
         next_var,
+        false,
     )?;
 
-    function.ir[*block].statements.push(Statement::Operation(
-        Operation::Access(left_var, right),
+    function.ir[*block].statements.push(Statement {
         store,
-    ));
+        operation: Operation::Access(left_var, right),
+    });
 
     Ok(())
 }

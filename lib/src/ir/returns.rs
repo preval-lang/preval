@@ -35,13 +35,14 @@ pub fn returns(
             declarations,
             locals,
             next_var,
+            true,
         )?;
         return_var
     } else {
-        function.ir[*block].statements.push(Statement::Operation(
-            Operation::LoadLiteral(Value::new(EmptyTuple)),
-            Some(return_var),
-        ));
+        function.ir[*block].statements.push(Statement {
+            store: Some(return_var),
+            operation: Operation::LoadLiteral(Value::new(EmptyTuple)),
+        });
         return_var
     });
     Ok(())

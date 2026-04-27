@@ -18,6 +18,7 @@ pub fn guard(
     declarations: &HashMap<String, Declaration>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
+    tail: bool,
 ) -> Result<(), IRErrorInfo> {
     let dep_var = {
         *next_var += 1;
@@ -32,14 +33,23 @@ pub fn guard(
         declarations,
         locals,
         next_var,
+        false,
     )?;
 
     let body_block = function.ir.len();
-    let mut body_block_mut = function.ir.len();
+    let mut body_block_mut = body_block;
+    let continuation_block = body_block + 1;
 
     function.ir.push(Block {
         statements: Vec::new(),
-        terminal: Terminal::Jump(function.ir.len() + 1),
+        terminal: Terminal::Jump(continuation_block),
+    });
+
+    let old_terminal = function.ir[*block].terminal.clone();
+
+    function.ir.push(Block {
+        statements: Vec::new(),
+        terminal: old_terminal,
     });
 
     to_ir(
@@ -51,30 +61,24 @@ pub fn guard(
         declarations,
         locals,
         next_var,
+        tail,
     )?;
-
-    let old_terminal = function.ir[*block].terminal.clone();
 
     function.ir[*block].terminal = Terminal::Guard {
         dependency: dep_var,
         body: body_block,
-        continuation: function.ir.len(),
+        continuation: continuation_block,
     };
-    *block = function.ir.len();
-
-    function.ir.push(Block {
-        statements: Vec::new(),
-        terminal: old_terminal,
-    });
+    *block = continuation_block;
 
     if let Some(store) = store {
-        function.ir[*block].statements.push(Statement::Operation(
-            Operation::GuardPhi {
+        function.ir[*block].statements.push(Statement {
+            store: Some(store),
+            operation: Operation::GuardPhi {
                 block: body_block,
                 var: store,
             },
-            Some(store),
-        ));
+        });
     }
 
     Ok(())

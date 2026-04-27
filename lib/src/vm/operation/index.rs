@@ -18,12 +18,18 @@ pub fn index(
             if let Some(store) = store {
                 vars.insert(store, None);
             }
-            out.push(Statement::Operation(Operation::Index(leftn, rightn), store));
+            out.push(Statement {
+                store,
+                operation: Operation::Index(leftn, rightn),
+            });
         }
         None => panic!("Undefined variable in left of index"),
         Some(Some(left)) => match r {
             Some(None) => {
-                out.push(Statement::Operation(Operation::Index(leftn, rightn), store));
+                out.push(Statement {
+                    store,
+                    operation: Operation::Index(leftn, rightn),
+                });
             }
             None => panic!("Undefined variable in left of index"),
             Some(Some(right)) => {

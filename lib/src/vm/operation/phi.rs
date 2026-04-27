@@ -19,10 +19,10 @@ pub fn phi(
         let var = vars.get(var_num).expect("Phi evaluated to undefined variable, must have forgot to store the result of the block");
 
         if var.is_none() {
-            out.push(Statement::Operation(
-                Operation::Phi { block_to_var },
-                Some(store),
-            ));
+            out.push(Statement {
+                store: Some(store),
+                operation: Operation::Phi { block_to_var },
+            });
         }
 
         vars.insert(

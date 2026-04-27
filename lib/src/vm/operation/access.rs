@@ -17,7 +17,10 @@ pub fn access(
             if let Some(store) = store {
                 vars.insert(store, None);
             }
-            out.push(Statement::Operation(Operation::Access(left, right), store));
+            out.push(Statement {
+                store,
+                operation: Operation::Access(left, right),
+            });
         }
         None => panic!("Undefined variable in left of index"),
         Some(Some(left)) => {

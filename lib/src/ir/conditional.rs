@@ -18,6 +18,7 @@ pub fn conditional(
     declarations: &HashMap<String, Declaration>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
+    tail: bool,
 ) -> Result<(), IRErrorInfo> {
     let cond_var = {
         *next_var += 1;
@@ -32,6 +33,7 @@ pub fn conditional(
         declarations,
         locals,
         next_var,
+        false,
     )?;
 
     let then_block_n = function.ir.len();
@@ -53,6 +55,7 @@ pub fn conditional(
         declarations,
         locals,
         next_var,
+        tail,
     )?;
 
     let else_block = if let Some(els) = els {
@@ -75,6 +78,7 @@ pub fn conditional(
             declarations,
             locals,
             next_var,
+            tail,
         )?;
         Some((else_block_n, else_block_var))
     } else {
@@ -100,10 +104,10 @@ pub fn conditional(
             let mut block_to_var = HashMap::new();
             block_to_var.insert(else_block.0, else_block.1);
             block_to_var.insert(then_block_n, then_block_var);
-            function.ir[*block].statements.push(Statement::Operation(
-                Operation::Phi { block_to_var },
-                Some(store),
-            ));
+            function.ir[*block].statements.push(Statement {
+                store: Some(store),
+                operation: Operation::Phi { block_to_var },
+            });
         } else {
             return Err(IRErrorInfo {
                 idx,

@@ -11,10 +11,10 @@ pub fn literal(
     store: Option<usize>,
 ) -> Result<(), IRErrorInfo> {
     if let Some(store) = store {
-        function.ir[*block].statements.push(Statement::Operation(
-            Operation::LoadLiteral(lit),
-            Some(store),
-        ));
+        function.ir[*block].statements.push(Statement {
+            store: Some(store),
+            operation: Operation::LoadLiteral(lit),
+        });
     }
     Ok(())
 }

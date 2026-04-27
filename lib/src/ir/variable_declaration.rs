@@ -33,13 +33,14 @@ pub fn variable_declaration(
         declarations,
         locals,
         next_var,
+        false,
     )?;
     locals.insert(name, Declaration::Variable(new_var));
     if let Some(store) = store {
-        function.ir[*block].statements.push(Statement::Operation(
-            Operation::LoadLocal { src: new_var },
-            Some(store),
-        ));
+        function.ir[*block].statements.push(Statement {
+            store: Some(store),
+            operation: Operation::LoadLocal { src: new_var },
+        });
     }
     Ok(())
 }

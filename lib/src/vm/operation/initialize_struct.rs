@@ -35,10 +35,10 @@ pub fn initialize_struct(
         );
 
         if residualise {
-            out.push(Statement::Operation(
-                crate::ir::Operation::InitializeStruct(name, fields),
-                Some(store),
-            ));
+            out.push(Statement {
+                store: Some(store),
+                operation: crate::ir::Operation::InitializeStruct(name, fields),
+            });
         }
     }
 }

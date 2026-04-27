@@ -26,13 +26,13 @@ pub fn to_string(blocks: &Vec<Block>, indentation: usize) -> String {
                 out.push_str("\t");
             }
             match stmt {
-                Statement::Operation(op, store) => {
+                Statement { store, operation } => {
                     if let Some(store) = store {
                         out.push_str("$");
                         out.push_str(&store.to_string());
                         out.push_str(" = ");
                     }
-                    match op {
+                    match operation {
                         Operation::LoadConstant(name) => out.push_str(&format!("const {name:?}")),
                         Operation::InitializeStruct(name, fields) => {
                             out.push_str(&format!("struct {name:?}({fields:?})"));
@@ -61,9 +61,6 @@ pub fn to_string(blocks: &Vec<Block>, indentation: usize) -> String {
                         }
                     }
                 }
-                Statement::Delete(var) => {
-                    out.push_str(&format!("delete ${var}"));
-                }
             }
             out.push('\n');
         }
@@ -77,6 +74,15 @@ pub fn to_string(blocks: &Vec<Block>, indentation: usize) -> String {
                 continuation,
             } => {
                 out.push_str(&format!("guard ${dependency}: {body} / {continuation}"));
+            }
+            Terminal::TailCall { function, args } => {
+                out.push_str(&format!(
+                    "tail_call ${function:?}({})",
+                    args.iter()
+                        .map(|a| format!("${a}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
             }
             Terminal::CondJump { cond, then, els } => {
                 out.push_str(&format!("if ${} then {} else {}", cond, then, els));

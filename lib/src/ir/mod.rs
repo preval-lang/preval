@@ -82,9 +82,9 @@ impl PrevalValue for Partial {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum Statement {
-    Operation(Operation, Option<usize>),
-    Delete(usize),
+pub struct Statement {
+    pub store: Option<usize>,
+    pub operation: Operation,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -140,6 +140,10 @@ pub enum Terminal {
         dependency: usize,
         body: usize,
         continuation: usize,
+    },
+    TailCall {
+        function: Callable,
+        args: Vec<usize>,
     },
 }
 

@@ -33,6 +33,7 @@ pub fn index(
         declarations,
         locals,
         next_var,
+        false,
     )?;
     let right_var = {
         *next_var += 1;
@@ -47,12 +48,13 @@ pub fn index(
         declarations,
         locals,
         next_var,
+        false,
     )?;
 
-    function.ir[*block].statements.push(Statement::Operation(
-        Operation::Index(left_var, right_var),
+    function.ir[*block].statements.push(Statement {
         store,
-    ));
+        operation: Operation::Index(left_var, right_var),
+    });
 
     Ok(())
 }

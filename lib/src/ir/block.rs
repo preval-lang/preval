@@ -20,6 +20,7 @@ pub fn compile_block(
     declarations: &HashMap<String, Declaration>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
+    tail: bool,
 ) -> Result<(), IRErrorInfo> {
     let mut i = 0;
     let len = statements.len();
@@ -34,6 +35,7 @@ pub fn compile_block(
                 declarations,
                 locals,
                 next_var,
+                false,
             )?;
         } else {
             to_ir(
@@ -45,16 +47,17 @@ pub fn compile_block(
                 declarations,
                 locals,
                 next_var,
+                tail,
             )?;
         }
         i += 1;
     }
 
     if (len == 0 || !returns) && store.is_some() {
-        function.ir[*block].statements.push(Statement::Operation(
-            Operation::LoadLiteral(Value::new(EmptyTuple {})),
+        function.ir[*block].statements.push(Statement {
             store,
-        ));
+            operation: Operation::LoadLiteral(Value::new(EmptyTuple {})),
+        });
     }
     Ok(())
 }

@@ -25,16 +25,16 @@ pub fn variable(
                 });
             }
             Some(Declaration::Variable(v)) => {
-                function.ir[*block].statements.push(Statement::Operation(
-                    Operation::LoadLocal { src: *v },
-                    Some(store),
-                ));
+                function.ir[*block].statements.push(Statement {
+                    store: Some(store),
+                    operation: Operation::LoadLocal { src: *v },
+                });
             }
             Some(Declaration::Constant) => {
-                function.ir[*block].statements.push(Statement::Operation(
-                    Operation::LoadConstant(name),
-                    Some(store),
-                ));
+                function.ir[*block].statements.push(Statement {
+                    store: Some(store),
+                    operation: Operation::LoadConstant(name),
+                });
             }
             _ => {
                 return Err(IRErrorInfo {

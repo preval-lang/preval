@@ -18,10 +18,10 @@ pub fn call(
         Callable::Partial(function) => Value::new(function.clone()),
         Callable::Var(function_var) => match vars.get(&function_var) {
             Some(None) => {
-                out.push(Statement::Operation(
-                    Operation::Call { function, args },
+                out.push(Statement {
                     store,
-                ));
+                    operation: Operation::Call { function, args },
+                });
                 if let Some(store) = store {
                     vars.insert(store, None);
                 }
@@ -35,8 +35,45 @@ pub fn call(
         },
     };
 
+    match function_value.data.call(module, prepare_args(&args, vars)) {
+        RunResult::Concrete(value) => {
+            if let Some(store) = store {
+                vars.insert(store, Some(value));
+            }
+        }
+        RunResult::Partial(blocks, start_block) => {
+            out.push(Statement {
+                store,
+                operation: Operation::Call {
+                    function: Callable::Partial(Partial {
+                        blocks,
+                        start_block,
+                    }),
+                    args,
+                },
+            });
+            if let Some(store) = store {
+                vars.insert(store, None);
+            }
+        }
+        RunResult::Residualise => {
+            out.push(Statement {
+                store,
+                operation: Operation::Call { function, args },
+            });
+            if let Some(store) = store {
+                vars.insert(store, None);
+            }
+        }
+    }
+}
+
+pub fn prepare_args<'a>(
+    args: &Vec<usize>,
+    vars: &'a mut HashMap<usize, Option<Value>>,
+) -> Vec<&'a Option<Value>> {
     let mut arg_values = Vec::new();
-    for arg_var in &args {
+    for arg_var in args {
         arg_values.push(match vars.get(&arg_var) {
             Some(value) => value,
             None => panic!(
@@ -45,36 +82,5 @@ pub fn call(
             ),
         });
     }
-
-    match function_value.data.call(module, arg_values) {
-        RunResult::Concrete(value) => {
-            if let Some(store) = store {
-                vars.insert(store, Some(value));
-            }
-        }
-        RunResult::Partial(blocks, start_block) => {
-            out.push(Statement::Operation(
-                Operation::Call {
-                    function: Callable::Partial(Partial {
-                        blocks,
-                        start_block,
-                    }),
-                    args,
-                },
-                store,
-            ));
-            if let Some(store) = store {
-                vars.insert(store, None);
-            }
-        }
-        RunResult::Residualise => {
-            out.push(Statement::Operation(
-                Operation::Call { function, args },
-                store,
-            ));
-            if let Some(store) = store {
-                vars.insert(store, None);
-            }
-        }
-    }
+    arg_values
 }

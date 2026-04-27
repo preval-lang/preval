@@ -4,6 +4,7 @@ use crate::ir::Function;
 use crate::ir::Module;
 use crate::ir::Operation;
 use crate::ir::Statement;
+use crate::ir::Terminal;
 use crate::ir::error::IRErrorInfo;
 use crate::ir::to_ir;
 use crate::parser::expression::InfoExpr;
@@ -20,6 +21,7 @@ pub fn call(
     declarations: &HashMap<String, Declaration>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
+    tail: bool,
 ) -> Result<(), IRErrorInfo> {
     let callee = *callee;
 
@@ -38,6 +40,7 @@ pub fn call(
             declarations,
             locals,
             next_var,
+            false,
         )?;
         arg_indexes.push(i);
     }
@@ -55,14 +58,22 @@ pub fn call(
         declarations,
         locals,
         next_var,
+        false,
     )?;
 
-    function.ir[*block].statements.push(Statement::Operation(
-        Operation::Call {
+    if tail {
+        function.ir[*block].terminal = Terminal::TailCall {
             function: Callable::Var(fn_var),
             args: arg_indexes,
-        },
-        store,
-    ));
+        }
+    } else {
+        function.ir[*block].statements.push(Statement {
+            store,
+            operation: Operation::Call {
+                function: Callable::Var(fn_var),
+                args: arg_indexes,
+            },
+        });
+    }
     Ok(())
 }

@@ -18,10 +18,10 @@ pub fn load_local(
             }
             Some(None) => {
                 vars.insert(store, None);
-                out.push(Statement::Operation(
-                    Operation::LoadLocal { src },
-                    Some(store),
-                ));
+                out.push(Statement {
+                    store: Some(store),
+                    operation: Operation::LoadLocal { src },
+                });
             }
             None => {
                 panic!("Load undefined local variable {src}");

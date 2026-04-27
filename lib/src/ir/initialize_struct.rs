@@ -34,12 +34,13 @@ pub fn initialize_struct(
                 declarations,
                 locals,
                 next_var,
+                false,
             )?;
         }
-        function.ir[*block].statements.push(Statement::Operation(
-            Operation::InitializeStruct(name, field_vars),
-            Some(store),
-        ));
+        function.ir[*block].statements.push(Statement {
+            store: Some(store),
+            operation: Operation::InitializeStruct(name, field_vars),
+        });
     }
     Ok(())
 }

@@ -2,6 +2,7 @@ dylib "stdlib/print" fn print(io: IO, args: string);
 dylib "stdlib/print" fn input(io: IO): string;
 
 fn loop_forever(io: IO) {
+    print(io, "Hi");
     guard(io) loop_forever(io);
 }
 

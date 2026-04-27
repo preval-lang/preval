@@ -35,8 +35,10 @@ pub fn remove_unused(
 
         for stmt in &blocks[block].statements {
             match stmt {
-                Statement::Delete(_) => todo!("Remove delete statement"),
-                Statement::Operation(Operation::LoadLocal { src }, store) => {
+                Statement {
+                    store,
+                    operation: Operation::LoadLocal { src },
+                } => {
                     // we don't have to think about unused variables making others used because the partial evaluator will already remove them
                     if let Some(store) = store {
                         if let Some(poison) = poison_vars.get(src) {
@@ -45,7 +47,10 @@ pub fn remove_unused(
                         used_vars.insert(*src);
                     }
                 }
-                Statement::Operation(Operation::GuardPhi { block: _, var }, store) => {
+                Statement {
+                    store,
+                    operation: Operation::GuardPhi { block: _, var },
+                } => {
                     // we don't have to think about unused variables making others used because the partial evaluator will already remove them
                     if let Some(store) = store {
                         if let Some(poison) = poison_vars.get(var) {
@@ -54,8 +59,14 @@ pub fn remove_unused(
                         used_vars.insert(*var);
                     }
                 }
-                Statement::Operation(Operation::LoadConstant(_), _) => {}
-                Statement::Operation(Operation::InitializeStruct(_, fields), store) => {
+                Statement {
+                    operation: Operation::LoadConstant(_),
+                    ..
+                } => {}
+                Statement {
+                    store,
+                    operation: Operation::InitializeStruct(_, fields),
+                } => {
                     if let Some(store) = store {
                         let mut pf = HashMap::new();
                         for field_name in fields.keys() {
@@ -71,7 +82,10 @@ pub fn remove_unused(
                         poison_vars.insert(*store, Usage::Fields(pf));
                     }
                 }
-                Statement::Operation(Operation::Call { function, args }, _) => {
+                Statement {
+                    operation: Operation::Call { function, args },
+                    ..
+                } => {
                     for arg_var in args {
                         used_vars.insert(*arg_var);
                     }
@@ -82,11 +96,17 @@ pub fn remove_unused(
                         Callable::Partial(_) => {}
                     }
                 }
-                Statement::Operation(Operation::Index(left, right), _) => {
+                Statement {
+                    operation: Operation::Index(left, right),
+                    ..
+                } => {
                     used_vars.insert(*left);
                     used_vars.insert(*right);
                 }
-                Statement::Operation(Operation::Access(left, right), store) => {
+                Statement {
+                    store,
+                    operation: Operation::Access(left, right),
+                } => {
                     if let Some(store) = store {
                         used_vars.insert(*left);
                         match poison_vars.get(left) {
@@ -100,7 +120,10 @@ pub fn remove_unused(
                         }
                     }
                 }
-                Statement::Operation(Operation::LoadLiteral(v), store) => {
+                Statement {
+                    store,
+                    operation: Operation::LoadLiteral(v),
+                } => {
                     if let Some(store) = store {
                         fn get_poison(v: &Value) -> Option<Usage> {
                             if v.data.should_poison() {
@@ -130,7 +153,10 @@ pub fn remove_unused(
                         }
                     }
                 }
-                Statement::Operation(Operation::Phi { block_to_var }, store) => {
+                Statement {
+                    store,
+                    operation: Operation::Phi { block_to_var },
+                } => {
                     if let Some(store) = store {
                         for (_, var) in block_to_var {
                             used_vars.insert(*var);
@@ -170,6 +196,17 @@ pub fn remove_unused(
                 used_vars.insert(*cond);
                 block_queue.push(*then);
                 block_queue.push(*els);
+            }
+            Terminal::TailCall { function, args } => {
+                match function {
+                    Callable::Var(var) => {
+                        used_vars.insert(*var);
+                    }
+                    Callable::Partial(_) => {}
+                }
+                for arg in args {
+                    used_vars.insert(*arg);
+                }
             }
         }
     }
@@ -222,25 +259,35 @@ pub fn remove_unused(
 
             for statement in &block.statements {
                 match statement {
-                    Statement::Operation(Operation::LoadLiteral(_), Some(var)) => {
+                    Statement {
+                        store: Some(_),
+                        operation: Operation::LoadLiteral(_),
+                    } => {
                         // if used_vars.contains(var) {
                         new_block.statements.push(statement.clone());
                         // }
                     }
-                    Statement::Operation(Operation::InitializeStruct(_, _), Some(var)) => {
+                    Statement {
+                        store: Some(_),
+                        operation: Operation::InitializeStruct(_, _),
+                    } => {
                         // if used_vars.contains(var) {
                         new_block.statements.push(statement.clone());
                         // }
                     }
-                    Statement::Operation(Operation::Call { function, args }, store) => {
+                    Statement {
+                        store,
+                        operation: Operation::Call { function, args },
+                    } => {
                         let mut poisoned_args = HashMap::new();
                         for (arg_idx, arg_var) in args.iter().enumerate() {
                             if let Some(poison) = poison_vars.get(arg_var) {
                                 poisoned_args.insert(arg_idx, poison.clone());
                             }
                         }
-                        new_block.statements.push(Statement::Operation(
-                            Operation::Call {
+                        new_block.statements.push(Statement {
+                            store: store.clone(),
+                            operation: Operation::Call {
                                 function: match function {
                                     Callable::Var(v) => Callable::Var(*v),
                                     Callable::Partial(Partial {
@@ -258,8 +305,7 @@ pub fn remove_unused(
                                 },
                                 args: args.clone(),
                             },
-                            store.clone(),
-                        ));
+                        });
                     }
                     _ => {
                         new_block.statements.push(statement.clone());

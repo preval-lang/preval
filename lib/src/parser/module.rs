@@ -61,6 +61,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                     &mut declarations,
                     &mut locals,
                     &mut last_var,
+                    true,
                 )?;
 
                 if let Some(_) = module
