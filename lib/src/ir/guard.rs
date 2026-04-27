@@ -10,7 +10,7 @@ use crate::{
 pub fn guard(
     dependency: Box<InfoExpr>,
     body: Box<InfoExpr>,
-    idx: usize,
+    _idx: usize,
     function: &mut Function,
     block: &mut usize,
     module: &mut Module,

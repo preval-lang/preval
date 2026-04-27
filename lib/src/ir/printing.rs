@@ -2,7 +2,7 @@ use crate::ir::{Operation, Partial, Terminal};
 use std::fmt::Debug;
 
 use crate::ir::Statement;
-use crate::ir::{Block, Function, Module};
+use crate::ir::{Block, Module};
 
 pub fn module_to_string(module: &Module) -> String {
     let mut out = String::new();

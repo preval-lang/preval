@@ -16,7 +16,7 @@ pub fn returns(
     function: &mut Function,
     block: &mut usize,
     module: &mut Module,
-    store: Option<usize>,
+    _store: Option<usize>,
     declarations: &HashMap<String, Declaration>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,

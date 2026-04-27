@@ -21,7 +21,7 @@ impl PrevalValue for NativeFunction {
 
     fn vcall(
         &mut self,
-        module: &crate::ir::Module,
+        _module: &crate::ir::Module,
         args: Vec<&Option<super::Value>>,
     ) -> crate::vm::RunResult {
         unsafe {

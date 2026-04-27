@@ -100,11 +100,11 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                     if let [
                         InfoToken {
                             token: Token::Name(name),
-                            idx: name_idx,
+                            idx: _name_idx,
                         },
                         InfoToken {
                             token: Token::Colon,
-                            idx: colon_idx,
+                            idx: _colon_idx,
                         },
                         typ @ ..,
                     ] = field_colon_type.as_slice()
@@ -151,7 +151,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                 i += 1;
 
                 declarations.insert(name.clone(), Declaration::Constant);
-                if let Some(v) = module.objects.insert(
+                if let Some(_v) = module.objects.insert(
                     name.clone(),
                     Value::new(NativeFunction {
                         lib_name,
@@ -165,7 +165,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                     });
                 }
             }
-            tk => {
+            _tk => {
                 return Err(InfoParseError {
                     idx: tokens[i].idx,
                     error: ParseError::ExpectedTopLevel,
@@ -194,11 +194,11 @@ pub fn expect_function_signature(
                 if let [
                     InfoToken {
                         token: Token::Name(name),
-                        idx: name_idx,
+                        idx: _name_idx,
                     },
                     InfoToken {
                         token: Token::Colon,
-                        idx: colon_idx,
+                        idx: _colon_idx,
                     },
                     typ @ ..,
                 ] = &arg_colon_type[..]

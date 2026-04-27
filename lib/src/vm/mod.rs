@@ -9,10 +9,9 @@ use crate::{
     value::{
         Value,
         structure::Struct,
-        typ::{Poison, Type},
     },
     vm::operation::{
-        access, call, guard_phi, index, initialize_struct, load_local, phi, prepare_args,
+        access, call, guard_phi, index, initialize_struct, load_local, phi,
     },
 };
 

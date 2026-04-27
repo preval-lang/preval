@@ -4,7 +4,7 @@ use crate::ir::{Function, Module, Partial};
 use crate::value::native::NativeFunction;
 use crate::value::primitive::{EmptyTuple, IO};
 use crate::value::structure::Struct;
-use crate::value::{PreSerialize, PrevalValue, ValueData};
+use crate::value::{PrevalValue, ValueData};
 use crate::{
     parser::expression::{InfoParseError, ParseError},
     tokeniser::{InfoToken, Token},
@@ -71,7 +71,7 @@ pub fn deserialize_type(typ: &Type, data: String) -> Box<dyn ValueData> {
         Type::Bool => Box::new(ron::de::from_str::<bool>(&data).unwrap()),
         Type::USize => Box::new(ron::de::from_str::<usize>(&data).unwrap()),
         Type::Struct(_) => Box::new(ron::de::from_str::<Struct>(&data).unwrap()),
-        Type::Function(f) => Box::new(ron::de::from_str::<Function>(&data).unwrap()),
+        Type::Function(_f) => Box::new(ron::de::from_str::<Function>(&data).unwrap()),
         Type::Partial => Box::new(ron::de::from_str::<Partial>(&data).unwrap()),
     }
 }

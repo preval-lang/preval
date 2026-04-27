@@ -11,7 +11,7 @@ use crate::{
 pub fn access(
     left: Box<InfoExpr>,
     right: String,
-    idx: usize,
+    _idx: usize,
     function: &mut Function,
     block: &mut usize,
     module: &mut Module,

@@ -1,7 +1,6 @@
 use crate::ir::Module;
 use crate::value::Value;
 use crate::value::structure::Struct;
-use crate::value::typ::Type;
 use crate::vm::Statement;
 use std::collections::HashMap;
 
@@ -9,7 +8,7 @@ pub fn initialize_struct(
     name: String,
     fields: HashMap<String, usize>,
     store: Option<usize>,
-    module: &Module,
+    _module: &Module,
     out: &mut Vec<Statement>,
     vars: &mut HashMap<usize, Option<Value>>,
 ) {

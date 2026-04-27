@@ -1,17 +1,11 @@
 use std::{
     any::{Any, type_name},
-    collections::{HashMap, HashSet},
     fmt::Debug,
 };
 
-use serde::{Deserialize, Serialize};
-
 use crate::{
-    ir::{Block, Module},
-    value::{
-        primitive::EmptyTuple,
-        typ::{Type, deserialize_type},
-    },
+    ir::Module,
+    value::typ::{Type, deserialize_type},
     vm::RunResult,
 };
 
@@ -39,7 +33,7 @@ impl Debug for Value {
 
 pub trait ValueData: Debug {
     fn vclone(&self) -> Box<dyn ValueData>;
-    fn index(&mut self, value: &Value) -> Value {
+    fn index(&mut self, _value: &Value) -> Value {
         panic!("Type is not indexable")
     }
     fn call(&mut self, module: &Module, args: Vec<&Option<Value>>) -> RunResult;
@@ -79,11 +73,11 @@ impl Clone for Box<dyn ValueData> {
 // }
 
 pub trait PrevalValue: PreSerialize {
-    fn vindex(&mut self, value: &Value) -> Value {
+    fn vindex(&mut self, _value: &Value) -> Value {
         panic!("Not indexable: {}", type_name::<Self>())
     }
 
-    fn vcall(&mut self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
+    fn vcall(&mut self, _module: &Module, _args: Vec<&Option<Value>>) -> RunResult {
         panic!("Not callable: {}", type_name::<Self>())
     }
 

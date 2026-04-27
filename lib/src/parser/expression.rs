@@ -224,7 +224,7 @@ fn try_parse_struct(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseE
         },
         InfoToken {
             token: Token::Braces(contents),
-            idx: brace_idx,
+            idx: _brace_idx,
         },
     ] = tokens
     {
@@ -233,11 +233,11 @@ fn try_parse_struct(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseE
             if let [
                 InfoToken {
                     token: Token::Name(name),
-                    idx: name_idx,
+                    idx: _name_idx,
                 },
                 InfoToken {
                     token: Token::Colon,
-                    idx: colon_idx,
+                    idx: _colon_idx,
                 },
                 value @ ..,
             ] = &name_colon_value[..]
@@ -320,7 +320,7 @@ fn try_parse_dot(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseErro
         },
         InfoToken {
             token: Token::Name(name),
-            idx: name_idx,
+            idx: _name_idx,
         },
     ] = tokens
     {

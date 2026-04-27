@@ -10,11 +10,11 @@ pub fn variable(
     idx: usize,
     function: &mut Function,
     block: &mut usize,
-    module: &mut Module,
+    _module: &mut Module,
     store: Option<usize>,
     declarations: &HashMap<String, Declaration>,
     locals: &mut HashMap<String, Declaration>,
-    next_var: &mut usize,
+    _next_var: &mut usize,
 ) -> Result<(), IRErrorInfo> {
     if let Some(store) = store {
         match locals.get(&name).or(declarations.get(&name)) {
@@ -34,12 +34,6 @@ pub fn variable(
                 function.ir[*block].statements.push(Statement {
                     store: Some(store),
                     operation: Operation::LoadConstant(name),
-                });
-            }
-            _ => {
-                return Err(IRErrorInfo {
-                    idx,
-                    error: IRError::NotStorable(name),
                 });
             }
         }

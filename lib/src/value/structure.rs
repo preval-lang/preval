@@ -2,11 +2,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    ir::Module,
-    value::{PrevalValue, Value, typ::Type},
-    vm::RunResult,
-};
+use crate::value::{PrevalValue, Value, typ::Type};
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct Struct {

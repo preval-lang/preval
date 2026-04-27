@@ -56,7 +56,7 @@ impl PrevalValue for Function {
     fn vcall(&mut self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
         let mut args_map = HashMap::new();
         for (i, arg) in args.iter().enumerate() {
-            args_map.insert(i, arg.clone().clone());
+            args_map.insert(i, (**arg).clone());
         }
         evaluate(module, self.ir.clone(), &mut args_map, 0)
     }
@@ -73,9 +73,9 @@ impl PrevalValue for Partial {
     }
 
     fn vcall(&mut self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
-        let mut args_map = HashMap::new();
+        let mut args_map: HashMap<usize, Option<Value>> = HashMap::new();
         for (i, arg) in args.iter().enumerate() {
-            args_map.insert(i, arg.clone().clone());
+            args_map.insert(i, (**arg).clone());
         }
         evaluate(module, self.blocks.clone(), &mut args_map, self.start_block)
     }

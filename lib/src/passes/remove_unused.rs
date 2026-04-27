@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     ir::{Block, Callable, Module, Operation, Partial, Statement, Terminal},
-    value::{Value, structure::Struct, typ::Type},
+    value::{Value, structure::Struct},
     vm::RunResult,
 };
 
@@ -179,9 +179,9 @@ pub fn remove_unused(
                 // we will remove unused variables from the then and els branches when we're constructing the new block list
             }
             Terminal::Guard {
-                dependency,
-                body,
-                continuation,
+                dependency: _,
+                body: _,
+                continuation: _,
             } => {
                 panic!("Guard block should not reach this stage!")
             }
