@@ -163,7 +163,31 @@ pub fn evaluate(
                                 {
                                     Some((0, result.ir.clone()))
                                 } else {
-                                    panic!("Non-function in tail call")
+                                    match value
+                                        .clone()
+                                        .data
+                                        .call(module, args.iter().map(|idx| &vars[idx]).collect())
+                                    {
+                                        RunResult::Concrete(return_value) => {
+                                            if residualise {
+                                                out.push(Statement {
+                                                    store: { Some(90000) },
+                                                    operation: Operation::LoadLiteral(return_value),
+                                                });
+                                                blocks[block_num] = Block {
+                                                    statements: out,
+                                                    terminal: Terminal::Return(90000),
+                                                };
+                                                return RunResult::Partial(blocks, start_block);
+                                            } else {
+                                                return RunResult::Concrete(return_value);
+                                            }
+                                        }
+                                        RunResult::Partial(blocks, start_block) => {
+                                            Some((start_block, blocks.clone()))
+                                        }
+                                        RunResult::Residualise => None,
+                                    }
                                 }
                             } else {
                                 None

@@ -3,7 +3,7 @@ dylib "stdlib/print" fn input(io: IO): string;
 
 fn loop_forever(io: IO) {
     print(io, "Hi");
-    guard(io) loop_forever(io);
+
 }
 
 fn main(compile_io: IO, io: IO) {
