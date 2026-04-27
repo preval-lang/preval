@@ -6,13 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ir::{Block, Callable, Function, Module, Operation, Partial, Statement, Terminal},
-    value::{
-        Value,
-        structure::Struct,
-    },
-    vm::operation::{
-        access, call, guard_phi, index, initialize_struct, load_local, phi,
-    },
+    value::{Value, structure::Struct},
+    vm::operation::{access, call, guard_phi, index, initialize_struct, load_local, phi},
 };
 
 #[repr(C)]

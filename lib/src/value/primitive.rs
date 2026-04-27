@@ -1,9 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::value::{
-    PrevalValue, Value,
-    typ::Type,
-};
+use crate::value::{PrevalValue, Value, typ::Type};
 
 impl PrevalValue for String {
     fn vindex(&mut self, value: &Value) -> Value {
