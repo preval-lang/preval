@@ -1,4 +1,9 @@
-use crate::value::Value;
+use std::fmt::{Debug, Display, Write};
+
+use crate::{
+    typ::{ConcreteType, IntegerSize},
+    value::Value,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Keyword {
@@ -37,7 +42,7 @@ impl TryFrom<&str> for Keyword {
 pub enum Token {
     Name(String),
     Keyword(Keyword),
-    Literal(Value),
+    Literal(Literal),
     Parens(Vec<InfoToken>),
     Braces(Vec<InfoToken>),
     Index(Vec<InfoToken>),
@@ -46,12 +51,39 @@ pub enum Token {
     Comma,
     Dot,
     Assignment,
+    Union,
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum Literal {
+    Bool(bool),
+    String(String),
+    Usize(usize),
+}
+
+impl Literal {
+    pub fn get_type(&self) -> ConcreteType {
+        match self {
+            Literal::Bool(_) => ConcreteType::Bool,
+            Literal::String(_) => ConcreteType::String,
+            Literal::Usize(_) => ConcreteType::Integer {
+                size: IntegerSize::Size,
+                signed: false,
+            },
+        }
+    }
+}
+
+#[derive(Clone, PartialEq)]
 pub struct InfoToken {
     pub token: Token,
     pub idx: usize,
+}
+
+impl Debug for InfoToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Token::fmt(&self.token, f)
+    }
 }
 
 #[derive(Debug)]
@@ -136,6 +168,13 @@ pub fn tokenise(input: &str, offset: usize) -> Result<Vec<InfoToken>, TokeniseEr
                 });
                 i += 1;
             }
+            Some('|') => {
+                out.push(InfoToken {
+                    token: Token::Union,
+                    idx: offset + i,
+                });
+                i += 1;
+            }
             Some('(') => {
                 let (idx, contents) = read_brackets(input, &mut i, offset, '(', ')')?;
                 out.push(InfoToken {
@@ -187,7 +226,7 @@ fn read_number(input: &str, i: &mut usize, offset: usize) -> Result<InfoToken, T
             return Ok(InfoToken {
                 idx: offset + start,
                 token: if let Ok(num) = number.parse::<usize>() {
-                    Token::Literal(Value::new(num))
+                    Token::Literal(Literal::Usize(num))
                 } else {
                     return Err(TokeniseErrorInfo {
                         idx: offset + start,
@@ -284,7 +323,7 @@ fn read_string(input: &str, i: &mut usize, offset: usize) -> Result<InfoToken, T
                 *i += 1;
                 return Ok(InfoToken {
                     idx: offset + start,
-                    token: Token::Literal(Value::new(contents)),
+                    token: Token::Literal(Literal::String(contents)),
                 });
             }
             Some(c) => {

@@ -18,39 +18,32 @@ pub use to_ir::*;
 
 use std::{collections::HashMap, fmt::Debug};
 
-use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    value::{
-        PrevalValue, Value,
-        typ::{Signature, Type},
-    },
+    value::{PrevalValue, Value, runtime_type::RuntimeType},
     vm::{RunResult, evaluate},
 };
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Module {
     pub objects: HashMap<String, Value>,
-    pub structs: HashMap<String, StructDescriptor>,
-    pub partials: HashMap<String, Partial>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StructDescriptor {
-    pub fields: IndexMap<String, Type>,
+    pub fields: HashMap<String, usize>,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Function {
     pub ir: Vec<Block>,
     pub exported: bool,
-    pub signature: Signature,
 }
 
 impl PrevalValue for Function {
-    fn get_type(&self) -> Type {
-        Type::Function(Box::new(self.signature.clone()))
+    fn get_type(&self) -> RuntimeType {
+        RuntimeType::Function
     }
 
     fn vcall(&mut self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
@@ -68,8 +61,8 @@ pub struct Partial {
     pub start_block: usize,
 }
 impl PrevalValue for Partial {
-    fn get_type(&self) -> Type {
-        Type::Partial
+    fn get_type(&self) -> RuntimeType {
+        RuntimeType::Partial
     }
 
     fn vcall(&mut self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {

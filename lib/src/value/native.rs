@@ -1,8 +1,4 @@
-use crate::value::{
-    PrevalValue, Value,
-    primitive::EmptyTuple,
-    typ::{Signature, Type},
-};
+use crate::value::{PrevalValue, Value, primitive::EmptyTuple, runtime_type::RuntimeType};
 use libloading::Library;
 use preval_api::RawAPI;
 use serde::{Deserialize, Serialize};
@@ -11,12 +7,11 @@ use serde::{Deserialize, Serialize};
 pub struct NativeFunction {
     pub lib_name: String,
     pub func_name: String,
-    pub signature: Signature,
 }
 
 impl PrevalValue for NativeFunction {
-    fn get_type(&self) -> Type {
-        Type::NativeFunction
+    fn get_type(&self) -> RuntimeType {
+        RuntimeType::NativeFunction
     }
 
     fn vcall(

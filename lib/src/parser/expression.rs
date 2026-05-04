@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::parser::utility::read_punctuated;
+use crate::tokeniser::Literal;
 use crate::value::Value;
 use crate::{
     ir::error::{IRError, IRErrorInfo},
@@ -11,7 +12,7 @@ use crate::{
 pub enum Expr {
     Index(Box<InfoExpr>, Box<InfoExpr>),
     Var(String),
-    Literal(Value),
+    Literal(Literal),
     Call(Box<InfoExpr>, Vec<InfoExpr>),
     Return(Option<Box<InfoExpr>>),
     Block(Vec<InfoExpr>, bool),
@@ -428,7 +429,7 @@ fn try_parse_boolean(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParse
     ] = tokens
     {
         return Ok(Some(InfoExpr {
-            expr: Expr::Literal(Value::new(*value)),
+            expr: Expr::Literal(Literal::Bool(*value)),
             idx: *idx,
         }));
     }

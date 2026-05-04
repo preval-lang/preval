@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::value::{PrevalValue, Value, typ::Type};
+use crate::value::{PrevalValue, Value, runtime_type::RuntimeType};
 
 impl PrevalValue for String {
     fn vindex(&mut self, value: &Value) -> Value {
@@ -10,28 +10,28 @@ impl PrevalValue for String {
         }
     }
 
-    fn get_type(&self) -> Type {
-        Type::String
+    fn get_type(&self) -> RuntimeType {
+        RuntimeType::String
     }
 }
 
 impl PrevalValue for usize {
-    fn get_type(&self) -> Type {
-        Type::USize
+    fn get_type(&self) -> RuntimeType {
+        RuntimeType::USize
     }
 }
 
 impl PrevalValue for bool {
-    fn get_type(&self) -> Type {
-        Type::Bool
+    fn get_type(&self) -> RuntimeType {
+        RuntimeType::Bool
     }
 }
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct IO;
 impl PrevalValue for IO {
-    fn get_type(&self) -> Type {
-        Type::IO
+    fn get_type(&self) -> RuntimeType {
+        RuntimeType::IO
     }
 
     fn vshould_poison(&self) -> bool {
@@ -42,7 +42,7 @@ impl PrevalValue for IO {
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct EmptyTuple;
 impl PrevalValue for EmptyTuple {
-    fn get_type(&self) -> Type {
-        Type::Tuple(Vec::new())
+    fn get_type(&self) -> RuntimeType {
+        RuntimeType::Tuple(Vec::new())
     }
 }

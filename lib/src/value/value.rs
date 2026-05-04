@@ -5,14 +5,14 @@ use std::{
 
 use crate::{
     ir::Module,
-    value::typ::{Type, deserialize_type},
+    value::runtime_type::{RuntimeType, deserialize_type},
     vm::RunResult,
 };
 
 #[repr(C)]
 #[derive(Clone)]
 pub struct Value {
-    pub typ: Type,
+    pub typ: RuntimeType,
     pub data: Box<dyn ValueData>,
 }
 
@@ -41,7 +41,7 @@ pub trait ValueData: Debug {
     fn veq(&self, other: &Value) -> bool;
     fn as_any(&self) -> &dyn Any;
     fn pre_serialize<'a>(&'a self) -> Option<&'a dyn erased_serde::Serialize>;
-    fn get_type(&self) -> Type;
+    fn get_type(&self) -> RuntimeType;
     fn should_poison(&self) -> bool;
 }
 
@@ -85,11 +85,11 @@ pub trait PrevalValue: PreSerialize {
         false
     }
 
-    fn get_type(&self) -> Type;
+    fn get_type(&self) -> RuntimeType;
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
-struct RawValue(Type, String);
+struct RawValue(RuntimeType, String);
 
 impl<'de> serde::Deserialize<'de> for Value {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -160,7 +160,7 @@ impl<T: PartialEq + Clone + Debug + PrevalValue + 'static> ValueData for T {
         PreSerialize::pre_serialize(self)
     }
 
-    fn get_type(&self) -> Type {
+    fn get_type(&self) -> RuntimeType {
         PrevalValue::get_type(self)
     }
 

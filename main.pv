@@ -1,11 +1,12 @@
 dylib "stdlib/print" fn print(io: IO, args: string);
 dylib "stdlib/print" fn input(io: IO): string;
 
-fn loop_forever(io: IO) {
-    print(io, "Hi");
-
+struct Test {
+    abc: string,
 }
 
 fn main(compile_io: IO, io: IO) {
-    loop_forever(io);
+    let a = Test{abc: "Hi"};
+
+    let b = print(io, a.abc);
 }

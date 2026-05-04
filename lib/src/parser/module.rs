@@ -1,37 +1,37 @@
 use std::{collections::HashMap, usize};
 
-use indexmap::IndexMap;
-
 use crate::{
-    ir::{Block, Declaration, Function, Module, StructDescriptor, Terminal, to_ir},
+    ir::{Block, Declaration, Function, Module, Terminal, to_ir},
     parser::{
         expression::{InfoExpr, InfoParseError, ParseError, parse_expression},
+        typ::parse_type,
         utility::read_punctuated,
     },
-    tokeniser::{InfoToken, Keyword, Token},
-    value::{
-        Value,
-        native::NativeFunction,
-        typ::{Signature, Type, get_type},
-    },
+    passes::type_check_expr::infer_expr_type,
+    tokeniser::{InfoToken, Keyword, Literal, Token},
+    typ::{ConcreteType, InfoTypeError, Instantiator, Signature, Type, TypeError},
+    value::{Value, native::NativeFunction},
 };
+
+use crate::passes::type_check_expr::Scope;
 
 pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
     let mut module = Module {
         objects: HashMap::new(),
-        structs: HashMap::new(),
-        partials: HashMap::new(),
     };
 
     let mut declarations = HashMap::new();
+
+    let mut ins = Instantiator::new();
 
     let mut i = 0;
 
     while i < tokens.len() {
         match tokens[i].token.clone() {
             Token::Keyword(Keyword::Fn) => {
+                i += 1;
                 let ((name, name_idx), args, signature) =
-                    expect_function_signature(&module, tokens, &mut i)?;
+                    expect_function_signature(&module, tokens, &mut ins, &mut i)?;
                 declarations.insert(name.clone(), Declaration::Constant);
 
                 let body = expect_block_or_expr(tokens, &mut i)?;
@@ -44,12 +44,32 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                         statements: Vec::new(),
                     }],
                     exported: true,
-                    signature,
                 };
+
+                let global_scope = ins.global_scope();
+                let mut scope = global_scope.sub();
 
                 let mut locals = HashMap::new();
                 for (idx, arg) in args.iter().enumerate() {
                     locals.insert(arg.clone(), Declaration::Variable(idx));
+                    scope.insert(arg.clone(), signature.args[idx]);
+                }
+
+                ins.insert(
+                    &name,
+                    Type::Concrete(ConcreteType::Function(Box::new(signature.clone()))),
+                );
+
+                let body_type =
+                    infer_expr_type(&body, &mut ins, &mut scope, signature.returns).unwrap();
+
+                if !ins.compatible(body_type, signature.returns) {
+                    panic!(
+                        "incorrect function return type expected {:?} got {:?}",
+                        ins.get_type(signature.returns),
+                        ins.get_type(body_type)
+                    );
+                    todo!("proper error for function body type mismatch")
                 }
 
                 to_ir(
@@ -94,7 +114,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                     })
                 }?;
 
-                let mut fields = IndexMap::new();
+                let mut fields = HashMap::new();
 
                 for field_colon_type in read_punctuated(block, Token::Comma)? {
                     if let [
@@ -109,27 +129,21 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                         typ @ ..,
                     ] = field_colon_type.as_slice()
                     {
-                        fields.insert(name.clone(), get_type(&module, typ, &mut 0)?);
+                        fields.insert(name.clone(), ins.instantiate(&parse_type(typ)?.expr));
                     }
                 }
                 i += 1;
 
-                module
-                    .structs
-                    .insert(name.clone(), StructDescriptor { fields });
+                ins.insert(name, Type::Concrete(ConcreteType::Struct(fields)));
             }
             Token::Keyword(Keyword::Dylib) => {
                 i += 1;
                 let lib_name = if let InfoToken {
                     idx: _,
-                    token:
-                        Token::Literal(Value {
-                            typ: Type::String,
-                            data,
-                        }),
+                    token: Token::Literal(Literal::String(s)),
                 } = &tokens[i]
                 {
-                    data.as_any().downcast_ref::<String>().unwrap().clone()
+                    s.clone()
                 } else {
                     return Err(InfoParseError {
                         idx: tokens[i].idx,
@@ -138,9 +152,10 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                 };
 
                 i += 1;
+                i += 1;
 
                 let ((name, name_idx), _, signature) =
-                    expect_function_signature(&module, tokens, &mut i)?;
+                    expect_function_signature(&module, tokens, &mut ins, &mut i)?;
 
                 if tokens[i].token != Token::Semicolon {
                     return Err(InfoParseError {
@@ -156,7 +171,6 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                     Value::new(NativeFunction {
                         lib_name,
                         func_name: name.clone(),
-                        signature,
                     }),
                 ) {
                     return Err(InfoParseError {
@@ -164,6 +178,11 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                         error: ParseError::DuplicateName,
                     });
                 }
+
+                ins.insert(
+                    &name,
+                    Type::Concrete(ConcreteType::Function(Box::new(signature))),
+                );
             }
             _tk => {
                 return Err(InfoParseError {
@@ -180,9 +199,9 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
 pub fn expect_function_signature(
     module: &Module,
     tokens: &[InfoToken],
+    ins: &mut Instantiator,
     i: &mut usize,
 ) -> Result<((String, usize), Vec<String>, Signature), InfoParseError> {
-    *i += 1;
     if let Token::Name(name) = &tokens[*i].token {
         let name_idx = tokens[*i].idx;
         *i += 1;
@@ -203,7 +222,7 @@ pub fn expect_function_signature(
                     typ @ ..,
                 ] = &arg_colon_type[..]
                 {
-                    let typ = get_type(&module, &typ, &mut 0)?;
+                    let typ = ins.instantiate(&parse_type(typ)?.expr);
                     args.push((name.clone(), typ));
                 }
             }
@@ -211,11 +230,24 @@ pub fn expect_function_signature(
         } else {
             panic!("Missing function parameters, got {:?}", tokens[*i]);
         }
-        let mut returns = Type::Tuple(Vec::new());
-        if let Token::Colon = &tokens[*i].token {
+        let returns = if let Token::Colon = &tokens[*i].token {
             *i += 1;
-            returns = get_type(&module, tokens, i)?;
-        }
+            let start = *i;
+            loop {
+                if let Some(InfoToken {
+                    token: Token::Braces(_) | Token::Semicolon,
+                    idx: _,
+                }) = tokens.iter().nth(*i)
+                {
+                    break;
+                }
+                *i += 1;
+            }
+
+            ins.instantiate(&parse_type(&tokens[start..*i])?.expr)
+        } else {
+            ins.concrete(ConcreteType::Tuple(Vec::new()))
+        };
         Ok((
             (name.clone(), name_idx),
             args.iter().map(|arg| arg.0.clone()).collect(),

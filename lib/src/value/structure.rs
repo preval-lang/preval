@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::value::{PrevalValue, Value, typ::Type};
+use crate::value::{PrevalValue, Value, runtime_type::RuntimeType};
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct Struct {
@@ -10,8 +10,8 @@ pub struct Struct {
     pub typ: String,
 }
 impl PrevalValue for Struct {
-    fn get_type(&self) -> Type {
-        Type::Struct(self.typ.clone())
+    fn get_type(&self) -> RuntimeType {
+        RuntimeType::Struct(self.typ.clone())
     }
 
     fn vindex(&mut self, value: &Value) -> Value {
