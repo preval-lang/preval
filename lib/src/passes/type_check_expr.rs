@@ -24,7 +24,7 @@ impl<'a> Scope<'a> {
     }
 
     pub fn get(&self, name: &str) -> Option<usize> {
-        for scope in &self.scopes {
+        for scope in self.scopes.iter().rev() {
             if let Some(typ) = (*scope).get(name) {
                 return Some(*typ);
             }
@@ -46,7 +46,7 @@ pub fn infer_expr_type(
     return_type: usize,
 ) -> Result<usize, InfoTypeError> {
     match &expr.expr {
-        Expr::Literal(value) => Ok(ins.concrete(value.get_type())),
+        Expr::Literal(value) => Ok(ins.add(Type::Concrete(value.get_type()))),
         Expr::Var(name) => {
             if let Some(idx) = scope.get(name) {
                 Ok(idx)
@@ -59,7 +59,7 @@ pub fn infer_expr_type(
         }
         Expr::Block(statements, returns) => {
             if statements.len() == 0 || (statements.len() == 1 && !returns) {
-                return Ok(ins.concrete(ConcreteType::Tuple(Vec::new())));
+                return Ok(ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new()))));
             }
 
             let mut scope = scope.sub();
@@ -69,27 +69,21 @@ pub fn infer_expr_type(
             if *returns {
                 infer_expr_type(statements.last().unwrap(), ins, &mut scope, return_type)
             } else {
-                Ok(ins.concrete(ConcreteType::Tuple(Vec::new())))
+                Ok(ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new()))))
             }
         }
-        Expr::InitializeStruct(name, fields) => {
-            let (struct_type, struct_type_id) = if let Some(struct_type_id) = ins.get_name(name) {
+        Expr::InitializeStruct(struct_type_id, fields) => {
+            let (struct_type, struct_type_id) =
                 if let Type::Concrete(ConcreteType::Struct(struct_type)) =
-                    ins.get_type(struct_type_id).clone()
+                    ins.get_type(*struct_type_id).clone()
                 {
                     (struct_type, struct_type_id)
                 } else {
                     return Err(InfoTypeError {
                         idx: expr.idx,
-                        error: TypeError::NotAStruct(ins.get_type(struct_type_id).clone()),
+                        error: TypeError::NotAStruct(ins.get_type(*struct_type_id).clone()),
                     });
-                }
-            } else {
-                return Err(InfoTypeError {
-                    idx: expr.idx,
-                    error: TypeError::UnknownType(name.clone()),
-                });
-            };
+                };
 
             if fields.len() != struct_type.len() {
                 return Err(InfoTypeError {
@@ -112,7 +106,7 @@ pub fn infer_expr_type(
                         error: TypeError::UnknownField(name.clone()),
                     });
                 };
-                if !ins.compatible(assignee_type, slot) {
+                if !ins.compatible(assignee_type, slot, 0) {
                     return Err(InfoTypeError {
                         idx: expr.idx,
                         error: TypeError::IncompatibleTypes {
@@ -123,7 +117,7 @@ pub fn infer_expr_type(
                 }
             }
 
-            Ok(struct_type_id)
+            Ok(*struct_type_id)
         }
         Expr::Access(struct_expr, field_name) => {
             let struct_type_id = infer_expr_type(struct_expr, ins, scope, return_type)?;
@@ -145,6 +139,7 @@ pub fn infer_expr_type(
                 })
             }
         }
+        Expr::Is { name: _, typ: _ } => Ok(ins.add(Type::Concrete(ConcreteType::Bool))),
         Expr::Call(function_expr, args_exprs) => {
             let function_type_id = infer_expr_type(function_expr, ins, scope, return_type)?;
 
@@ -171,7 +166,7 @@ pub fn infer_expr_type(
 
             for (arg_expr, arg_type) in args_exprs.iter().zip(signature.args.iter()) {
                 let arg_expr_type = infer_expr_type(arg_expr, ins, scope, return_type)?;
-                if !ins.compatible(arg_expr_type, *arg_type) {
+                if !ins.compatible(arg_expr_type, *arg_type, 0) {
                     return Err(InfoTypeError {
                         idx: expr.idx,
                         error: TypeError::IncompatibleTypes {
@@ -186,8 +181,8 @@ pub fn infer_expr_type(
         }
         Expr::If { cond, then, els } => {
             let cond_type = infer_expr_type(cond, ins, scope, return_type)?;
-            let bool = ins.concrete(ConcreteType::Bool);
-            if !ins.compatible(cond_type, bool) {
+            let bool = ins.add(Type::Concrete(ConcreteType::Bool));
+            if !ins.compatible(cond_type, bool, 0) {
                 return Err(InfoTypeError {
                     idx: expr.idx,
                     error: TypeError::IncompatibleTypes {
@@ -196,14 +191,18 @@ pub fn infer_expr_type(
                     },
                 });
             }
-            let then_type = infer_expr_type(then, ins, scope, return_type)?;
+            let mut then_scope = scope.sub();
+            if let Expr::Is { name, typ } = &cond.expr {
+                then_scope.insert(name.clone(), *typ);
+            }
+            let then_type = infer_expr_type(then, ins, &mut then_scope, return_type)?;
             let els_type = if let Some(els) = els {
                 Some(infer_expr_type(els, ins, scope, return_type)?)
             } else {
                 None
             };
             Ok(if let Some(els_type) = els_type {
-                if !ins.compatible(then_type, els_type) {
+                if !ins.compatible(then_type, els_type, 0) {
                     ins.add(Type::Union(then_type, els_type))
                 } else {
                     then_type
@@ -231,7 +230,7 @@ pub fn infer_expr_type(
                 ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new())))
             };
 
-            if !ins.compatible(expr_type, return_type) {
+            if !ins.compatible(expr_type, return_type, 0) {
                 return Err(InfoTypeError {
                     idx: expr.idx,
                     error: TypeError::IncompatibleTypes {

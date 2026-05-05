@@ -1,4 +1,7 @@
-use crate::value::{PrevalValue, Value, primitive::EmptyTuple, runtime_type::RuntimeType};
+use crate::{
+    typ::{Instantiator, type_id},
+    value::{PrevalValue, Value, primitive::EmptyTuple, runtime_type::TypeDeserializer},
+};
 use libloading::Library;
 use preval_api::RawAPI;
 use serde::{Deserialize, Serialize};
@@ -10,13 +13,13 @@ pub struct NativeFunction {
 }
 
 impl PrevalValue for NativeFunction {
-    fn get_type(&self) -> RuntimeType {
-        RuntimeType::NativeFunction
+    fn get_type(&self) -> TypeDeserializer {
+        TypeDeserializer::NativeFunction
     }
 
     fn vcall(
         &mut self,
-        _module: &crate::ir::Module,
+        _module: &mut crate::ir::Module,
         args: Vec<&Option<super::Value>>,
     ) -> crate::vm::RunResult {
         unsafe {
@@ -81,11 +84,12 @@ extern "C" fn string_value_start(value: *const Value) -> *const u8 {
 }
 
 extern "C" fn new_tuple_value() -> *mut Value {
-    Box::into_raw(Box::new(Value::new(EmptyTuple)))
+    Box::into_raw(Box::new(Value::new(EmptyTuple, type_id::empty_tuple)))
 }
 
 extern "C" fn new_string_value(value: *const u8, len: usize) -> *mut Value {
     Box::into_raw(Box::new(Value::new(
         String::from_utf8_lossy(unsafe { std::slice::from_raw_parts(value, len) }).into_owned(),
+        type_id::String,
     )))
 }

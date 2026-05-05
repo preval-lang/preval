@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ir::{Callable, Module, Operation, Partial, Statement},
+    typ::{Instantiator, type_id},
     value::Value,
     vm::RunResult,
 };
@@ -11,11 +12,11 @@ pub fn call(
     args: Vec<usize>,
     store: Option<usize>,
     out: &mut Vec<Statement>,
-    module: &Module,
+    module: &mut Module,
     vars: &mut HashMap<usize, Option<Value>>,
 ) {
     let mut function_value = match &function {
-        Callable::Partial(function) => Value::new(function.clone()),
+        Callable::Partial(function) => Value::new(function.clone(), 0), // the type ID isn't used - this is a hack
         Callable::Var(function_var) => match vars.get(&function_var) {
             Some(None) => {
                 out.push(Statement {

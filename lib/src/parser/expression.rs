@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
+use crate::parser::typ::{InfoTypeExpr, parse_type};
 use crate::parser::utility::read_punctuated;
 use crate::tokeniser::Literal;
-use crate::value::Value;
+use crate::typ::Instantiator;
 use crate::{
     ir::error::{IRError, IRErrorInfo},
     tokeniser::{InfoToken, Keyword, Token},
@@ -22,11 +23,15 @@ pub enum Expr {
         then: Box<InfoExpr>,
         els: Option<Box<InfoExpr>>,
     },
-    InitializeStruct(String, HashMap<String, InfoExpr>),
+    InitializeStruct(usize, HashMap<String, InfoExpr>),
     Access(Box<InfoExpr>, String),
     Guard {
         dependency: Box<InfoExpr>,
         body: Box<InfoExpr>,
+    },
+    Is {
+        name: String,
+        typ: usize,
     },
 }
 
@@ -65,44 +70,51 @@ impl From<IRErrorInfo> for InfoParseError {
     }
 }
 
-pub fn parse_expression(tokens: &[InfoToken]) -> Result<InfoExpr, InfoParseError> {
-    if let Some(expr) = try_parse_parens(tokens)? {
+pub fn parse_expression(
+    tokens: &[InfoToken],
+    ins: &mut Instantiator,
+) -> Result<InfoExpr, InfoParseError> {
+    if let Some(expr) = try_parse_parens(tokens, ins)? {
         return Ok(expr);
     }
 
-    if let Some(expr) = try_parse_block(tokens)? {
+    if let Some(expr) = try_parse_block(tokens, ins)? {
         return Ok(expr);
     }
 
-    if let Some(expr) = try_parse_let(tokens)? {
+    if let Some(expr) = try_parse_let(tokens, ins)? {
         return Ok(expr);
     }
 
-    if let Some(expr) = try_parse_return(tokens)? {
+    if let Some(expr) = try_parse_return(tokens, ins)? {
         return Ok(expr);
     }
 
-    if let Some(expr) = try_parse_if(tokens)? {
+    if let Some(expr) = try_parse_if(tokens, ins)? {
         return Ok(expr);
     }
 
-    if let Some(expr) = try_parse_guard(tokens)? {
+    if let Some(expr) = try_parse_guard(tokens, ins)? {
         return Ok(expr);
     }
 
-    if let Some(expr) = try_parse_index(tokens)? {
+    if let Some(expr) = try_parse_index(tokens, ins)? {
         return Ok(expr);
     }
 
-    if let Some(expr) = try_parse_call(tokens)? {
+    if let Some(expr) = try_parse_call(tokens, ins)? {
         return Ok(expr);
     }
 
-    if let Some(expr) = try_parse_dot(tokens)? {
+    if let Some(expr) = try_parse_dot(tokens, ins)? {
         return Ok(expr);
     }
 
-    if let Some(expr) = try_parse_struct(tokens)? {
+    if let Some(expr) = try_parse_is(tokens, ins)? {
+        return Ok(expr);
+    }
+
+    if let Some(expr) = try_parse_struct(tokens, ins)? {
         return Ok(expr);
     }
 
@@ -124,7 +136,10 @@ pub fn parse_expression(tokens: &[InfoToken]) -> Result<InfoExpr, InfoParseError
     })
 }
 
-fn try_parse_let(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError> {
+fn try_parse_let(
+    tokens: &[InfoToken],
+    ins: &mut Instantiator,
+) -> Result<Option<InfoExpr>, InfoParseError> {
     if let Some(InfoToken {
         token: Token::Keyword(Keyword::Let),
         idx: let_idx,
@@ -141,7 +156,7 @@ fn try_parse_let(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseErro
             }) = tokens.get(2)
             {
                 return Ok(Some(InfoExpr {
-                    expr: Expr::Let(name.clone(), Box::new(parse_expression(&tokens[3..])?)),
+                    expr: Expr::Let(name.clone(), Box::new(parse_expression(&tokens[3..], ins)?)),
                     idx: *let_idx,
                 }));
             } else {
@@ -160,7 +175,10 @@ fn try_parse_let(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseErro
     Ok(None)
 }
 
-fn try_parse_guard(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError> {
+fn try_parse_guard(
+    tokens: &[InfoToken],
+    ins: &mut Instantiator,
+) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
         InfoToken {
             token: Token::Keyword(Keyword::Guard),
@@ -176,15 +194,45 @@ fn try_parse_guard(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseEr
         return Ok(Some(InfoExpr {
             idx: *guard_idx,
             expr: Expr::Guard {
-                dependency: Box::new(parse_expression(dependency)?),
-                body: Box::new(parse_expression(rest)?),
+                dependency: Box::new(parse_expression(dependency, ins)?),
+                body: Box::new(parse_expression(rest, ins)?),
             },
         }));
     }
     Ok(None)
 }
 
-fn try_parse_if(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError> {
+fn try_parse_is(
+    tokens: &[InfoToken],
+    ins: &mut Instantiator,
+) -> Result<Option<InfoExpr>, InfoParseError> {
+    if let [
+        InfoToken {
+            token: Token::Name(name),
+            idx: _,
+        },
+        InfoToken {
+            token: Token::Keyword(Keyword::Is),
+            idx: is_idx,
+        },
+        type_expr @ ..,
+    ] = tokens
+    {
+        return Ok(Some(InfoExpr {
+            idx: *is_idx,
+            expr: Expr::Is {
+                name: name.clone(),
+                typ: ins.instantiate(&parse_type(type_expr)?.expr),
+            },
+        }));
+    }
+    Ok(None)
+}
+
+fn try_parse_if(
+    tokens: &[InfoToken],
+    ins: &mut Instantiator,
+) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
         InfoToken {
             token: Token::Keyword(Keyword::If),
@@ -207,9 +255,9 @@ fn try_parse_if(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError
     {
         return Ok(Some(InfoExpr {
             expr: Expr::If {
-                cond: Box::new(parse_expression(condition)?),
-                then: Box::new(parse_expression(&[then_block.clone()])?),
-                els: Some(Box::new(parse_expression(&[else_block.clone()])?)),
+                cond: Box::new(parse_expression(condition, ins)?),
+                then: Box::new(parse_expression(&[then_block.clone()], ins)?),
+                els: Some(Box::new(parse_expression(&[else_block.clone()], ins)?)),
             },
             idx: *if_idx,
         }));
@@ -217,7 +265,10 @@ fn try_parse_if(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError
     Ok(None)
 }
 
-fn try_parse_struct(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError> {
+fn try_parse_struct(
+    tokens: &[InfoToken],
+    ins: &mut Instantiator,
+) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
         InfoToken {
             token: Token::Name(name),
@@ -243,12 +294,12 @@ fn try_parse_struct(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseE
                 value @ ..,
             ] = &name_colon_value[..]
             {
-                let value = parse_expression(value)?;
+                let value = parse_expression(value, ins)?;
                 fields.insert(name.clone(), value);
             }
         }
         Ok(Some(InfoExpr {
-            expr: Expr::InitializeStruct(name.clone(), fields),
+            expr: Expr::InitializeStruct(ins.get_name(name).unwrap(), fields),
             idx: *name_idx,
         }))
     } else {
@@ -256,7 +307,10 @@ fn try_parse_struct(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseE
     }
 }
 
-fn try_parse_return(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError> {
+fn try_parse_return(
+    tokens: &[InfoToken],
+    ins: &mut Instantiator,
+) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
         InfoToken {
             token: Token::Keyword(Keyword::Return),
@@ -270,7 +324,7 @@ fn try_parse_return(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseE
                 if return_tokens.is_empty() {
                     None
                 } else {
-                    Some(Box::new(parse_expression(return_tokens)?))
+                    Some(Box::new(parse_expression(return_tokens, ins)?))
                 }
             }),
             idx: *idx,
@@ -279,7 +333,10 @@ fn try_parse_return(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseE
     Ok(None)
 }
 
-fn try_parse_index(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError> {
+fn try_parse_index(
+    tokens: &[InfoToken],
+    ins: &mut Instantiator,
+) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
         left @ ..,
         InfoToken {
@@ -290,8 +347,8 @@ fn try_parse_index(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseEr
     {
         return Ok(Some(InfoExpr {
             expr: Expr::Index(
-                Box::new(parse_expression(left)?),
-                Box::new(parse_expression(index)?),
+                Box::new(parse_expression(left, ins)?),
+                Box::new(parse_expression(index, ins)?),
             ),
             idx: *idx,
         }));
@@ -299,7 +356,10 @@ fn try_parse_index(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseEr
     Ok(None)
 }
 
-fn try_parse_parens(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError> {
+fn try_parse_parens(
+    tokens: &[InfoToken],
+    ins: &mut Instantiator,
+) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
         InfoToken {
             token: Token::Parens(contents),
@@ -307,12 +367,15 @@ fn try_parse_parens(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseE
         },
     ] = tokens
     {
-        return Ok(Some(parse_expression(contents)?));
+        return Ok(Some(parse_expression(contents, ins)?));
     }
     Ok(None)
 }
 
-fn try_parse_dot(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError> {
+fn try_parse_dot(
+    tokens: &[InfoToken],
+    ins: &mut Instantiator,
+) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
         left @ ..,
         InfoToken {
@@ -326,7 +389,7 @@ fn try_parse_dot(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseErro
     ] = tokens
     {
         return Ok(Some(InfoExpr {
-            expr: Expr::Access(Box::new(parse_expression(left)?), name.clone()),
+            expr: Expr::Access(Box::new(parse_expression(left, ins)?), name.clone()),
             idx: *idx,
         }));
     }
@@ -334,7 +397,10 @@ fn try_parse_dot(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseErro
     Ok(None)
 }
 
-fn try_parse_call(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError> {
+fn try_parse_call(
+    tokens: &[InfoToken],
+    ins: &mut Instantiator,
+) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
         left @ ..,
         InfoToken {
@@ -344,10 +410,10 @@ fn try_parse_call(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseErr
     ] = tokens
     {
         return Ok(Some(InfoExpr {
-            expr: Expr::Call(Box::new(parse_expression(left)?), {
+            expr: Expr::Call(Box::new(parse_expression(left, ins)?), {
                 let mut out = Vec::new();
                 for tokens in read_punctuated(contents, Token::Comma)? {
-                    out.push(parse_expression(&tokens)?);
+                    out.push(parse_expression(&tokens, ins)?);
                 }
                 out
             }),
@@ -357,7 +423,10 @@ fn try_parse_call(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseErr
     Ok(None)
 }
 
-fn try_parse_block(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError> {
+fn try_parse_block(
+    tokens: &[InfoToken],
+    ins: &mut Instantiator,
+) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
         InfoToken {
             token: Token::Braces(contents),
@@ -377,7 +446,7 @@ fn try_parse_block(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseEr
         };
         if !contents.is_empty() {
             for tokens in read_punctuated(contents, Token::Semicolon)? {
-                out.push(parse_expression(&tokens)?);
+                out.push(parse_expression(&tokens, ins)?);
             }
         }
         return Ok(Some(InfoExpr {

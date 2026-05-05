@@ -4,6 +4,7 @@ use crate::{
     typ::TypeExpr,
 };
 
+#[derive(Debug)]
 pub struct InfoTypeExpr {
     pub expr: TypeExpr,
     pub idx: usize,

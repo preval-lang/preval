@@ -5,22 +5,25 @@ use std::{
 
 use crate::{
     ir::Module,
-    value::runtime_type::{RuntimeType, deserialize_type},
+    typ::Instantiator,
+    value::runtime_type::{TypeDeserializer, deserialize_type},
     vm::RunResult,
 };
 
 #[repr(C)]
 #[derive(Clone)]
 pub struct Value {
-    pub typ: RuntimeType,
+    pub deserializer: TypeDeserializer,
     pub data: Box<dyn ValueData>,
+    pub typ: usize,
 }
 
 impl Value {
-    pub fn new<T: ValueData>(value: T) -> Value {
+    pub fn new<T: ValueData>(value: T, typ: usize) -> Value {
         Value {
-            typ: value.get_type(),
+            deserializer: value.get_deserializer(),
             data: value.vclone(),
+            typ,
         }
     }
 }
@@ -36,12 +39,12 @@ pub trait ValueData: Debug {
     fn index(&mut self, _value: &Value) -> Value {
         panic!("Type is not indexable")
     }
-    fn call(&mut self, module: &Module, args: Vec<&Option<Value>>) -> RunResult;
+    fn call(&mut self, module: &mut Module, args: Vec<&Option<Value>>) -> RunResult;
     fn vto_string(&self) -> String;
     fn veq(&self, other: &Value) -> bool;
     fn as_any(&self) -> &dyn Any;
     fn pre_serialize<'a>(&'a self) -> Option<&'a dyn erased_serde::Serialize>;
-    fn get_type(&self) -> RuntimeType;
+    fn get_deserializer(&self) -> TypeDeserializer;
     fn should_poison(&self) -> bool;
 }
 
@@ -77,7 +80,7 @@ pub trait PrevalValue: PreSerialize {
         panic!("Not indexable: {}", type_name::<Self>())
     }
 
-    fn vcall(&mut self, _module: &Module, _args: Vec<&Option<Value>>) -> RunResult {
+    fn vcall(&mut self, _module: &mut Module, _args: Vec<&Option<Value>>) -> RunResult {
         panic!("Not callable: {}", type_name::<Self>())
     }
 
@@ -85,21 +88,22 @@ pub trait PrevalValue: PreSerialize {
         false
     }
 
-    fn get_type(&self) -> RuntimeType;
+    fn get_type(&self) -> TypeDeserializer;
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
-struct RawValue(RuntimeType, String);
+struct RawValue(TypeDeserializer, String, usize);
 
 impl<'de> serde::Deserialize<'de> for Value {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        let RawValue(typ, data) = RawValue::deserialize(deserializer)?;
+        let RawValue(deserializer, data, typ) = RawValue::deserialize(deserializer)?;
 
         Ok(Value {
-            data: deserialize_type(&typ, data),
+            data: deserialize_type(&deserializer, data),
+            deserializer,
             typ,
         })
     }
@@ -112,7 +116,11 @@ impl serde::Serialize for Value {
     {
         let data = self.data.pre_serialize().expect("NOT SERIALIZABLE");
 
-        let raw_value = RawValue(self.typ.clone(), ron::ser::to_string(data).unwrap());
+        let raw_value = RawValue(
+            self.deserializer.clone(),
+            ron::ser::to_string(data).unwrap(),
+            self.typ,
+        );
 
         raw_value.serialize(serializer)
     }
@@ -148,7 +156,7 @@ impl<T: PartialEq + Clone + Debug + PrevalValue + 'static> ValueData for T {
         self.vindex(value)
     }
 
-    fn call(&mut self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
+    fn call(&mut self, module: &mut Module, args: Vec<&Option<Value>>) -> RunResult {
         self.vcall(module, args)
     }
 
@@ -160,7 +168,7 @@ impl<T: PartialEq + Clone + Debug + PrevalValue + 'static> ValueData for T {
         PreSerialize::pre_serialize(self)
     }
 
-    fn get_type(&self) -> RuntimeType {
+    fn get_deserializer(&self) -> TypeDeserializer {
         PrevalValue::get_type(self)
     }
 

@@ -1,13 +1,11 @@
-use std::{
-    collections::HashMap,
-    env, fs,
-};
+use std::{collections::HashMap, env, fs};
 
 use preval_lib::{
     ir::Module,
     parser::module::parse_module,
     passes::remove_unused::{Usage, remove_unused},
     tokeniser::{get_line_and_column, tokenise},
+    typ::type_id,
     value::{Value, primitive::IO},
     vm::{RunResult, evaluate},
 };
@@ -16,15 +14,15 @@ use ron::ser::PrettyConfig;
 fn main() {
     if let Some(arg1) = env::args().collect::<Vec<_>>().get(1) {
         if arg1 == "run" {
-            let (module, runresult): (Module, RunResult) =
+            let (mut module, runresult): (Module, RunResult) =
                 ron::de::from_bytes(&fs::read("main.pvc").unwrap()).unwrap();
 
             let mut vars: HashMap<usize, Option<Value>> = HashMap::new();
 
-            vars.insert(0, Some(Value::new(IO)));
-            vars.insert(1, Some(Value::new(IO)));
+            vars.insert(0, Some(Value::new(IO, type_id::IO)));
+            vars.insert(1, Some(Value::new(IO, type_id::IO)));
 
-            run_entire_program(&module, runresult, &mut vars);
+            run_entire_program(&mut module, runresult, &mut vars);
             return;
         }
     }
@@ -49,7 +47,7 @@ fn main() {
                         .unwrap()
                         .clone()
                         .data
-                        .call(&module, vec![&Some(Value::new(IO)), &None]);
+                        .call(&mut module, vec![&Some(Value::new(IO, type_id::IO)), &None]);
 
                     let mut poisoned_vars = HashMap::new();
                     poisoned_vars.insert(0, Usage::Value);
@@ -79,10 +77,10 @@ fn main() {
 
                     let mut vars: HashMap<usize, Option<Value>> = HashMap::new();
 
-                    vars.insert(0, Some(Value::new(IO {})));
-                    vars.insert(1, Some(Value::new(IO {})));
+                    vars.insert(0, Some(Value::new(IO {}, type_id::IO)));
+                    vars.insert(1, Some(Value::new(IO {}, type_id::IO)));
 
-                    run_entire_program(&module, optimized, &mut vars);
+                    run_entire_program(&mut module, optimized, &mut vars);
                 }
                 Err(err) => {
                     let (line, column) = get_line_and_column(&src, err.idx).unwrap();
@@ -94,7 +92,7 @@ fn main() {
 }
 
 fn run_entire_program(
-    module: &Module,
+    module: &mut Module,
     eval: RunResult,
     vars: &mut HashMap<usize, Option<Value>>,
 ) -> bool {
@@ -102,7 +100,8 @@ fn run_entire_program(
         RunResult::Concrete(_) => false,
         RunResult::Partial(blocks, next_block) => {
             // vars.insert(1, Some(Box::new(IO {})));
-            run_entire_program(module, evaluate(module, blocks, vars, next_block), vars)
+            let e = evaluate(module, blocks, vars, next_block);
+            run_entire_program(module, e, vars)
         }
         RunResult::Residualise => panic!(),
     }

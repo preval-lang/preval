@@ -1,4 +1,4 @@
-use crate::value::runtime_type::RuntimeType;
+use crate::value::runtime_type::TypeDeserializer;
 
 #[derive(Debug)]
 pub struct IRErrorInfo {
@@ -11,10 +11,10 @@ pub enum IRError {
     SymbolUndefined(String),
     SymbolNotCallable(String),
     SymbolNotIndexable(String),
-    ExpressionNotCallable(RuntimeType),
+    ExpressionNotCallable(TypeDeserializer),
     TypeMismatch {
-        got: RuntimeType,
-        expected: RuntimeType,
+        got: TypeDeserializer,
+        expected: TypeDeserializer,
     },
     ExtraArgument(),
     NotStorable(String),

@@ -6,7 +6,7 @@ use crate::{
 };
 
 pub fn initialize_struct(
-    name: String,
+    typ: usize,
     fields: HashMap<String, InfoExpr>,
     function: &mut Function,
     block: &mut usize,
@@ -39,7 +39,7 @@ pub fn initialize_struct(
         }
         function.ir[*block].statements.push(Statement {
             store: Some(store),
-            operation: Operation::InitializeStruct(name, field_vars),
+            operation: Operation::InitializeStruct(typ, field_vars),
         });
     }
     Ok(())

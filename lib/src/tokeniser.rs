@@ -16,6 +16,7 @@ pub enum Keyword {
     Struct,
     Dylib,
     Guard,
+    Is,
 }
 
 impl TryFrom<&str> for Keyword {
@@ -33,6 +34,7 @@ impl TryFrom<&str> for Keyword {
             "struct" => Ok(Keyword::Struct),
             "dylib" => Ok(Keyword::Dylib),
             "guard" => Ok(Keyword::Guard),
+            "is" => Ok(Keyword::Is),
             _ => Err(()),
         }
     }

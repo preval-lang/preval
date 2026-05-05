@@ -33,6 +33,7 @@ pub fn to_string(blocks: &Vec<Block>, indentation: usize) -> String {
                         out.push_str(" = ");
                     }
                     match operation {
+                        Operation::Is { value, typ } => out.push_str("{value} is {typ}"),
                         Operation::LoadConstant(name) => out.push_str(&format!("const {name:?}")),
                         Operation::InitializeStruct(name, fields) => {
                             out.push_str(&format!("struct {name:?}({fields:?})"));

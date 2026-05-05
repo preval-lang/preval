@@ -2,16 +2,15 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::value::{PrevalValue, Value, runtime_type::RuntimeType};
+use crate::value::{PrevalValue, Value, runtime_type::TypeDeserializer};
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct Struct {
     pub fields: HashMap<String, Option<Value>>,
-    pub typ: String,
 }
 impl PrevalValue for Struct {
-    fn get_type(&self) -> RuntimeType {
-        RuntimeType::Struct(self.typ.clone())
+    fn get_type(&self) -> TypeDeserializer {
+        TypeDeserializer::Struct
     }
 
     fn vindex(&mut self, value: &Value) -> Value {

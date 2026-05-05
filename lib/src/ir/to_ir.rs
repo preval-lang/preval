@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     ir::{
         Declaration, Function, Module, access::access, error::IRErrorInfo, guard::guard,
-        initialize_struct::initialize_struct,
+        initialize_struct::initialize_struct, is::is,
     },
     parser::expression::{Expr, InfoExpr},
 };
@@ -135,6 +135,18 @@ pub fn to_ir(
         Expr::Index(left, right) => index(
             left,
             right,
+            expr.idx,
+            function,
+            block,
+            module,
+            store,
+            declarations,
+            locals,
+            next_var,
+        ),
+        Expr::Is { name, typ } => is(
+            name,
+            typ,
             expr.idx,
             function,
             block,

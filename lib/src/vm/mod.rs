@@ -6,8 +6,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ir::{Block, Callable, Function, Module, Operation, Partial, Statement, Terminal},
+    typ::Instantiator,
     value::{Value, structure::Struct},
-    vm::operation::{access, call, guard_phi, index, initialize_struct, load_local, phi},
+    vm::operation::{access, call, guard_phi, index, initialize_struct, is, load_local, phi},
 };
 
 #[repr(C)]
@@ -19,7 +20,7 @@ pub enum RunResult {
 }
 
 pub fn evaluate(
-    module: &Module,
+    module: &mut Module,
     mut blocks: Vec<Block>,
     vars: &mut HashMap<usize, Option<Value>>,
     start_block: usize,
@@ -34,6 +35,10 @@ pub fn evaluate(
 
         for stmt in blocks[block_num].statements.clone() {
             match stmt {
+                Statement {
+                    store,
+                    operation: Operation::Is { value, typ },
+                } => is(value, typ, module, vars, &mut out, store),
                 Statement {
                     store,
                     operation: Operation::GuardPhi { block, var },

@@ -1,4 +1,4 @@
 pub mod expression;
 pub mod module;
-mod typ;
+pub mod typ;
 mod utility;

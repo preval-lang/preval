@@ -7,13 +7,13 @@ use crate::value::structure::Struct;
 use crate::value::{PrevalValue, ValueData};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Eq)]
-pub enum RuntimeType {
+pub enum TypeDeserializer {
     USize,
-    Tuple(Vec<RuntimeType>),
+    Tuple(Vec<TypeDeserializer>),
     IO,
     Bool,
     String,
-    Struct(String),
+    Struct,
     Function,
     Partial,
     NativeFunction,
@@ -24,24 +24,24 @@ pub enum RuntimeType {
 pub struct Poison;
 
 impl PrevalValue for Poison {
-    fn get_type(&self) -> RuntimeType {
-        RuntimeType::Poison
+    fn get_type(&self) -> TypeDeserializer {
+        TypeDeserializer::Poison
     }
 }
 
-pub fn deserialize_type(typ: &RuntimeType, data: String) -> Box<dyn ValueData> {
+pub fn deserialize_type(typ: &TypeDeserializer, data: String) -> Box<dyn ValueData> {
     match typ {
-        RuntimeType::Poison => Box::new(Poison),
-        RuntimeType::NativeFunction => {
+        TypeDeserializer::Poison => Box::new(Poison),
+        TypeDeserializer::NativeFunction => {
             Box::new(ron::de::from_str::<NativeFunction>(&data).unwrap())
         }
-        RuntimeType::String => Box::new(ron::de::from_str::<String>(&data).unwrap()),
-        RuntimeType::Tuple(_) => Box::new(ron::de::from_str::<EmptyTuple>(&data).unwrap()),
-        RuntimeType::IO => Box::new(IO),
-        RuntimeType::Bool => Box::new(ron::de::from_str::<bool>(&data).unwrap()),
-        RuntimeType::USize => Box::new(ron::de::from_str::<usize>(&data).unwrap()),
-        RuntimeType::Struct(_) => Box::new(ron::de::from_str::<Struct>(&data).unwrap()),
-        RuntimeType::Function => Box::new(ron::de::from_str::<Function>(&data).unwrap()),
-        RuntimeType::Partial => Box::new(ron::de::from_str::<Partial>(&data).unwrap()),
+        TypeDeserializer::String => Box::new(ron::de::from_str::<String>(&data).unwrap()),
+        TypeDeserializer::Tuple(_) => Box::new(ron::de::from_str::<EmptyTuple>(&data).unwrap()),
+        TypeDeserializer::IO => Box::new(IO),
+        TypeDeserializer::Bool => Box::new(ron::de::from_str::<bool>(&data).unwrap()),
+        TypeDeserializer::USize => Box::new(ron::de::from_str::<usize>(&data).unwrap()),
+        TypeDeserializer::Struct => Box::new(ron::de::from_str::<Struct>(&data).unwrap()),
+        TypeDeserializer::Function => Box::new(ron::de::from_str::<Function>(&data).unwrap()),
+        TypeDeserializer::Partial => Box::new(ron::de::from_str::<Partial>(&data).unwrap()),
     }
 }

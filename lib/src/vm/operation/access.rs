@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ir::{Operation, Statement},
+    typ::type_id,
     value::Value,
 };
 
@@ -24,7 +25,7 @@ pub fn access(
         }
         None => panic!("Undefined variable in left of index"),
         Some(Some(left)) => {
-            let val = Value::new(right.clone());
+            let val = Value::new(right.clone(), type_id::String);
             let v = left.data.index(&val);
 
             if let Some(store) = store {

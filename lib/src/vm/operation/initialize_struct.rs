@@ -5,7 +5,7 @@ use crate::vm::Statement;
 use std::collections::HashMap;
 
 pub fn initialize_struct(
-    name: String,
+    typ: usize,
     fields: HashMap<String, usize>,
     store: Option<usize>,
     _module: &Module,
@@ -27,16 +27,18 @@ pub fn initialize_struct(
 
         vars.insert(
             store,
-            Some(Value::new(Struct {
-                fields: output_struct,
-                typ: name.clone(),
-            })),
+            Some(Value::new(
+                Struct {
+                    fields: output_struct,
+                },
+                typ,
+            )),
         );
 
         if residualise {
             out.push(Statement {
                 store: Some(store),
-                operation: crate::ir::Operation::InitializeStruct(name, fields),
+                operation: crate::ir::Operation::InitializeStruct(typ, fields),
             });
         }
     }

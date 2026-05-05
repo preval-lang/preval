@@ -1,12 +1,26 @@
-dylib "stdlib/print" fn print(io: IO, args: string);
-dylib "stdlib/print" fn input(io: IO): string;
+dylib "stdlib/print" fn print(io: IO, text: String);
+dylib "stdlib/print" fn input(io: IO): String;
+
+struct Person {
+    name: String,
+    age: usize,
+}
 
 struct Test {
-    abc: string,
+    abc: String | Person,
 }
 
 fn main(compile_io: IO, io: IO) {
-    let a = Test{abc: "Hi"};
+    let a = Test{abc: Person{name: "John", age: 30}};
 
-    let b = print(io, a.abc);
+    let b = a.abc;
+    if b is String {
+        print(io, b);
+    } else {
+        if b is Person {
+            print(compile_io, b.name);
+        } else {
+
+        }
+    }
 }

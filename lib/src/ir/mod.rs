@@ -6,6 +6,7 @@ pub mod error;
 mod guard;
 mod index;
 mod initialize_struct;
+mod is;
 mod literal;
 mod printing;
 mod returns;
@@ -21,13 +22,15 @@ use std::{collections::HashMap, fmt::Debug};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    value::{PrevalValue, Value, runtime_type::RuntimeType},
+    typ::Instantiator,
+    value::{PrevalValue, Value, runtime_type::TypeDeserializer},
     vm::{RunResult, evaluate},
 };
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Module {
     pub objects: HashMap<String, Value>,
+    pub instantiator: Instantiator,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -42,11 +45,11 @@ pub struct Function {
 }
 
 impl PrevalValue for Function {
-    fn get_type(&self) -> RuntimeType {
-        RuntimeType::Function
+    fn get_type(&self) -> TypeDeserializer {
+        TypeDeserializer::Function
     }
 
-    fn vcall(&mut self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
+    fn vcall(&mut self, module: &mut Module, args: Vec<&Option<Value>>) -> RunResult {
         let mut args_map = HashMap::new();
         for (i, arg) in args.iter().enumerate() {
             args_map.insert(i, (**arg).clone());
@@ -61,11 +64,11 @@ pub struct Partial {
     pub start_block: usize,
 }
 impl PrevalValue for Partial {
-    fn get_type(&self) -> RuntimeType {
-        RuntimeType::Partial
+    fn get_type(&self) -> TypeDeserializer {
+        TypeDeserializer::Partial
     }
 
-    fn vcall(&mut self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {
+    fn vcall(&mut self, module: &mut Module, args: Vec<&Option<Value>>) -> RunResult {
         let mut args_map: HashMap<usize, Option<Value>> = HashMap::new();
         for (i, arg) in args.iter().enumerate() {
             args_map.insert(i, (**arg).clone());
@@ -99,8 +102,12 @@ pub enum Operation {
     },
     Index(usize, usize),
     Access(usize, String),
-    InitializeStruct(String, HashMap<String, usize>),
+    InitializeStruct(usize, HashMap<String, usize>),
     LoadConstant(String),
+    Is {
+        value: usize,
+        typ: usize,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
