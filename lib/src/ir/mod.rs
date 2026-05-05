@@ -22,7 +22,7 @@ use std::{collections::HashMap, fmt::Debug};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    typ::Instantiator,
+    typ::{Instantiator, TypeReference},
     value::{PrevalValue, Value, runtime_type::TypeDeserializer},
     vm::{RunResult, evaluate},
 };
@@ -106,7 +106,7 @@ pub enum Operation {
     LoadConstant(String),
     Is {
         value: usize,
-        typ: usize,
+        typ: TypeReference,
     },
 }
 

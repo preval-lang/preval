@@ -51,7 +51,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                 let mut locals = HashMap::new();
                 for (idx, arg) in args.iter().enumerate() {
                     locals.insert(arg.clone(), Declaration::Variable(idx));
-                    scope.insert(arg.clone(), signature.args[idx]);
+                    scope.insert(arg.clone(), signature.args[idx].clone());
                 }
 
                 let fn_typ = module.instantiator.insert(
@@ -110,6 +110,45 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                     })
                 }?;
                 i += 1;
+                let generics_tokens = if let Token::LessThan = &tokens[i].token {
+                    i += 1;
+                    let start = i;
+                    loop {
+                        if let Some(InfoToken {
+                            token: Token::GreaterThan,
+                            idx: _,
+                        }) = tokens.iter().nth(i)
+                        {
+                            break;
+                        }
+                        i += 1;
+                    }
+                    i += 1;
+                    Some(&tokens[start..i - 1])
+                } else {
+                    None
+                };
+                let generics = if let Some(generics_tokens) = generics_tokens {
+                    let generics = read_punctuated(generics_tokens, Token::Comma)?;
+                    generics
+                        .iter()
+                        .map(|param_tokens| {
+                            if let [
+                                InfoToken {
+                                    token: Token::Name(name),
+                                    idx: _,
+                                },
+                            ] = &param_tokens[..]
+                            {
+                                name.clone()
+                            } else {
+                                panic!("Non name tokens in generic {param_tokens:?}")
+                            }
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
                 let block = if let Token::Braces(block) = &tokens[i].token {
                     Ok(block)
                 } else {
@@ -136,7 +175,10 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                     {
                         fields.insert(
                             name.clone(),
-                            module.instantiator.instantiate(&parse_type(typ)?.expr),
+                            module.instantiator.instantiate(
+                                &parse_type(typ)?.expr,
+                                &generics.iter().map(|a| (a.clone(), ())).collect(),
+                            ),
                         );
                     }
                 }
@@ -234,7 +276,10 @@ pub fn expect_function_signature(
                     typ @ ..,
                 ] = &arg_colon_type[..]
                 {
-                    let typ = ins.instantiate(&parse_type(typ)?.expr);
+                    let typ = ins.instantiate(
+                        &parse_type(typ)?.expr,
+                        todo!("Generics in function signatures"),
+                    );
                     args.push((name.clone(), typ));
                 }
             }
@@ -256,7 +301,10 @@ pub fn expect_function_signature(
                 *i += 1;
             }
 
-            ins.instantiate(&parse_type(&tokens[start..*i])?.expr)
+            ins.instantiate(
+                &parse_type(&tokens[start..*i])?.expr,
+                todo!("Generics in function signatures"),
+            )
         } else {
             ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new())))
         };

@@ -6,6 +6,10 @@ struct Person {
     age: usize,
 }
 
+struct Box<T> {
+    a: T,
+}
+
 struct Test {
     abc: String | Person,
 }

@@ -4,7 +4,7 @@ mod error;
 pub use error::*;
 use serde::{Deserialize, Serialize};
 
-use crate::passes::type_check_expr::Scope;
+use crate::{parser::typ::InfoTypeExpr, passes::type_check_expr::Scope};
 
 #[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize)]
 pub enum IntegerSize {
@@ -12,10 +12,10 @@ pub enum IntegerSize {
     Number(usize),
 }
 
-#[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Signature {
-    pub args: Vec<usize>,
-    pub returns: usize,
+    pub args: Vec<TypeReference>,
+    pub returns: TypeReference,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -24,23 +24,30 @@ pub enum ConcreteType {
     Float { size: usize },
     Bool,
     String,
-    Struct(HashMap<String, usize>),
+    Struct(HashMap<String, TypeReference>),
     Function(Box<Signature>),
-    Tuple(Vec<usize>),
+    Tuple(Vec<TypeReference>),
     IO,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum TypeReference {
+    Concrete(usize),
+    Generic(usize),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Type {
     Concrete(ConcreteType),
-    Union(usize, usize),
+    Union(TypeReference, TypeReference),
     EarlyReturn,
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq, Serialize, Deserialize)]
 pub enum TypeExpr {
-    Union(Box<TypeExpr>, Box<TypeExpr>),
+    Union(Box<InfoTypeExpr>, Box<InfoTypeExpr>),
     Name(String),
+    Generics(Box<InfoTypeExpr>, Vec<InfoTypeExpr>),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -90,6 +97,8 @@ type_ids! {
     IO => ConcreteType::IO,
 }
 
+type GenericRestriction = ();
+
 impl Instantiator {
     pub fn new() -> Self {
         let mut names = HashMap::new();
@@ -117,24 +126,40 @@ impl Instantiator {
         self.add(typ)
     }
 
-    pub fn instantiate(&mut self, expr: &TypeExpr) -> usize {
+    pub fn instantiate(
+        &mut self,
+        expr: &TypeExpr,
+        generics: &Vec<(String, GenericRestriction)>,
+    ) -> TypeReference {
         if let Some(&index) = self.visited.get(expr) {
-            return index;
+            return TypeReference::Concrete(index);
         }
-        let type_ = match expr {
+        match expr {
             TypeExpr::Name(n) => {
-                self.types[*self.names.get(n).expect(&format!("Type exists {n:?}"))].clone()
+                let mut type_ref = None;
+                for (idx, (name, restriction)) in generics.iter().enumerate() {
+                    if n == name {
+                        type_ref = Some(TypeReference::Generic(idx));
+                        break;
+                    }
+                }
+                if let None = type_ref {
+                    type_ref = Some(TypeReference::Concrete(
+                        *self.names.get(n).expect(&format!("Type exists {n:?}")),
+                    ));
+                }
+
+                type_ref.unwrap()
             }
             TypeExpr::Union(a, b) => {
-                let a = self.instantiate(a);
-                let b = self.instantiate(b);
-                Type::Union(a, b)
+                let a = self.instantiate(a, generics);
+                let b = self.instantiate(b, generics);
+                let index = self.types.len();
+                self.visited.insert(expr.clone(), index);
+                self.types.push(Type::Union(a, b));
+                TypeReference::Concrete(index)
             }
-        };
-        let index = self.types.len();
-        self.visited.insert(expr.clone(), index);
-        self.types.push(type_);
-        index
+        }
     }
 
     pub fn add(&mut self, typ: Type) -> usize {
@@ -150,7 +175,24 @@ impl Instantiator {
         &self.types[index]
     }
 
-    pub fn compatible(&self, assignee: usize, slot: usize, index: usize) -> bool {
+    pub fn compatible(
+        &self,
+        assignee_ref: TypeReference,
+        slot_ref: TypeReference,
+        index: usize,
+    ) -> bool {
+        let slot = if let TypeReference::Generic(slot) = slot_ref {
+            slot
+        } else {
+            return true;
+        };
+
+        let assignee = if let TypeReference::Generic(assignee) = assignee_ref {
+            assignee
+        } else {
+            return false;
+        };
+
         let assignee_t = self.get_type(assignee);
         if let Type::EarlyReturn = assignee_t {
             return true;
@@ -161,18 +203,25 @@ impl Instantiator {
             Type::Concrete(a) => match assignee_t {
                 Type::Concrete(b) => a == b,
                 Type::Union(a, b) => {
-                    self.compatible(*a, slot, index + 1) || self.compatible(*b, slot, index + 1)
+                    self.compatible(a.clone(), slot_ref.clone(), index + 1)
+                        || self.compatible(b.clone(), slot_ref, index + 1)
                 }
                 Type::EarlyReturn => panic!("Early return can't be assigned"),
             },
             Type::Union(a, b) => {
-                self.compatible(assignee, *a, index + 1) || self.compatible(assignee, *b, index + 1)
+                self.compatible(assignee_ref.clone(), a.clone(), index + 1)
+                    || self.compatible(assignee_ref, b.clone(), index + 1)
             }
             Type::EarlyReturn => panic!("Early return can't be a slot"),
         }
     }
 
     pub fn global_scope<'b>(&self) -> Scope<'b> {
-        Scope::new(self.names.clone())
+        Scope::new(
+            self.names
+                .iter()
+                .map(|entry| (entry.0.clone(), TypeReference::Concrete(*entry.1)))
+                .collect(),
+        )
     }
 }

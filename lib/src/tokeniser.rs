@@ -54,6 +54,8 @@ pub enum Token {
     Dot,
     Assignment,
     Union,
+    LessThan,
+    GreaterThan,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -173,6 +175,20 @@ pub fn tokenise(input: &str, offset: usize) -> Result<Vec<InfoToken>, TokeniseEr
             Some('|') => {
                 out.push(InfoToken {
                     token: Token::Union,
+                    idx: offset + i,
+                });
+                i += 1;
+            }
+            Some('<') => {
+                out.push(InfoToken {
+                    token: Token::LessThan,
+                    idx: offset + i,
+                });
+                i += 1;
+            }
+            Some('>') => {
+                out.push(InfoToken {
+                    token: Token::GreaterThan,
                     idx: offset + i,
                 });
                 i += 1;

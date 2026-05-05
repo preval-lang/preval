@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::parser::typ::{InfoTypeExpr, parse_type};
 use crate::parser::utility::read_punctuated;
 use crate::tokeniser::Literal;
-use crate::typ::Instantiator;
+use crate::typ::{Instantiator, TypeReference};
 use crate::{
     ir::error::{IRError, IRErrorInfo},
     tokeniser::{InfoToken, Keyword, Token},
@@ -23,7 +23,7 @@ pub enum Expr {
         then: Box<InfoExpr>,
         els: Option<Box<InfoExpr>>,
     },
-    InitializeStruct(usize, HashMap<String, InfoExpr>),
+    InitializeStruct(usize, HashMap<String, InfoExpr>, Vec<TypeReference>),
     Access(Box<InfoExpr>, String),
     Guard {
         dependency: Box<InfoExpr>,
@@ -31,7 +31,7 @@ pub enum Expr {
     },
     Is {
         name: String,
-        typ: usize,
+        typ: TypeReference,
     },
 }
 
@@ -222,7 +222,7 @@ fn try_parse_is(
             idx: *is_idx,
             expr: Expr::Is {
                 name: name.clone(),
-                typ: ins.instantiate(&parse_type(type_expr)?.expr),
+                typ: ins.instantiate(&parse_type(type_expr)?.expr, &Vec::new()),
             },
         }));
     }
@@ -299,7 +299,7 @@ fn try_parse_struct(
             }
         }
         Ok(Some(InfoExpr {
-            expr: Expr::InitializeStruct(ins.get_name(name).unwrap(), fields),
+            expr: Expr::InitializeStruct(ins.get_name(name).unwrap(), fields, Vec::new()),
             idx: *name_idx,
         }))
     } else {
