@@ -22,7 +22,7 @@ use std::{collections::HashMap, fmt::Debug};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    typ::{Instantiator, TypeReference},
+    typ::Instantiator,
     value::{PrevalValue, Value, runtime_type::TypeDeserializer},
     vm::{RunResult, evaluate},
 };

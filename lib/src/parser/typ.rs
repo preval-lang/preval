@@ -9,18 +9,25 @@ use crate::{
     typ::TypeExpr,
 };
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash)]
 pub struct InfoTypeExpr {
     pub expr: TypeExpr,
     pub idx: usize,
 }
 
-pub fn parse_type(tokens: &[InfoToken]) -> Result<InfoTypeExpr, InfoParseError> {
-    if let Some(expr) = try_parse_union(tokens)? {
+pub fn parse_type(
+    tokens: &[InfoToken],
+    generics: &[String],
+) -> Result<InfoTypeExpr, InfoParseError> {
+    if let Some(expr) = try_parse_union(tokens, generics)? {
         return Ok(expr);
     }
 
-    if let Some(expr) = try_parse_name(tokens)? {
+    if let Some(expr) = try_parse_name(tokens, generics)? {
+        return Ok(expr);
+    }
+
+    if let Some(expr) = try_parse_generics(tokens, generics)? {
         return Ok(expr);
     }
 
@@ -30,7 +37,10 @@ pub fn parse_type(tokens: &[InfoToken]) -> Result<InfoTypeExpr, InfoParseError> 
     })
 }
 
-fn try_parse_name(tokens: &[InfoToken]) -> Result<Option<InfoTypeExpr>, InfoParseError> {
+fn try_parse_name(
+    tokens: &[InfoToken],
+    generics: &[String],
+) -> Result<Option<InfoTypeExpr>, InfoParseError> {
     if tokens.len() != 1 {
         return Ok(None);
     }
@@ -39,6 +49,16 @@ fn try_parse_name(tokens: &[InfoToken]) -> Result<Option<InfoTypeExpr>, InfoPars
         token: Token::Name(name),
     } = &tokens[0]
     {
+        if let Some(generic) = generics
+            .iter()
+            .enumerate()
+            .find_map(|i| if i.1 == name { Some(i.0) } else { None })
+        {
+            return Ok(Some(InfoTypeExpr {
+                expr: TypeExpr::Parameter(generic),
+                idx: *idx,
+            }));
+        }
         Ok(Some(InfoTypeExpr {
             expr: TypeExpr::Name(name.clone()),
             idx: *idx,
@@ -48,9 +68,10 @@ fn try_parse_name(tokens: &[InfoToken]) -> Result<Option<InfoTypeExpr>, InfoPars
     }
 }
 
-fn try_parse_generics(tokens: &[InfoToken]) -> Result<Option<InfoTypeExpr>, InfoParseError> {
-    todo!("CHange this to outermost");
-
+fn try_parse_generics(
+    tokens: &[InfoToken],
+    generics: &[String],
+) -> Result<Option<InfoTypeExpr>, InfoParseError> {
     let open_idx = if let Some(open_idx) = tokens.iter().position(|t| t.token == Token::LessThan) {
         open_idx
     } else {
@@ -81,12 +102,12 @@ fn try_parse_generics(tokens: &[InfoToken]) -> Result<Option<InfoTypeExpr>, Info
 
     let generics_tokens = read_punctuated(contents, Token::Comma)?;
 
-    let param_exprs = Vec::new();
+    let mut param_exprs = Vec::new();
 
-    let base = parse_type(&tokens[open_idx - 1..])?;
+    let base = parse_type(&tokens[open_idx - 1..], generics)?;
 
     for generic_param_tokens in generics_tokens {
-        param_exprs.push(parse_type(&generic_param_tokens)?)
+        param_exprs.push(parse_type(&generic_param_tokens, generics)?)
     }
 
     Ok(Some(InfoTypeExpr {
@@ -95,7 +116,10 @@ fn try_parse_generics(tokens: &[InfoToken]) -> Result<Option<InfoTypeExpr>, Info
     }))
 }
 
-fn try_parse_union(tokens: &[InfoToken]) -> Result<Option<InfoTypeExpr>, InfoParseError> {
+fn try_parse_union(
+    tokens: &[InfoToken],
+    generics: &[String],
+) -> Result<Option<InfoTypeExpr>, InfoParseError> {
     let union_idx = if let Some(union_idx) = tokens.iter().position(|t| t.token == Token::Union) {
         union_idx
     } else {
@@ -104,8 +128,8 @@ fn try_parse_union(tokens: &[InfoToken]) -> Result<Option<InfoTypeExpr>, InfoPar
     let left = &tokens[..union_idx];
     let right = &tokens[union_idx + 1..];
 
-    let left_expr = parse_type(left)?;
-    let right_expr = parse_type(right)?;
+    let left_expr = parse_type(left, generics)?;
+    let right_expr = parse_type(right, generics)?;
 
     Ok(Some(InfoTypeExpr {
         expr: TypeExpr::Union(Box::new(left_expr), Box::new(right_expr)),

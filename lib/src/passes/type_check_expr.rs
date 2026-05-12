@@ -2,16 +2,16 @@ use std::{borrow::Cow, cell::RefCell, collections::HashMap, sync::RwLock};
 
 use crate::{
     parser::expression::{Expr, InfoExpr},
-    typ::{ConcreteType, InfoTypeError, Instantiator, Type, TypeError, TypeReference, type_id},
+    typ::{ConcreteType, InfoTypeError, Instantiator, Type, TypeError},
 };
 
 #[derive(Debug)]
 pub struct Scope<'a> {
-    scopes: Vec<Cow<'a, HashMap<String, TypeReference>>>,
+    scopes: Vec<Cow<'a, HashMap<String, usize>>>,
 }
 
 impl<'a> Scope<'a> {
-    pub fn new(global_scope: HashMap<String, TypeReference>) -> Self {
+    pub fn new(global_scope: HashMap<String, usize>) -> Self {
         Self {
             scopes: vec![Cow::Owned(global_scope)],
         }
@@ -23,16 +23,16 @@ impl<'a> Scope<'a> {
         Self { scopes }
     }
 
-    pub fn get(&self, name: &str) -> Option<TypeReference> {
+    pub fn get(&self, name: &str) -> Option<usize> {
         for scope in self.scopes.iter().rev() {
             if let Some(typ) = (*scope).get(name) {
-                return Some(typ.clone());
+                return Some(*typ);
             }
         }
         None
     }
 
-    pub fn insert(&mut self, name: String, typ: TypeReference) {
+    pub fn insert(&mut self, name: String, typ: usize) {
         let mut last = self.scopes.pop().unwrap().into_owned();
         last.insert(name, typ);
         self.scopes.push(Cow::Owned(last));
@@ -43,12 +43,10 @@ pub fn infer_expr_type(
     expr: &InfoExpr,
     ins: &mut Instantiator,
     scope: &mut Scope,
-    return_type: TypeReference,
-) -> Result<TypeReference, InfoTypeError> {
+    return_type: usize,
+) -> Result<usize, InfoTypeError> {
     match &expr.expr {
-        Expr::Literal(value) => Ok(TypeReference::Concrete(
-            ins.add(Type::Concrete(value.get_type())),
-        )),
+        Expr::Literal(value) => Ok(ins.add(Type::Concrete(value.get_type()))),
         Expr::Var(name) => {
             if let Some(idx) = scope.get(name) {
                 Ok(idx)
@@ -61,9 +59,7 @@ pub fn infer_expr_type(
         }
         Expr::Block(statements, returns) => {
             if statements.len() == 0 || (statements.len() == 1 && !returns) {
-                return Ok(TypeReference::Concrete(
-                    ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new()))),
-                ));
+                return Ok(ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new()))));
             }
 
             let mut scope = scope.sub();
@@ -73,12 +69,10 @@ pub fn infer_expr_type(
             if *returns {
                 infer_expr_type(statements.last().unwrap(), ins, &mut scope, return_type)
             } else {
-                Ok(TypeReference::Concrete(
-                    ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new()))),
-                ))
+                Ok(ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new()))))
             }
         }
-        Expr::InitializeStruct(struct_type_id, fields, generics) => {
+        Expr::InitializeStruct(struct_type_id, fields) => {
             let (struct_type, struct_type_id) =
                 if let Type::Concrete(ConcreteType::Struct(struct_type)) =
                     ins.get_type(*struct_type_id).clone()
@@ -116,26 +110,17 @@ pub fn infer_expr_type(
                     return Err(InfoTypeError {
                         idx: expr.idx,
                         error: TypeError::IncompatibleTypes {
-                            expected: slot,
-                            got: assignee_type,
+                            expected: ins.get_type(slot).clone(),
+                            got: ins.get_type(assignee_type).clone(),
                         },
                     });
                 }
             }
 
-            Ok(TypeReference::Concrete(*struct_type_id))
+            Ok(*struct_type_id)
         }
         Expr::Access(struct_expr, field_name) => {
             let struct_type_id = infer_expr_type(struct_expr, ins, scope, return_type)?;
-
-            let struct_type_id = if let TypeReference::Concrete(id) = struct_type_id {
-                id
-            } else {
-                return Err(InfoTypeError {
-                    idx: expr.idx,
-                    error: TypeError::UnknownField(field_name.clone()),
-                });
-            };
 
             if let Type::Concrete(ConcreteType::Struct(struct_type)) = ins.get_type(struct_type_id)
             {
@@ -154,7 +139,7 @@ pub fn infer_expr_type(
                 })
             }
         }
-        Expr::Is { name: _, typ: _ } => Ok(TypeReference::Concrete(type_id::bool)),
+        Expr::Is { name: _, typ: _ } => Ok(ins.add(Type::Concrete(ConcreteType::Bool))),
         Expr::Call(function_expr, args_exprs) => {
             let function_type_id = infer_expr_type(function_expr, ins, scope, return_type)?;
 

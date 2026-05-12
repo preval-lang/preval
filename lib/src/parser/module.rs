@@ -173,20 +173,12 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                         typ @ ..,
                     ] = field_colon_type.as_slice()
                     {
-                        fields.insert(
-                            name.clone(),
-                            module.instantiator.instantiate(
-                                &parse_type(typ)?.expr,
-                                &generics.iter().map(|a| (a.clone(), ())).collect(),
-                            ),
-                        );
+                        fields.insert(name.clone(), parse_type(typ, &generics));
                     }
                 }
                 i += 1;
 
-                module
-                    .instantiator
-                    .insert(name, Type::Concrete(ConcreteType::Struct(fields)));
+                module.instantiator.add_template(name, Type::Struct(fields));
             }
             Token::Keyword(Keyword::Dylib) => {
                 i += 1;
@@ -276,10 +268,8 @@ pub fn expect_function_signature(
                     typ @ ..,
                 ] = &arg_colon_type[..]
                 {
-                    let typ = ins.instantiate(
-                        &parse_type(typ)?.expr,
-                        todo!("Generics in function signatures"),
-                    );
+                    let typ = ins
+                        .instantiate(&parse_type(typ)?, todo!("Generics in function signatures"));
                     args.push((name.clone(), typ));
                 }
             }
@@ -302,7 +292,7 @@ pub fn expect_function_signature(
             }
 
             ins.instantiate(
-                &parse_type(&tokens[start..*i])?.expr,
+                &parse_type(&tokens[start..*i])?,
                 todo!("Generics in function signatures"),
             )
         } else {

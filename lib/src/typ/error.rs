@@ -1,24 +1,15 @@
-use crate::typ::{Type, TypeReference};
+use crate::typ::Type;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeError {
     UnknownVariable(String),
     UnknownField(String),
     UnknownType(String),
-    IncompatibleTypes {
-        expected: TypeReference,
-        got: TypeReference,
-    },
+    IncompatibleTypes { expected: Type, got: Type },
     NotAStruct(Type),
-    NotAFunction(TypeReference),
-    IncorrectArgumentCount {
-        expected: usize,
-        got: usize,
-    },
-    IncorrectFieldCount {
-        expected: usize,
-        got: usize,
-    },
+    NotAFunction(Type),
+    IncorrectArgumentCount { expected: usize, got: usize },
+    IncorrectFieldCount { expected: usize, got: usize },
     DuplicateName(String),
 }
 

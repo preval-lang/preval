@@ -12,10 +12,10 @@ pub enum IntegerSize {
     Number(usize),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Signature {
-    pub args: Vec<TypeReference>,
-    pub returns: TypeReference,
+    pub args: Vec<usize>,
+    pub returns: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -24,22 +24,16 @@ pub enum ConcreteType {
     Float { size: usize },
     Bool,
     String,
-    Struct(HashMap<String, TypeReference>),
+    Struct(HashMap<String, usize>),
     Function(Box<Signature>),
-    Tuple(Vec<TypeReference>),
+    Tuple(Vec<usize>),
     IO,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum TypeReference {
-    Concrete(usize),
-    Generic(usize),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Type {
     Concrete(ConcreteType),
-    Union(TypeReference, TypeReference),
+    Union(usize, usize),
     EarlyReturn,
 }
 
@@ -48,12 +42,14 @@ pub enum TypeExpr {
     Union(Box<InfoTypeExpr>, Box<InfoTypeExpr>),
     Name(String),
     Generics(Box<InfoTypeExpr>, Vec<InfoTypeExpr>),
+    Parameter(usize),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Instantiator {
     visited: HashMap<TypeExpr, usize>,
     names: HashMap<String, usize>,
+    template_names: HashMap<String, TypeExpr>,
     types: Vec<Type>,
 }
 
@@ -97,8 +93,6 @@ type_ids! {
     IO => ConcreteType::IO,
 }
 
-type GenericRestriction = ();
-
 impl Instantiator {
     pub fn new() -> Self {
         let mut names = HashMap::new();
@@ -118,6 +112,7 @@ impl Instantiator {
             visited: HashMap::new(),
             names,
             types,
+            template_names: HashMap::new(),
         }
     }
 
@@ -126,45 +121,40 @@ impl Instantiator {
         self.add(typ)
     }
 
-    pub fn instantiate(
-        &mut self,
-        expr: &TypeExpr,
-        generics: &Vec<(String, GenericRestriction)>,
-    ) -> TypeReference {
-        if let Some(&index) = self.visited.get(expr) {
-            return TypeReference::Concrete(index);
+    pub fn instantiate(&mut self, expr: &InfoTypeExpr, generics: &[usize]) -> usize {
+        if let Some(&index) = self.visited.get(&expr.expr) {
+            return index;
         }
-        match expr {
-            TypeExpr::Name(n) => {
-                let mut type_ref = None;
-                for (idx, (name, restriction)) in generics.iter().enumerate() {
-                    if n == name {
-                        type_ref = Some(TypeReference::Generic(idx));
-                        break;
-                    }
-                }
-                if let None = type_ref {
-                    type_ref = Some(TypeReference::Concrete(
-                        *self.names.get(n).expect(&format!("Type exists {n:?}")),
-                    ));
-                }
-
-                type_ref.unwrap()
-            }
+        let type_ = match &expr.expr {
+            TypeExpr::Parameter(i) => generics[*i],
+            TypeExpr::Name(n) => *self.names.get(n).expect(&format!("Type exists {n:?}")),
             TypeExpr::Union(a, b) => {
-                let a = self.instantiate(a, generics);
-                let b = self.instantiate(b, generics);
-                let index = self.types.len();
-                self.visited.insert(expr.clone(), index);
-                self.types.push(Type::Union(a, b));
-                TypeReference::Concrete(index)
+                let a = self.instantiate(a.as_ref(), generics);
+                let b = self.instantiate(&b, generics);
+                self.add(Type::Union(a, b))
             }
-        }
+            TypeExpr::Generics(base, params) => {
+                let params = params
+                    .iter()
+                    .map(|p| self.instantiate(p, generics))
+                    .collect::<Vec<_>>();
+
+                self.instantiate(base.as_ref(), &params)
+            }
+        };
+
+        self.visited.insert(expr.expr.clone(), type_);
+
+        type_
     }
 
     pub fn add(&mut self, typ: Type) -> usize {
         self.types.push(typ);
         self.types.len() - 1
+    }
+
+    pub fn add_template(&mut self, name: String, expr: TypeExpr) {
+        self.template_names.insert(name, expr);
     }
 
     pub fn get_name(&self, name: &str) -> Option<usize> {
@@ -175,24 +165,7 @@ impl Instantiator {
         &self.types[index]
     }
 
-    pub fn compatible(
-        &self,
-        assignee_ref: TypeReference,
-        slot_ref: TypeReference,
-        index: usize,
-    ) -> bool {
-        let slot = if let TypeReference::Generic(slot) = slot_ref {
-            slot
-        } else {
-            return true;
-        };
-
-        let assignee = if let TypeReference::Generic(assignee) = assignee_ref {
-            assignee
-        } else {
-            return false;
-        };
-
+    pub fn compatible(&self, assignee: usize, slot: usize, index: usize) -> bool {
         let assignee_t = self.get_type(assignee);
         if let Type::EarlyReturn = assignee_t {
             return true;
@@ -203,25 +176,18 @@ impl Instantiator {
             Type::Concrete(a) => match assignee_t {
                 Type::Concrete(b) => a == b,
                 Type::Union(a, b) => {
-                    self.compatible(a.clone(), slot_ref.clone(), index + 1)
-                        || self.compatible(b.clone(), slot_ref, index + 1)
+                    self.compatible(*a, slot, index + 1) || self.compatible(*b, slot, index + 1)
                 }
                 Type::EarlyReturn => panic!("Early return can't be assigned"),
             },
             Type::Union(a, b) => {
-                self.compatible(assignee_ref.clone(), a.clone(), index + 1)
-                    || self.compatible(assignee_ref, b.clone(), index + 1)
+                self.compatible(assignee, *a, index + 1) || self.compatible(assignee, *b, index + 1)
             }
             Type::EarlyReturn => panic!("Early return can't be a slot"),
         }
     }
 
     pub fn global_scope<'b>(&self) -> Scope<'b> {
-        Scope::new(
-            self.names
-                .iter()
-                .map(|entry| (entry.0.clone(), TypeReference::Concrete(*entry.1)))
-                .collect(),
-        )
+        Scope::new(self.names.clone())
     }
 }
