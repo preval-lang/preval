@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     ir::Module,
-    typ::Instantiator,
+    typ::Type,
     value::runtime_type::{TypeDeserializer, deserialize_type},
     vm::RunResult,
 };
@@ -15,11 +15,11 @@ use crate::{
 pub struct Value {
     pub deserializer: TypeDeserializer,
     pub data: Box<dyn ValueData>,
-    pub typ: usize,
+    pub typ: Type,
 }
 
 impl Value {
-    pub fn new<T: ValueData>(value: T, typ: usize) -> Value {
+    pub fn new<T: ValueData>(value: T, typ: Type) -> Value {
         Value {
             deserializer: value.get_deserializer(),
             data: value.vclone(),
@@ -92,7 +92,7 @@ pub trait PrevalValue: PreSerialize {
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
-struct RawValue(TypeDeserializer, String, usize);
+struct RawValue(TypeDeserializer, String, Type);
 
 impl<'de> serde::Deserialize<'de> for Value {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -119,7 +119,7 @@ impl serde::Serialize for Value {
         let raw_value = RawValue(
             self.deserializer.clone(),
             ron::ser::to_string(data).unwrap(),
-            self.typ,
+            self.typ.clone(),
         );
 
         raw_value.serialize(serializer)

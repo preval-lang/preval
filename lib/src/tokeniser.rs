@@ -1,7 +1,7 @@
-use std::fmt::{Debug, Display, Write};
+use std::fmt::Debug;
 
 use crate::{
-    typ::{ConcreteType, IntegerSize},
+    typ::{self, Type, type_names},
     value::Value,
 };
 
@@ -66,14 +66,20 @@ pub enum Literal {
 }
 
 impl Literal {
-    pub fn get_type(&self) -> ConcreteType {
+    pub fn get_type(&self) -> Type {
         match self {
-            Literal::Bool(_) => ConcreteType::Bool,
-            Literal::String(_) => ConcreteType::String,
-            Literal::Usize(_) => ConcreteType::Integer {
-                size: IntegerSize::Size,
-                signed: false,
-            },
+            Literal::Bool(_) => type_names::bool(),
+            Literal::String(_) => type_names::string(),
+            Literal::Usize(_) => type_names::usize(),
+        }
+    }
+
+    pub fn to_value(self) -> Value {
+        let typ = self.get_type();
+        match self {
+            Literal::Bool(b) => Value::new(b, typ),
+            Literal::String(s) => Value::new(s, typ),
+            Literal::Usize(u) => Value::new(u, typ),
         }
     }
 }

@@ -3,7 +3,7 @@ use crate::ir::Operation;
 use crate::ir::Statement;
 use crate::ir::error::IRErrorInfo;
 use crate::tokeniser::Literal;
-use crate::typ::type_id;
+use crate::typ::Type;
 use crate::value::Value;
 
 pub fn literal(
@@ -15,12 +15,7 @@ pub fn literal(
     if let Some(store) = store {
         function.ir[*block].statements.push(Statement {
             store: Some(store),
-            operation: Operation::LoadLiteral(match lit {
-                // TODO: Add method on Literal for this
-                Literal::Bool(b) => Value::new(b, type_id::bool),
-                Literal::String(b) => Value::new(b, type_id::String),
-                Literal::Usize(b) => Value::new(b, type_id::usize),
-            }),
+            operation: Operation::LoadLiteral(lit.to_value()),
         });
     }
     Ok(())

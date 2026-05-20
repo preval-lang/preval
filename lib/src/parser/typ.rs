@@ -1,16 +1,10 @@
 use crate::{
     parser::expression::{InfoParseError, ParseError},
     tokeniser::{InfoToken, Token},
-    typ::TypeExpr,
+    typ::{Name, Type},
 };
 
-#[derive(Debug)]
-pub struct InfoTypeExpr {
-    pub expr: TypeExpr,
-    pub idx: usize,
-}
-
-pub fn parse_type(tokens: &[InfoToken]) -> Result<InfoTypeExpr, InfoParseError> {
+pub fn parse_type(tokens: &[InfoToken]) -> Result<Type, InfoParseError> {
     if let Some(expr) = try_parse_union(tokens)? {
         return Ok(expr);
     }
@@ -25,7 +19,7 @@ pub fn parse_type(tokens: &[InfoToken]) -> Result<InfoTypeExpr, InfoParseError> 
     })
 }
 
-fn try_parse_name(tokens: &[InfoToken]) -> Result<Option<InfoTypeExpr>, InfoParseError> {
+fn try_parse_name(tokens: &[InfoToken]) -> Result<Option<Type>, InfoParseError> {
     if tokens.len() != 1 {
         return Ok(None);
     }
@@ -34,16 +28,16 @@ fn try_parse_name(tokens: &[InfoToken]) -> Result<Option<InfoTypeExpr>, InfoPars
         token: Token::Name(name),
     } = &tokens[0]
     {
-        Ok(Some(InfoTypeExpr {
-            expr: TypeExpr::Name(name.clone()),
-            idx: *idx,
-        }))
+        Ok(Some(Type::Named(Name {
+            path: vec![name.clone()],
+            generics: Vec::new(),
+        })))
     } else {
         Ok(None)
     }
 }
 
-fn try_parse_union(tokens: &[InfoToken]) -> Result<Option<InfoTypeExpr>, InfoParseError> {
+fn try_parse_union(tokens: &[InfoToken]) -> Result<Option<Type>, InfoParseError> {
     let union_idx = if let Some(union_idx) = tokens.iter().position(|t| t.token == Token::Union) {
         union_idx
     } else {
@@ -55,8 +49,5 @@ fn try_parse_union(tokens: &[InfoToken]) -> Result<Option<InfoTypeExpr>, InfoPar
     let left_expr = parse_type(left)?;
     let right_expr = parse_type(right)?;
 
-    Ok(Some(InfoTypeExpr {
-        expr: TypeExpr::Union(Box::new(left_expr.expr), Box::new(right_expr.expr)),
-        idx: tokens[union_idx].idx,
-    }))
+    Ok(Some(Type::Union(Box::new(left_expr), Box::new(right_expr))))
 }

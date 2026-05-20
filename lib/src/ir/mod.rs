@@ -22,7 +22,7 @@ use std::{collections::HashMap, fmt::Debug};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    typ::Instantiator,
+    typ::Type,
     value::{PrevalValue, Value, runtime_type::TypeDeserializer},
     vm::{RunResult, evaluate},
 };
@@ -30,7 +30,7 @@ use crate::{
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Module {
     pub objects: HashMap<String, Value>,
-    pub instantiator: Instantiator,
+    pub types: HashMap<String, Type>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -102,11 +102,11 @@ pub enum Operation {
     },
     Index(usize, usize),
     Access(usize, String),
-    InitializeStruct(usize, HashMap<String, usize>),
+    InitializeStruct(Type, HashMap<String, usize>),
     LoadConstant(String),
     Is {
         value: usize,
-        typ: usize,
+        typ: Type,
     },
 }
 

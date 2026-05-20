@@ -1,17 +1,22 @@
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, sync::RwLock};
 
 use crate::{
+    ir::Module,
     parser::expression::{Expr, InfoExpr},
-    typ::{ConcreteType, InfoTypeError, Instantiator, Type, TypeError},
+    typ::{
+        Type,
+        error::{InfoTypeError, TypeError},
+        type_names,
+    },
 };
 
 #[derive(Debug)]
 pub struct Scope<'a> {
-    scopes: Vec<Cow<'a, HashMap<String, usize>>>,
+    scopes: Vec<Cow<'a, HashMap<String, Type>>>,
 }
 
 impl<'a> Scope<'a> {
-    pub fn new(global_scope: HashMap<String, usize>) -> Self {
+    pub fn new(global_scope: HashMap<String, Type>) -> Self {
         Self {
             scopes: vec![Cow::Owned(global_scope)],
         }
@@ -23,16 +28,16 @@ impl<'a> Scope<'a> {
         Self { scopes }
     }
 
-    pub fn get(&self, name: &str) -> Option<usize> {
+    pub fn get(&self, name: &str) -> Option<Type> {
         for scope in self.scopes.iter().rev() {
             if let Some(typ) = (*scope).get(name) {
-                return Some(*typ);
+                return Some(typ.clone());
             }
         }
         None
     }
 
-    pub fn insert(&mut self, name: String, typ: usize) {
+    pub fn insert(&mut self, name: String, typ: Type) {
         let mut last = self.scopes.pop().unwrap().into_owned();
         last.insert(name, typ);
         self.scopes.push(Cow::Owned(last));
@@ -41,12 +46,12 @@ impl<'a> Scope<'a> {
 
 pub fn infer_expr_type(
     expr: &InfoExpr,
-    ins: &mut Instantiator,
+    module: &Module,
     scope: &mut Scope,
-    return_type: usize,
-) -> Result<usize, InfoTypeError> {
+    return_type: Type,
+) -> Result<Type, InfoTypeError> {
     match &expr.expr {
-        Expr::Literal(value) => Ok(ins.add(Type::Concrete(value.get_type()))),
+        Expr::Literal(value) => Ok(value.get_type()),
         Expr::Var(name) => {
             if let Some(idx) = scope.get(name) {
                 Ok(idx)
@@ -59,73 +64,70 @@ pub fn infer_expr_type(
         }
         Expr::Block(statements, returns) => {
             if statements.len() == 0 || (statements.len() == 1 && !returns) {
-                return Ok(ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new()))));
+                return Ok(Type::Tuple(Vec::new()));
             }
 
             let mut scope = scope.sub();
             for statement in &statements[..statements.len() - 1] {
-                let _ = infer_expr_type(statement, ins, &mut scope, return_type)?;
+                let _ = infer_expr_type(statement, module, &mut scope, return_type.clone())?;
             }
             if *returns {
-                infer_expr_type(statements.last().unwrap(), ins, &mut scope, return_type)
+                infer_expr_type(statements.last().unwrap(), module, &mut scope, return_type)
             } else {
-                Ok(ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new()))))
+                Ok(Type::Tuple(Vec::new()))
             }
         }
-        Expr::InitializeStruct(struct_type_id, fields) => {
-            let (struct_type, struct_type_id) =
-                if let Type::Concrete(ConcreteType::Struct(struct_type)) =
-                    ins.get_type(*struct_type_id).clone()
-                {
-                    (struct_type, struct_type_id)
+        Expr::InitializeStruct(struct_type, fields) => {
+            let def_fields =
+                if let Type::Struct(def_fields, _) = resolve(struct_type, module, expr.idx)? {
+                    def_fields
                 } else {
                     return Err(InfoTypeError {
                         idx: expr.idx,
-                        error: TypeError::NotAStruct(ins.get_type(*struct_type_id).clone()),
+                        error: TypeError::NotAStruct(struct_type.clone()),
                     });
                 };
 
-            if fields.len() != struct_type.len() {
+            if fields.len() != def_fields.len() {
                 return Err(InfoTypeError {
                     idx: expr.idx,
                     error: TypeError::IncorrectFieldCount {
-                        expected: struct_type.len(),
+                        expected: def_fields.len(),
                         got: fields.len(),
                     },
                 });
             }
 
             for (name, field) in fields {
-                let assignee_type = infer_expr_type(field, ins, scope, return_type)?;
+                let assignee_type = infer_expr_type(field, module, scope, return_type.clone())?;
 
-                let slot = if let Some(slot) = struct_type.get(name) {
-                    *slot
+                let slot = if let Some(slot) = def_fields.get(name) {
+                    slot.clone()
                 } else {
                     return Err(InfoTypeError {
                         idx: expr.idx,
                         error: TypeError::UnknownField(name.clone()),
                     });
                 };
-                if !ins.compatible(assignee_type, slot, 0) {
+                if !compatible(&assignee_type, &slot, module, 0)? {
                     return Err(InfoTypeError {
                         idx: expr.idx,
                         error: TypeError::IncompatibleTypes {
-                            expected: ins.get_type(slot).clone(),
-                            got: ins.get_type(assignee_type).clone(),
+                            expected: slot.clone(),
+                            got: assignee_type.clone(),
                         },
                     });
                 }
             }
 
-            Ok(*struct_type_id)
+            Ok(struct_type.clone())
         }
         Expr::Access(struct_expr, field_name) => {
-            let struct_type_id = infer_expr_type(struct_expr, ins, scope, return_type)?;
+            let struct_type = infer_expr_type(struct_expr, module, scope, return_type)?;
 
-            if let Type::Concrete(ConcreteType::Struct(struct_type)) = ins.get_type(struct_type_id)
-            {
-                if let Some(slot) = struct_type.get(field_name) {
-                    Ok(*slot)
+            if let Type::Struct(fields, _) = resolve(&struct_type, module, expr.idx)? {
+                if let Some(slot) = fields.get(field_name) {
+                    Ok(slot.clone())
                 } else {
                     Err(InfoTypeError {
                         idx: expr.idx,
@@ -139,18 +141,16 @@ pub fn infer_expr_type(
                 })
             }
         }
-        Expr::Is { name: _, typ: _ } => Ok(ins.add(Type::Concrete(ConcreteType::Bool))),
+        Expr::Is { name: _, typ: _ } => Ok(type_names::bool()),
         Expr::Call(function_expr, args_exprs) => {
-            let function_type_id = infer_expr_type(function_expr, ins, scope, return_type)?;
+            let function_type = infer_expr_type(function_expr, module, scope, return_type.clone())?;
 
-            let signature = if let Type::Concrete(ConcreteType::Function(signature)) =
-                ins.get_type(function_type_id).clone()
-            {
+            let signature = if let Type::Function(signature) = function_type {
                 signature
             } else {
                 return Err(InfoTypeError {
                     idx: expr.idx,
-                    error: TypeError::NotAFunction(ins.get_type(function_type_id).clone()),
+                    error: TypeError::NotAFunction(function_type),
                 });
             };
 
@@ -165,45 +165,44 @@ pub fn infer_expr_type(
             }
 
             for (arg_expr, arg_type) in args_exprs.iter().zip(signature.args.iter()) {
-                let arg_expr_type = infer_expr_type(arg_expr, ins, scope, return_type)?;
-                if !ins.compatible(arg_expr_type, *arg_type, 0) {
+                let arg_expr_type = infer_expr_type(arg_expr, module, scope, return_type.clone())?;
+                if !compatible(&arg_expr_type, arg_type, module, 0)? {
                     return Err(InfoTypeError {
                         idx: expr.idx,
                         error: TypeError::IncompatibleTypes {
-                            expected: ins.get_type(*arg_type).clone(),
-                            got: ins.get_type(arg_expr_type).clone(),
+                            expected: arg_type.clone(),
+                            got: arg_expr_type,
                         },
                     });
                 }
             }
 
-            Ok(signature.returns)
+            Ok(*signature.returns)
         }
         Expr::If { cond, then, els } => {
-            let cond_type = infer_expr_type(cond, ins, scope, return_type)?;
-            let bool = ins.add(Type::Concrete(ConcreteType::Bool));
-            if !ins.compatible(cond_type, bool, 0) {
+            let cond_type = infer_expr_type(cond, module, scope, return_type.clone())?;
+            if !compatible(&cond_type, &type_names::bool(), module, 0)? {
                 return Err(InfoTypeError {
                     idx: expr.idx,
                     error: TypeError::IncompatibleTypes {
-                        expected: Type::Concrete(ConcreteType::Bool),
-                        got: ins.get_type(cond_type).clone(),
+                        expected: type_names::bool(),
+                        got: cond_type,
                     },
                 });
             }
             let mut then_scope = scope.sub();
             if let Expr::Is { name, typ } = &cond.expr {
-                then_scope.insert(name.clone(), *typ);
+                then_scope.insert(name.clone(), typ.clone());
             }
-            let then_type = infer_expr_type(then, ins, &mut then_scope, return_type)?;
+            let then_type = infer_expr_type(then, module, &mut then_scope, return_type.clone())?;
             let els_type = if let Some(els) = els {
-                Some(infer_expr_type(els, ins, scope, return_type)?)
+                Some(infer_expr_type(els, module, scope, return_type.clone())?)
             } else {
                 None
             };
             Ok(if let Some(els_type) = els_type {
-                if !ins.compatible(then_type, els_type, 0) {
-                    ins.add(Type::Union(then_type, els_type))
+                if !compatible(&then_type, &els_type, module, 0)? {
+                    Type::Union(Box::new(then_type), Box::new(els_type))
                 } else {
                     then_type
                 }
@@ -212,35 +211,90 @@ pub fn infer_expr_type(
             })
         }
         Expr::Guard { dependency, body } => {
-            let _ = infer_expr_type(dependency, ins, scope, return_type)?;
-            let body_type = infer_expr_type(body, ins, scope, return_type)?;
+            let _ = infer_expr_type(dependency, module, scope, return_type.clone())?;
+            let body_type = infer_expr_type(body, module, scope, return_type)?;
             Ok(body_type)
         }
         Expr::Index(_, _) => panic!("TODO: remove indexing until i add operator overloading"),
         Expr::Let(name, value_expr) => {
-            let value_type = infer_expr_type(value_expr, ins, scope, return_type)?;
+            let value_type = infer_expr_type(value_expr, module, scope, return_type)?;
             scope.insert(name.clone(), value_type);
 
-            Ok(ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new()))))
+            Ok(Type::Tuple(Vec::new()))
         }
         Expr::Return(return_expr) => {
             let expr_type = if let Some(expr) = return_expr {
-                infer_expr_type(expr, ins, scope, return_type)?
+                infer_expr_type(expr, module, scope, return_type.clone())?
             } else {
-                ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new())))
+                Type::Tuple(Vec::new())
             };
 
-            if !ins.compatible(expr_type, return_type, 0) {
+            if !compatible(&expr_type, &return_type, module, 0)? {
                 return Err(InfoTypeError {
                     idx: expr.idx,
                     error: TypeError::IncompatibleTypes {
-                        expected: ins.get_type(return_type).clone(),
-                        got: ins.get_type(expr_type).clone(),
+                        expected: return_type,
+                        got: expr_type,
                     },
                 });
             }
 
-            Ok(ins.add(Type::EarlyReturn))
+            Ok(Type::EarlyReturn)
         }
     }
+}
+
+fn resolve(typ: &Type, module: &Module, idx: usize) -> Result<Type, InfoTypeError> {
+    if let Type::Named(name) = typ {
+        if let Some(typ) = module.types.get(&name.path[0]) {
+            return resolve(&typ, module, idx);
+        } else {
+            return Err(InfoTypeError {
+                idx,
+                error: TypeError::UnknownType(name.path[0].clone()),
+            });
+        }
+    } else {
+        return Ok(typ.clone());
+    }
+}
+
+pub fn compatible(
+    t1: &Type,
+    t2: &Type,
+    module: &Module,
+    depth: usize,
+) -> Result<bool, InfoTypeError> {
+    if depth > 100 {
+        return Ok(false);
+    }
+
+    println!("TEST {t2:?} ~= {t1:?}");
+
+    Ok(match t1 {
+        Type::Union(t1a, t1b) => {
+            compatible(
+                &resolve(t1a, module, 18298)?,
+                &resolve(t2, module, 18298)?,
+                module,
+                depth + 1,
+            )? || compatible(
+                &resolve(t1b, module, 18298)?,
+                &resolve(t2, module, 18298)?,
+                module,
+                depth,
+            )?
+        }
+        Type::EarlyReturn => false,
+        Type::Named(_) => {
+            t1 == t2
+                || compatible(
+                    &resolve(t1, module, 18298)?,
+                    &resolve(t2, module, 18298)?,
+                    module,
+                    depth + 1,
+                )?
+        }
+        _ => t1 == t2,
+    })
 }

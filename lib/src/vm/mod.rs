@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ir::{Block, Callable, Function, Module, Operation, Partial, Statement, Terminal},
-    typ::Instantiator,
     value::{Value, structure::Struct},
     vm::operation::{access, call, guard_phi, index, initialize_struct, is, load_local, phi},
 };

@@ -3,10 +3,11 @@ use std::collections::HashMap;
 use crate::{
     ir::{Declaration, Function, Module, Operation, Statement, error::IRErrorInfo, to_ir},
     parser::expression::InfoExpr,
+    typ::Type,
 };
 
 pub fn initialize_struct(
-    typ: usize,
+    typ: Type,
     fields: HashMap<String, InfoExpr>,
     function: &mut Function,
     block: &mut usize,

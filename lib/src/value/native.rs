@@ -1,5 +1,5 @@
 use crate::{
-    typ::{Instantiator, type_id},
+    typ::{Type, type_names},
     value::{PrevalValue, Value, primitive::EmptyTuple, runtime_type::TypeDeserializer},
 };
 use libloading::Library;
@@ -84,12 +84,12 @@ extern "C" fn string_value_start(value: *const Value) -> *const u8 {
 }
 
 extern "C" fn new_tuple_value() -> *mut Value {
-    Box::into_raw(Box::new(Value::new(EmptyTuple, type_id::empty_tuple)))
+    Box::into_raw(Box::new(Value::new(EmptyTuple, Type::Tuple(Vec::new()))))
 }
 
 extern "C" fn new_string_value(value: *const u8, len: usize) -> *mut Value {
     Box::into_raw(Box::new(Value::new(
         String::from_utf8_lossy(unsafe { std::slice::from_raw_parts(value, len) }).into_owned(),
-        type_id::String,
+        type_names::string(),
     )))
 }

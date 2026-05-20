@@ -7,7 +7,8 @@ use crate::ir::Terminal;
 use crate::ir::error::IRErrorInfo;
 use crate::ir::to_ir;
 use crate::parser::expression::InfoExpr;
-use crate::typ::type_id;
+
+use crate::typ::Type;
 use crate::value::Value;
 use crate::value::primitive::EmptyTuple;
 use std::collections::HashMap;
@@ -42,7 +43,7 @@ pub fn returns(
     } else {
         function.ir[*block].statements.push(Statement {
             store: Some(return_var),
-            operation: Operation::LoadLiteral(Value::new(EmptyTuple, type_id::empty_tuple)),
+            operation: Operation::LoadLiteral(Value::new(EmptyTuple, Type::Tuple(Vec::new()))),
         });
         return_var
     });

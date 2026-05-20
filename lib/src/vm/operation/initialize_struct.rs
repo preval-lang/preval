@@ -1,11 +1,12 @@
 use crate::ir::Module;
+use crate::typ::Type;
 use crate::value::Value;
 use crate::value::structure::Struct;
 use crate::vm::Statement;
 use std::collections::HashMap;
 
 pub fn initialize_struct(
-    typ: usize,
+    typ: Type,
     fields: HashMap<String, usize>,
     store: Option<usize>,
     _module: &Module,
@@ -31,7 +32,7 @@ pub fn initialize_struct(
                 Struct {
                     fields: output_struct,
                 },
-                typ,
+                typ.clone(),
             )),
         );
 

@@ -4,12 +4,12 @@ use crate::{
     ir::{
         Declaration, Function, Module, Operation, Statement, error::IRErrorInfo, variable::variable,
     },
-    parser::typ::InfoTypeExpr,
+    typ::Type,
 };
 
 pub fn is(
     name: String,
-    typ: usize,
+    typ: Type,
     idx: usize,
     function: &mut Function,
     block: &mut usize,

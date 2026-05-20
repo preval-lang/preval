@@ -5,7 +5,7 @@ use preval_lib::{
     parser::module::parse_module,
     passes::remove_unused::{Usage, remove_unused},
     tokeniser::{get_line_and_column, tokenise},
-    typ::type_id,
+    typ::{Type, type_names},
     value::{Value, primitive::IO},
     vm::{RunResult, evaluate},
 };
@@ -19,8 +19,8 @@ fn main() {
 
             let mut vars: HashMap<usize, Option<Value>> = HashMap::new();
 
-            vars.insert(0, Some(Value::new(IO, type_id::IO)));
-            vars.insert(1, Some(Value::new(IO, type_id::IO)));
+            vars.insert(0, Some(Value::new(IO, type_names::io())));
+            vars.insert(1, Some(Value::new(IO, type_names::io())));
 
             run_entire_program(&mut module, runresult, &mut vars);
             return;
@@ -41,13 +41,10 @@ fn main() {
                 Ok(mut module) => {
                     fs::write("ir.ir", format!("{module:#?}")).unwrap();
 
-                    let eval = module
-                        .objects
-                        .get_mut("main")
-                        .unwrap()
-                        .clone()
-                        .data
-                        .call(&mut module, vec![&Some(Value::new(IO, type_id::IO)), &None]);
+                    let eval = module.objects.get_mut("main").unwrap().clone().data.call(
+                        &mut module,
+                        vec![&Some(Value::new(IO, type_names::io())), &None],
+                    );
 
                     let mut poisoned_vars = HashMap::new();
                     poisoned_vars.insert(0, Usage::Value);
@@ -77,8 +74,8 @@ fn main() {
 
                     let mut vars: HashMap<usize, Option<Value>> = HashMap::new();
 
-                    vars.insert(0, Some(Value::new(IO {}, type_id::IO)));
-                    vars.insert(1, Some(Value::new(IO {}, type_id::IO)));
+                    vars.insert(0, Some(Value::new(IO {}, type_names::io())));
+                    vars.insert(1, Some(Value::new(IO {}, type_names::io())));
 
                     run_entire_program(&mut module, optimized, &mut vars);
                 }

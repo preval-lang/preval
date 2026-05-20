@@ -7,20 +7,12 @@ struct Person {
 }
 
 struct Test {
-    abc: String | Person,
+    abc: String | Test,
 }
 
 fn main(compile_io: IO, io: IO) {
-    let a = Test{abc: Person{name: "John", age: 30}};
 
-    let b = a.abc;
-    if b is String {
-        print(io, b);
-    } else {
-        if b is Person {
-            print(compile_io, b.name);
-        } else {
+    let a = Test { abc: Test { abc: "Recursive types" } };
 
-        }
-    }
+    print(io, a.abc);
 }
