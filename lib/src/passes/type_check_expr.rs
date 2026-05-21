@@ -109,7 +109,7 @@ pub fn infer_expr_type(
                         error: TypeError::UnknownField(name.clone()),
                     });
                 };
-                if !compatible(&assignee_type, &slot, module, 0)? {
+                if !compatible(&assignee_type, &slot, module, false)? {
                     return Err(InfoTypeError {
                         idx: expr.idx,
                         error: TypeError::IncompatibleTypes {
@@ -166,7 +166,7 @@ pub fn infer_expr_type(
 
             for (arg_expr, arg_type) in args_exprs.iter().zip(signature.args.iter()) {
                 let arg_expr_type = infer_expr_type(arg_expr, module, scope, return_type.clone())?;
-                if !compatible(&arg_expr_type, arg_type, module, 0)? {
+                if !compatible(&arg_expr_type, arg_type, module, false)? {
                     return Err(InfoTypeError {
                         idx: expr.idx,
                         error: TypeError::IncompatibleTypes {
@@ -181,7 +181,7 @@ pub fn infer_expr_type(
         }
         Expr::If { cond, then, els } => {
             let cond_type = infer_expr_type(cond, module, scope, return_type.clone())?;
-            if !compatible(&cond_type, &type_names::bool(), module, 0)? {
+            if !compatible(&cond_type, &type_names::bool(), module, false)? {
                 return Err(InfoTypeError {
                     idx: expr.idx,
                     error: TypeError::IncompatibleTypes {
@@ -201,7 +201,7 @@ pub fn infer_expr_type(
                 None
             };
             Ok(if let Some(els_type) = els_type {
-                if !compatible(&then_type, &els_type, module, 0)? {
+                if !compatible(&then_type, &els_type, module, false)? {
                     Type::Union(Box::new(then_type), Box::new(els_type))
                 } else {
                     then_type
@@ -229,7 +229,7 @@ pub fn infer_expr_type(
                 Type::Tuple(Vec::new())
             };
 
-            if !compatible(&expr_type, &return_type, module, 0)? {
+            if !compatible(&expr_type, &return_type, module, false)? {
                 return Err(InfoTypeError {
                     idx: expr.idx,
                     error: TypeError::IncompatibleTypes {
@@ -263,38 +263,35 @@ pub fn compatible(
     t1: &Type,
     t2: &Type,
     module: &Module,
-    depth: usize,
+    resolved: bool,
 ) -> Result<bool, InfoTypeError> {
-    if depth > 100 {
-        return Ok(false);
-    }
-
-    println!("TEST {t2:?} ~= {t1:?}");
-
-    Ok(match t1 {
-        Type::Union(t1a, t1b) => {
+    Ok(match t2 {
+        Type::Union(t2a, t2b) => {
             compatible(
-                &resolve(t1a, module, 18298)?,
-                &resolve(t2, module, 18298)?,
+                &resolve(t2a, module, 18298)?,
+                &resolve(t1, module, 18298)?,
                 module,
-                depth + 1,
+                true,
             )? || compatible(
-                &resolve(t1b, module, 18298)?,
-                &resolve(t2, module, 18298)?,
+                &resolve(t2b, module, 18298)?,
+                &resolve(t1, module, 18298)?,
                 module,
-                depth,
+                true,
             )?
         }
         Type::EarlyReturn => false,
-        Type::Named(_) => {
+        _ => {
             t1 == t2
-                || compatible(
-                    &resolve(t1, module, 18298)?,
-                    &resolve(t2, module, 18298)?,
-                    module,
-                    depth + 1,
-                )?
+                || (if !resolved {
+                    compatible(
+                        &resolve(t1, module, 18298)?,
+                        &resolve(t2, module, 18298)?,
+                        module,
+                        true,
+                    )?
+                } else {
+                    false
+                })
         }
-        _ => t1 == t2,
     })
 }

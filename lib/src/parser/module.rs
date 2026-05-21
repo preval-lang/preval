@@ -67,7 +67,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                     infer_expr_type(&body, &module, &mut scope, *signature.returns.clone())
                         .unwrap();
 
-                if !compatible(&body_type, &signature.returns, &module, 0).unwrap() {
+                if !compatible(&body_type, &signature.returns, &module, false).unwrap() {
                     panic!("error for incompatible return and inferred types")
                 }
 
