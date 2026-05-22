@@ -4,7 +4,7 @@ use crate::parser::typ::parse_type;
 use crate::parser::utility::read_punctuated;
 use crate::tokeniser::Literal;
 
-use crate::typ::{Name, Type};
+use crate::typ::{Name, TypeExpr};
 use crate::{
     ir::error::{IRError, IRErrorInfo},
     tokeniser::{InfoToken, Keyword, Token},
@@ -24,7 +24,7 @@ pub enum Expr {
         then: Box<InfoExpr>,
         els: Option<Box<InfoExpr>>,
     },
-    InitializeStruct(Type, HashMap<String, InfoExpr>),
+    InitializeStruct(TypeExpr, HashMap<String, InfoExpr>),
     Access(Box<InfoExpr>, String),
     Guard {
         dependency: Box<InfoExpr>,
@@ -32,7 +32,7 @@ pub enum Expr {
     },
     Is {
         name: String,
-        typ: Type,
+        typ: TypeExpr,
     },
 }
 
@@ -283,7 +283,7 @@ fn try_parse_struct(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseE
         }
         Ok(Some(InfoExpr {
             expr: Expr::InitializeStruct(
-                Type::Named(Name {
+                TypeExpr::Named(Name {
                     path: vec![name.clone()],
                     generics: Vec::new(),
                 }),

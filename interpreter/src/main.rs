@@ -5,7 +5,7 @@ use preval_lib::{
     parser::module::parse_module,
     passes::remove_unused::{Usage, remove_unused},
     tokeniser::{get_line_and_column, tokenise},
-    typ::{Type, type_names},
+    typ::{TypeExpr, type_names},
     value::{Value, primitive::IO},
     vm::{RunResult, evaluate},
 };

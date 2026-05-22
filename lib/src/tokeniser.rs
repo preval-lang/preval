@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use crate::{
-    typ::{self, Type, type_names},
+    typ::{self, TypeExpr, type_names},
     value::Value,
 };
 
@@ -66,7 +66,7 @@ pub enum Literal {
 }
 
 impl Literal {
-    pub fn get_type(&self) -> Type {
+    pub fn get_type(&self) -> TypeExpr {
         match self {
             Literal::Bool(_) => type_names::bool(),
             Literal::String(_) => type_names::string(),

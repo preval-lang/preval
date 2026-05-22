@@ -6,7 +6,7 @@ use crate::ir::Statement;
 use crate::ir::error::IRErrorInfo;
 use crate::ir::to_ir;
 use crate::parser::expression::InfoExpr;
-use crate::typ::Type;
+use crate::typ::TypeExpr;
 use crate::value::Value;
 use crate::value::primitive::EmptyTuple;
 use std::collections::HashMap;
@@ -57,7 +57,10 @@ pub fn compile_block(
     if (len == 0 || !returns) && store.is_some() {
         function.ir[*block].statements.push(Statement {
             store,
-            operation: Operation::LoadLiteral(Value::new(EmptyTuple {}, Type::Tuple(Vec::new()))),
+            operation: Operation::LoadLiteral(Value::new(
+                EmptyTuple {},
+                TypeExpr::Tuple(Vec::new()),
+            )),
         });
     }
     Ok(())

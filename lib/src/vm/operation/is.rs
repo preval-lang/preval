@@ -2,13 +2,14 @@ use std::collections::HashMap;
 
 use crate::{
     ir::{Module, Operation, Statement},
-    typ::Type,
+    passes::old_type_check_expr::compatible,
+    typ::{TypeExpr, type_names},
     value::Value,
 };
 
 pub fn is(
     value: usize,
-    typ: Type,
+    typ: TypeExpr,
     module: &mut Module,
     vars: &mut HashMap<usize, Option<Value>>,
     out: &mut Vec<Statement>,
@@ -16,7 +17,13 @@ pub fn is(
 ) {
     if let Some(store) = store {
         if let Some(value) = &vars[&value] {
-            todo!("Check type compatibility")
+            vars.insert(
+                store,
+                Some(Value::new(
+                    compatible(&value.typ, &typ, module, false).unwrap(),
+                    type_names::bool(),
+                )),
+            );
         } else {
             vars.insert(store, None);
             out.push(Statement {

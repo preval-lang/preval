@@ -1,0 +1,13 @@
+dylib "stdlib/print" fn print(io, text); // print implemented in C checks the types and knownness of its parameters. if io is unknown it returns unknown void. if io is known and text is unknown it throws an error. if both are known it prints the text to the console and returns void.
+dylib "stdlib/print" fn input(io); // input implemented in C returns unknown string when run with an unknown io and when run with a known io prompts the user for input
+
+struct Box {
+    value
+}
+
+fn main(compile_io, io) {
+
+    let box = Box { value: input(io) }; // at compile time: Box { value: unknown string } which contains unknown so it is residualised
+    print(io, box.value); // at compile time box.value is unknown string and io is unknown io, so print returns unknown void and is residualised
+
+}

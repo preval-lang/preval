@@ -1,5 +1,5 @@
 use crate::{
-    typ::{Type, type_names},
+    typ::{TypeExpr, type_names},
     value::{PrevalValue, Value, primitive::EmptyTuple, runtime_type::TypeDeserializer},
 };
 use libloading::Library;
@@ -84,7 +84,10 @@ extern "C" fn string_value_start(value: *const Value) -> *const u8 {
 }
 
 extern "C" fn new_tuple_value() -> *mut Value {
-    Box::into_raw(Box::new(Value::new(EmptyTuple, Type::Tuple(Vec::new()))))
+    Box::into_raw(Box::new(Value::new(
+        EmptyTuple,
+        TypeExpr::Tuple(Vec::new()),
+    )))
 }
 
 extern "C" fn new_string_value(value: *const u8, len: usize) -> *mut Value {

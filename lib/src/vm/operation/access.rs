@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ir::{Operation, Statement},
-    typ::{Type, type_names},
+    typ::{TypeExpr, type_names},
     value::Value,
 };
 

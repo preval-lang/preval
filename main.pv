@@ -1,18 +1,13 @@
 dylib "stdlib/print" fn print(io: IO, text: String);
 dylib "stdlib/print" fn input(io: IO): String;
 
-struct Person {
-    name: String,
-    age: usize,
-}
-
-struct Test {
-    abc: String | Test,
+struct Box<T> {
+    value: T,
 }
 
 fn main(compile_io: IO, io: IO) {
 
-    let a = Test { abc: Test { abc: "Recursive types" } };
-
+    let box = Box { value: "hi" };
+    print(io, box.value);
 
 }

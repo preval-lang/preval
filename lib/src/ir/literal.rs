@@ -3,7 +3,7 @@ use crate::ir::Operation;
 use crate::ir::Statement;
 use crate::ir::error::IRErrorInfo;
 use crate::tokeniser::Literal;
-use crate::typ::Type;
+use crate::typ::TypeExpr;
 use crate::value::Value;
 
 pub fn literal(

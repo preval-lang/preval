@@ -1,10 +1,10 @@
 use crate::{
     parser::expression::{InfoParseError, ParseError},
     tokeniser::{InfoToken, Token},
-    typ::{Name, Type},
+    typ::{Name, TypeExpr},
 };
 
-pub fn parse_type(tokens: &[InfoToken]) -> Result<Type, InfoParseError> {
+pub fn parse_type(tokens: &[InfoToken]) -> Result<TypeExpr, InfoParseError> {
     if let Some(expr) = try_parse_union(tokens)? {
         return Ok(expr);
     }
@@ -19,7 +19,7 @@ pub fn parse_type(tokens: &[InfoToken]) -> Result<Type, InfoParseError> {
     })
 }
 
-fn try_parse_name(tokens: &[InfoToken]) -> Result<Option<Type>, InfoParseError> {
+fn try_parse_name(tokens: &[InfoToken]) -> Result<Option<TypeExpr>, InfoParseError> {
     if tokens.len() != 1 {
         return Ok(None);
     }
@@ -28,7 +28,7 @@ fn try_parse_name(tokens: &[InfoToken]) -> Result<Option<Type>, InfoParseError> 
         token: Token::Name(name),
     } = &tokens[0]
     {
-        Ok(Some(Type::Named(Name {
+        Ok(Some(TypeExpr::Named(Name {
             path: vec![name.clone()],
             generics: Vec::new(),
         })))
@@ -37,7 +37,7 @@ fn try_parse_name(tokens: &[InfoToken]) -> Result<Option<Type>, InfoParseError> 
     }
 }
 
-fn try_parse_union(tokens: &[InfoToken]) -> Result<Option<Type>, InfoParseError> {
+fn try_parse_union(tokens: &[InfoToken]) -> Result<Option<TypeExpr>, InfoParseError> {
     let union_idx = if let Some(union_idx) = tokens.iter().position(|t| t.token == Token::Union) {
         union_idx
     } else {
@@ -49,5 +49,8 @@ fn try_parse_union(tokens: &[InfoToken]) -> Result<Option<Type>, InfoParseError>
     let left_expr = parse_type(left)?;
     let right_expr = parse_type(right)?;
 
-    Ok(Some(Type::Union(Box::new(left_expr), Box::new(right_expr))))
+    Ok(Some(TypeExpr::Union(
+        Box::new(left_expr),
+        Box::new(right_expr),
+    )))
 }

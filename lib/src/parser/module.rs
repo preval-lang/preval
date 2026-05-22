@@ -7,13 +7,13 @@ use crate::{
         typ::parse_type,
         utility::read_punctuated,
     },
-    passes::type_check_expr::{compatible, infer_expr_type},
+    passes::old_type_check_expr::{compatible, infer_expr_type},
     tokeniser::{InfoToken, Keyword, Literal, Token},
-    typ::{Name, Signature, Type},
+    typ::{Name, Signature, TypeExpr},
     value::{Value, native::NativeFunction},
 };
 
-use crate::passes::type_check_expr::Scope;
+use crate::passes::old_type_check_expr::Scope;
 
 pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
     let mut module = Module {
@@ -21,10 +21,10 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
         types: HashMap::new(),
     };
 
-    module.types.insert("String".to_string(), Type::String);
-    module.types.insert("bool".to_string(), Type::Bool);
-    module.types.insert("usize".to_string(), Type::Usize);
-    module.types.insert("IO".to_string(), Type::IO);
+    module.types.insert("String".to_string(), TypeExpr::String);
+    module.types.insert("bool".to_string(), TypeExpr::Bool);
+    module.types.insert("usize".to_string(), TypeExpr::Usize);
+    module.types.insert("IO".to_string(), TypeExpr::IO);
 
     let mut declarations = HashMap::new();
 
@@ -61,7 +61,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
 
                 module
                     .types
-                    .insert(name.clone(), Type::Function(signature.clone()));
+                    .insert(name.clone(), TypeExpr::Function(signature.clone()));
 
                 let body_type =
                     infer_expr_type(&body, &module, &mut scope, *signature.returns.clone())
@@ -85,7 +85,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
 
                 if let Some(_) = module.objects.insert(
                     name.to_string(),
-                    Value::new(function, Type::Function(signature)),
+                    Value::new(function, TypeExpr::Function(signature)),
                 ) {
                     return Err(InfoParseError {
                         idx: name_idx,
@@ -104,6 +104,45 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                     })
                 }?;
                 i += 1;
+                let generics_tokens = if let Token::LessThan = &tokens[i].token {
+                    i += 1;
+                    let start = i;
+                    loop {
+                        if let Some(InfoToken {
+                            token: Token::GreaterThan,
+                            idx: _,
+                        }) = tokens.iter().nth(i)
+                        {
+                            break;
+                        }
+                        i += 1;
+                    }
+                    i += 1;
+                    Some(&tokens[start..i - 1])
+                } else {
+                    None
+                };
+                let generics = if let Some(generics_tokens) = generics_tokens {
+                    let generics = read_punctuated(generics_tokens, Token::Comma)?;
+                    generics
+                        .iter()
+                        .map(|param_tokens| {
+                            if let [
+                                InfoToken {
+                                    token: Token::Name(name),
+                                    idx: _,
+                                },
+                            ] = &param_tokens[..]
+                            {
+                                name.clone()
+                            } else {
+                                panic!("Non name tokens in generic {param_tokens:?}")
+                            }
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
                 let block = if let Token::Braces(block) = &tokens[i].token {
                     Ok(block)
                 } else {
@@ -139,8 +178,9 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
 
                 module.types.insert(
                     name.clone(),
-                    Type::Struct(
+                    TypeExpr::Struct(
                         fields,
+                        generics,
                         Name {
                             path: vec![name.clone()],
                             generics: vec![],
@@ -180,7 +220,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
 
                 module
                     .types
-                    .insert(name.clone(), Type::Function((signature.clone())));
+                    .insert(name.clone(), TypeExpr::Function((signature.clone())));
                 if let Some(_v) = module.objects.insert(
                     name.clone(),
                     Value::new(
@@ -188,7 +228,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                             lib_name,
                             func_name: name.clone(),
                         },
-                        Type::Function(signature),
+                        TypeExpr::Function(signature),
                     ),
                 ) {
                     return Err(InfoParseError {
@@ -257,7 +297,7 @@ pub fn expect_function_signature(
 
             parse_type(&tokens[start..*i])?
         } else {
-            Type::Tuple(Vec::new())
+            TypeExpr::Tuple(Vec::new())
         };
         Ok((
             (name.clone(), name_idx),
