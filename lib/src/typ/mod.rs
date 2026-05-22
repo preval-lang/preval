@@ -4,18 +4,15 @@ mod error;
 pub use error::*;
 use serde::{Deserialize, Serialize};
 
-use crate::passes::type_check_expr::Scope;
+use crate::{
+    ir::Function, parser::typ::InfoTypeExpr, passes::type_check_expr::Scope,
+    value::native::NativeFunction,
+};
 
-#[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Serialize, Deserialize)]
 pub enum IntegerSize {
     Size,
     Number(usize),
-}
-
-#[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize)]
-pub struct Signature {
-    pub args: Vec<usize>,
-    pub returns: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -25,7 +22,7 @@ pub enum ConcreteType {
     Bool,
     String,
     Struct(HashMap<String, usize>),
-    Function(Box<Signature>),
+    Function(Vec<usize>, usize),
     Tuple(Vec<usize>),
     IO,
 }
@@ -37,16 +34,33 @@ pub enum Type {
     EarlyReturn,
 }
 
-#[derive(Debug, Clone, PartialEq, Hash, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TypeExpr {
-    Union(Box<TypeExpr>, Box<TypeExpr>),
+    Union(Box<InfoTypeExpr>, Box<InfoTypeExpr>),
     Name(String),
+    Generics(Box<InfoTypeExpr>, Vec<InfoTypeExpr>),
+    Parameter(usize),
+    Struct(HashMap<String, InfoTypeExpr>),
+    Tuple(Vec<InfoTypeExpr>),
+
+    Integer { size: IntegerSize, signed: bool },
+    Float { size: usize },
+    Bool,
+    String,
+    IO,
+
+    Function(Vec<InfoTypeExpr>, Box<InfoTypeExpr>, Implementation),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum Implementation {
+    Native(NativeFunction),
+    Normal(Function),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Instantiator {
-    visited: HashMap<TypeExpr, usize>,
-    names: HashMap<String, usize>,
+    template_names: HashMap<String, InfoTypeExpr>,
     types: Vec<Type>,
 }
 
@@ -56,7 +70,7 @@ macro_rules! type_ids {
             type_ids!(@consts [] ; $($name => $expr),*);
         }
 
-        const TYPES: &[ConcreteType] = &[
+        const TYPES: &[TypeExpr] = &[
             $($expr),*
         ];
 
@@ -83,58 +97,94 @@ macro_rules! type_ids {
 }
 
 type_ids! {
-    usize => ConcreteType::Integer { size: IntegerSize::Size, signed: false },
-    bool => ConcreteType::Bool,
-    empty_tuple => ConcreteType::Tuple(vec![]),
-    String => ConcreteType::String,
-    IO => ConcreteType::IO,
+    usize => TypeExpr::Integer { size: IntegerSize::Size, signed: false },
+    bool => TypeExpr::Bool,
+    empty_tuple => TypeExpr::Tuple(vec![]),
+    String => TypeExpr::String,
+    IO => TypeExpr::IO,
 }
 
 impl Instantiator {
     pub fn new() -> Self {
-        let mut names = HashMap::new();
-        let mut types = Vec::new();
+        let mut template_names = HashMap::new();
+        let types = Vec::new();
 
-        let mut names_to_types = Vec::new();
         for (name, typ) in TYPE_NAMES.iter().zip(TYPES) {
-            names_to_types.push((name.to_string(), Type::Concrete(typ.clone())));
-        }
-
-        for (name, typ) in names_to_types {
-            names.insert(name, types.len());
-            types.push(typ);
+            template_names.insert(
+                name.to_string(),
+                InfoTypeExpr {
+                    expr: typ.clone(),
+                    idx: 0,
+                },
+            );
         }
 
         Self {
-            visited: HashMap::new(),
-            names,
             types,
+            template_names,
         }
     }
 
-    pub fn insert(&mut self, name: &str, typ: Type) -> usize {
-        let _ = self.names.insert(name.to_string(), self.types.len());
-        self.add(typ)
-    }
-
-    pub fn instantiate(&mut self, expr: &TypeExpr) -> usize {
-        if let Some(&index) = self.visited.get(expr) {
-            return index;
-        }
-        let type_ = match expr {
+    pub fn instantiate(&mut self, expr: &InfoTypeExpr, generics: &[usize]) -> usize {
+        let type_ = match &expr.expr {
+            TypeExpr::Parameter(i) => generics[*i],
             TypeExpr::Name(n) => {
-                self.types[*self.names.get(n).expect(&format!("Type exists {n:?}"))].clone()
+                let template = self
+                    .template_names
+                    .get(n)
+                    .expect(&format!("Type exists {n:?}"))
+                    .clone();
+                self.instantiate(&template, generics)
             }
             TypeExpr::Union(a, b) => {
-                let a = self.instantiate(a);
-                let b = self.instantiate(b);
-                Type::Union(a, b)
+                let a = self.instantiate(a.as_ref(), generics);
+                let b = self.instantiate(&b, generics);
+                self.add(Type::Union(a, b))
+            }
+            TypeExpr::Generics(base, params) => {
+                let params = params
+                    .iter()
+                    .map(|p| self.instantiate(p, generics))
+                    .collect::<Vec<_>>();
+
+                println!("instantiate generics params: {params:?}");
+                self.instantiate(base.as_ref(), &params)
+            }
+            TypeExpr::Struct(fields) => {
+                let fields = fields
+                    .iter()
+                    .map(|(k, v)| (k.clone(), self.instantiate(v, generics)))
+                    .collect::<HashMap<_, _>>();
+                self.add(Type::Concrete(ConcreteType::Struct(fields)))
+            }
+            TypeExpr::Bool => self.add(Type::Concrete(ConcreteType::Bool)),
+            TypeExpr::String => self.add(Type::Concrete(ConcreteType::String)),
+            TypeExpr::IO => self.add(Type::Concrete(ConcreteType::IO)),
+            TypeExpr::Integer { size, signed } => self.add(Type::Concrete(ConcreteType::Integer {
+                size: *size,
+                signed: *signed,
+            })),
+            TypeExpr::Float { size } => {
+                self.add(Type::Concrete(ConcreteType::Float { size: *size }))
+            }
+            TypeExpr::Tuple(elems) => {
+                let elems = elems
+                    .iter()
+                    .map(|e| self.instantiate(e, generics))
+                    .collect::<Vec<_>>();
+                self.add(Type::Concrete(ConcreteType::Tuple(elems)))
+            }
+            TypeExpr::Function(args, ret, _) => {
+                let args = args
+                    .iter()
+                    .map(|e| self.instantiate(e, generics))
+                    .collect::<Vec<_>>();
+                let ret = self.instantiate(ret, generics);
+                self.add(Type::Concrete(ConcreteType::Function(args, ret)))
             }
         };
-        let index = self.types.len();
-        self.visited.insert(expr.clone(), index);
-        self.types.push(type_);
-        index
+
+        type_
     }
 
     pub fn add(&mut self, typ: Type) -> usize {
@@ -142,8 +192,12 @@ impl Instantiator {
         self.types.len() - 1
     }
 
-    pub fn get_name(&self, name: &str) -> Option<usize> {
-        self.names.get(name).copied()
+    pub fn add_template(&mut self, name: String, expr: InfoTypeExpr) {
+        self.template_names.insert(name, expr);
+    }
+
+    pub fn get_template(&self, name: &str) -> Option<&InfoTypeExpr> {
+        self.template_names.get(name)
     }
 
     pub fn get_type(&self, index: usize) -> &Type {
@@ -173,6 +227,6 @@ impl Instantiator {
     }
 
     pub fn global_scope<'b>(&self) -> Scope<'b> {
-        Scope::new(self.names.clone())
+        Scope::new(self.template_names.clone())
     }
 }

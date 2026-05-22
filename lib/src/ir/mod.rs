@@ -29,7 +29,6 @@ use crate::{
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Module {
-    pub objects: HashMap<String, Value>,
     pub instantiator: Instantiator,
 }
 
@@ -103,7 +102,7 @@ pub enum Operation {
     Index(usize, usize),
     Access(usize, String),
     InitializeStruct(usize, HashMap<String, usize>),
-    LoadConstant(String),
+    LoadFunction(String, Vec<usize>),
     Is {
         value: usize,
         typ: usize,
