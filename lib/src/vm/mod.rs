@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ir::{Block, Callable, Function, Module, Operation, Partial, Statement, Terminal},
-    typ::Instantiator,
+    typ::{Implementation, TypeExpr, type_id},
     value::{Value, structure::Struct},
     vm::operation::{access, call, guard_phi, index, initialize_struct, is, load_local, phi},
 };
@@ -49,11 +49,21 @@ pub fn evaluate(
                 } => call(function, args, store, &mut out, module, vars),
                 Statement {
                     store,
-                    operation: Operation::LoadConstant(name),
+                    operation: Operation::LoadFunction(name, generics),
                 } => {
-                    if let Some(value) = module.objects.get(&name) {
+                    if let Some(tmp) = module.instantiator.get_template(&name).cloned() {
+                        let typ = module.instantiator.instantiate(&tmp, &generics);
                         if let Some(store) = store {
-                            vars.insert(store, Some(value.clone()));
+                            vars.insert(
+                                store,
+                                Some(match tmp.expr {
+                                    TypeExpr::Function(_, _, imp) => match imp {
+                                        Implementation::Native(imp) => Value::new(imp, typ),
+                                        Implementation::Normal(imp) => Value::new(imp, typ),
+                                    },
+                                    _ => todo!(),
+                                }),
+                            );
                         }
                     }
                 }

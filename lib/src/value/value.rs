@@ -5,7 +5,6 @@ use std::{
 
 use crate::{
     ir::Module,
-    typ::Instantiator,
     value::runtime_type::{TypeDeserializer, deserialize_type},
     vm::RunResult,
 };

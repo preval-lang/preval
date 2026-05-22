@@ -71,7 +71,7 @@ pub fn remove_unused(
                     }
                 }
                 Statement {
-                    operation: Operation::LoadConstant(_),
+                    operation: Operation::LoadFunction(_, _),
                     ..
                 } => {}
                 Statement {

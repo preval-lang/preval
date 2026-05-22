@@ -273,10 +273,7 @@ fn try_parse_struct(
     ins: &mut Instantiator,
 ) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
-        InfoToken {
-            token: Token::Name(name),
-            idx: name_idx,
-        },
+        type_tokens @ ..,
         InfoToken {
             token: Token::Braces(contents),
             idx: _brace_idx,
@@ -301,9 +298,16 @@ fn try_parse_struct(
                 fields.insert(name.clone(), value);
             }
         }
+
+        println!("type tokens: {type_tokens:?}");
+
+        let type_expr = parse_type(type_tokens, &vec![])?;
+
+        println!("type expr: {type_expr:?}");
+
         Ok(Some(InfoExpr {
-            expr: Expr::InitializeStruct(ins.get_name(name).unwrap(), fields),
-            idx: *name_idx,
+            expr: Expr::InitializeStruct(ins.instantiate(&type_expr.clone(), &vec![]), fields),
+            idx: type_tokens[0].idx,
         }))
     } else {
         Ok(None)

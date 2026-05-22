@@ -9,7 +9,7 @@ use crate::{
     typ::TypeExpr,
 };
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct InfoTypeExpr {
     pub expr: TypeExpr,
     pub idx: usize,
@@ -104,7 +104,7 @@ fn try_parse_generics(
 
     let mut param_exprs = Vec::new();
 
-    let base = parse_type(&tokens[open_idx - 1..], generics)?;
+    let base = parse_type(&tokens[..open_idx], generics)?;
 
     for generic_param_tokens in generics_tokens {
         param_exprs.push(parse_type(&generic_param_tokens, generics)?)

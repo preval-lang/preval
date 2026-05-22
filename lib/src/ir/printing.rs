@@ -6,11 +6,7 @@ use crate::ir::{Block, Module};
 
 pub fn module_to_string(module: &Module) -> String {
     let mut out = String::new();
-    for (name, fun) in &module.objects {
-        out.push_str(&name);
-        out.push('\n');
-        out.push_str(&format!("{fun:?}"));
-    }
+
     out
 }
 
@@ -34,7 +30,9 @@ pub fn to_string(blocks: &Vec<Block>, indentation: usize) -> String {
                     }
                     match operation {
                         Operation::Is { value, typ } => out.push_str("{value} is {typ}"),
-                        Operation::LoadConstant(name) => out.push_str(&format!("const {name:?}")),
+                        Operation::LoadFunction(name, generics) => {
+                            out.push_str(&format!("fn {name:?}<{generics:?}>"))
+                        }
                         Operation::InitializeStruct(name, fields) => {
                             out.push_str(&format!("struct {name:?}({fields:?})"));
                         }

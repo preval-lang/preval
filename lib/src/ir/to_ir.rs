@@ -61,7 +61,7 @@ pub fn to_ir(
             next_var,
             tail,
         ),
-        Expr::InitializeStruct(name, fields, _) => initialize_struct(
+        Expr::InitializeStruct(name, fields) => initialize_struct(
             name,
             fields,
             function,

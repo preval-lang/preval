@@ -5,12 +5,11 @@ use crate::{
         Declaration, Function, Module, Operation, Statement, error::IRErrorInfo, variable::variable,
     },
     parser::typ::InfoTypeExpr,
-    typ::TypeReference,
 };
 
 pub fn is(
     name: String,
-    typ: TypeReference,
+    typ: usize,
     idx: usize,
     function: &mut Function,
     block: &mut usize,

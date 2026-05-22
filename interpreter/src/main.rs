@@ -2,11 +2,11 @@ use std::{collections::HashMap, env, fs};
 
 use preval_lib::{
     ir::Module,
-    parser::module::parse_module,
+    parser::{module::parse_module, typ::InfoTypeExpr},
     passes::remove_unused::{Usage, remove_unused},
     tokeniser::{get_line_and_column, tokenise},
-    typ::type_id,
-    value::{Value, primitive::IO},
+    typ::{Implementation, TypeExpr, type_id},
+    value::{PrevalValue, Value, primitive::IO},
     vm::{RunResult, evaluate},
 };
 use ron::ser::PrettyConfig;
@@ -41,13 +41,19 @@ fn main() {
                 Ok(mut module) => {
                     fs::write("ir.ir", format!("{module:#?}")).unwrap();
 
-                    let eval = module
-                        .objects
-                        .get_mut("main")
-                        .unwrap()
-                        .clone()
-                        .data
-                        .call(&mut module, vec![&Some(Value::new(IO, type_id::IO)), &None]);
+                    let main = module.instantiator.get_template("main").cloned();
+
+                    let eval = if let Some(InfoTypeExpr {
+                        idx: _,
+                        expr: TypeExpr::Function(name, generics, Implementation::Normal(mut f)),
+                    }) = main
+                    {
+                        let cio = Some(Value::new(IO, type_id::IO));
+                        let args = vec![&cio, &None];
+                        f.vcall(&mut module, args)
+                    } else {
+                        panic!("No main function")
+                    };
 
                     let mut poisoned_vars = HashMap::new();
                     poisoned_vars.insert(0, Usage::Value);

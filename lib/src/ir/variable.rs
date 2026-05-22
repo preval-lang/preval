@@ -33,7 +33,7 @@ pub fn variable(
             Some(Declaration::Constant) => {
                 function.ir[*block].statements.push(Statement {
                     store: Some(store),
-                    operation: Operation::LoadConstant(name),
+                    operation: Operation::LoadFunction(name, vec![]),
                 });
             }
         }
