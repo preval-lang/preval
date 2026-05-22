@@ -1,11 +1,11 @@
-dylib "stdlib/print" fn print(io: IO, args: string);
-dylib "stdlib/print" fn input(io: IO): string;
+dylib "stdlib/print" fn print(io, args);
+dylib "stdlib/print" fn input(io);
 
-fn loop_forever(io: IO) {
+fn loop_forever(io) {
     print(io, "Hi");
 
 }
 
-fn main(compile_io: IO, io: IO) {
+fn main(compile_io, io) {
     loop_forever(io);
 }

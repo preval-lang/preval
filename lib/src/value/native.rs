@@ -11,7 +11,6 @@ use serde::{Deserialize, Serialize};
 pub struct NativeFunction {
     pub lib_name: String,
     pub func_name: String,
-    pub signature: Signature,
 }
 
 impl PrevalValue for NativeFunction {

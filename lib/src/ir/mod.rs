@@ -32,8 +32,6 @@ use crate::{
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Module {
     pub objects: HashMap<String, Value>,
-    pub structs: HashMap<String, StructDescriptor>,
-    pub partials: HashMap<String, Partial>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -45,12 +43,11 @@ pub struct StructDescriptor {
 pub struct Function {
     pub ir: Vec<Block>,
     pub exported: bool,
-    pub signature: Signature,
 }
 
 impl PrevalValue for Function {
     fn get_type(&self) -> Type {
-        Type::Function(Box::new(self.signature.clone()))
+        Type::Function
     }
 
     fn vcall(&mut self, module: &Module, args: Vec<&Option<Value>>) -> RunResult {

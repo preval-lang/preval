@@ -43,6 +43,6 @@ impl PrevalValue for IO {
 pub struct EmptyTuple;
 impl PrevalValue for EmptyTuple {
     fn get_type(&self) -> Type {
-        Type::Tuple(Vec::new())
+        Type::Tuple
     }
 }

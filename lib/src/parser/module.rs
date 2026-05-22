@@ -1,9 +1,5 @@
-use std::{collections::HashMap, usize};
-
-use indexmap::IndexMap;
-
 use crate::{
-    ir::{Block, Declaration, Function, Module, StructDescriptor, Terminal, to_ir},
+    ir::{Block, Declaration, Function, Module, Terminal, to_ir},
     parser::{
         expression::{InfoExpr, InfoParseError, ParseError, parse_expression},
         utility::read_punctuated,
@@ -12,15 +8,14 @@ use crate::{
     value::{
         Value,
         native::NativeFunction,
-        typ::{Signature, Type, get_type},
+        typ::{Signature, Type},
     },
 };
+use std::{collections::HashMap, usize};
 
 pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
     let mut module = Module {
         objects: HashMap::new(),
-        structs: HashMap::new(),
-        partials: HashMap::new(),
     };
 
     let mut declarations = HashMap::new();
@@ -30,13 +25,12 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
     while i < tokens.len() {
         match tokens[i].token.clone() {
             Token::Keyword(Keyword::Fn) => {
-                let ((name, name_idx), args, signature) =
-                    expect_function_signature(&module, tokens, &mut i)?;
+                let ((name, name_idx), args) = expect_function_signature(&module, tokens, &mut i)?;
                 declarations.insert(name.clone(), Declaration::Constant);
 
                 let body = expect_block_or_expr(tokens, &mut i)?;
 
-                let mut last_var = signature.args.len();
+                let mut last_var = args.len();
 
                 let mut function = Function {
                     ir: vec![Block {
@@ -44,7 +38,6 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                         statements: Vec::new(),
                     }],
                     exported: true,
-                    signature,
                 };
 
                 let mut locals = HashMap::new();
@@ -74,50 +67,6 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                     });
                 }
             }
-            Token::Keyword(Keyword::Struct) => {
-                i += 1;
-                let name = if let Token::Name(name) = &tokens[i].token {
-                    Ok(name)
-                } else {
-                    Err(InfoParseError {
-                        idx: tokens[i].idx,
-                        error: ParseError::ExpectedName,
-                    })
-                }?;
-                i += 1;
-                let block = if let Token::Braces(block) = &tokens[i].token {
-                    Ok(block)
-                } else {
-                    Err(InfoParseError {
-                        idx: tokens[i].idx,
-                        error: ParseError::ExpectedExpression(tokens[i..].to_vec()),
-                    })
-                }?;
-
-                let mut fields = IndexMap::new();
-
-                for field_colon_type in read_punctuated(block, Token::Comma)? {
-                    if let [
-                        InfoToken {
-                            token: Token::Name(name),
-                            idx: _name_idx,
-                        },
-                        InfoToken {
-                            token: Token::Colon,
-                            idx: _colon_idx,
-                        },
-                        typ @ ..,
-                    ] = field_colon_type.as_slice()
-                    {
-                        fields.insert(name.clone(), get_type(&module, typ, &mut 0)?);
-                    }
-                }
-                i += 1;
-
-                module
-                    .structs
-                    .insert(name.clone(), StructDescriptor { fields });
-            }
             Token::Keyword(Keyword::Dylib) => {
                 i += 1;
                 let lib_name = if let InfoToken {
@@ -139,8 +88,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
 
                 i += 1;
 
-                let ((name, name_idx), _, signature) =
-                    expect_function_signature(&module, tokens, &mut i)?;
+                let ((name, name_idx), _) = expect_function_signature(&module, tokens, &mut i)?;
 
                 if tokens[i].token != Token::Semicolon {
                     return Err(InfoParseError {
@@ -156,7 +104,6 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                     Value::new(NativeFunction {
                         lib_name,
                         func_name: name.clone(),
-                        signature,
                     }),
                 ) {
                     return Err(InfoParseError {
@@ -181,7 +128,7 @@ pub fn expect_function_signature(
     module: &Module,
     tokens: &[InfoToken],
     i: &mut usize,
-) -> Result<((String, usize), Vec<String>, Signature), InfoParseError> {
+) -> Result<((String, usize), Vec<String>), InfoParseError> {
     *i += 1;
     if let Token::Name(name) = &tokens[*i].token {
         let name_idx = tokens[*i].idx;
@@ -196,33 +143,21 @@ pub fn expect_function_signature(
                         token: Token::Name(name),
                         idx: _name_idx,
                     },
-                    InfoToken {
-                        token: Token::Colon,
-                        idx: _colon_idx,
-                    },
-                    typ @ ..,
                 ] = &arg_colon_type[..]
                 {
-                    let typ = get_type(&module, &typ, &mut 0)?;
-                    args.push((name.clone(), typ));
+                    args.push(name.clone());
                 }
             }
             *i += 1;
         } else {
             panic!("Missing function parameters, got {:?}", tokens[*i]);
         }
-        let mut returns = Type::Tuple(Vec::new());
         if let Token::Colon = &tokens[*i].token {
             *i += 1;
-            returns = get_type(&module, tokens, i)?;
         }
         Ok((
             (name.clone(), name_idx),
-            args.iter().map(|arg| arg.0.clone()).collect(),
-            Signature {
-                args: args.iter().map(|arg| arg.1.clone()).collect(),
-                returns,
-            },
+            args.iter().map(|arg| arg.clone()).collect(),
         ))
     } else {
         Err(InfoParseError {

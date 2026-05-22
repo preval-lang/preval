@@ -11,7 +11,7 @@ pub struct Struct {
 }
 impl PrevalValue for Struct {
     fn get_type(&self) -> Type {
-        Type::Struct(self.typ.clone())
+        Type::Struct
     }
 
     fn vindex(&mut self, value: &Value) -> Value {
