@@ -22,7 +22,7 @@ pub enum ConcreteType {
     Bool,
     String,
     Struct(HashMap<String, usize>),
-    Function(Vec<usize>, usize),
+    Function(Vec<usize>, usize, Implementation),
     Tuple(Vec<usize>),
     IO,
 }
@@ -147,7 +147,6 @@ impl Instantiator {
                     .map(|p| self.instantiate(p, generics))
                     .collect::<Vec<_>>();
 
-                println!("instantiate generics params: {params:?}");
                 self.instantiate(base.as_ref(), &params)
             }
             TypeExpr::Struct(fields) => {
@@ -174,13 +173,17 @@ impl Instantiator {
                     .collect::<Vec<_>>();
                 self.add(Type::Concrete(ConcreteType::Tuple(elems)))
             }
-            TypeExpr::Function(args, ret, _) => {
+            TypeExpr::Function(args, ret, imp) => {
                 let args = args
                     .iter()
                     .map(|e| self.instantiate(e, generics))
                     .collect::<Vec<_>>();
                 let ret = self.instantiate(ret, generics);
-                self.add(Type::Concrete(ConcreteType::Function(args, ret)))
+                self.add(Type::Concrete(ConcreteType::Function(
+                    args,
+                    ret,
+                    imp.clone(),
+                )))
             }
         };
 
@@ -200,28 +203,26 @@ impl Instantiator {
         self.template_names.get(name)
     }
 
-    pub fn get_type(&self, index: usize) -> &Type {
-        &self.types[index]
+    pub fn get_type(&self, index: usize) -> Option<&Type> {
+        self.types.get(index)
     }
 
-    pub fn compatible(&self, assignee: usize, slot: usize, index: usize) -> bool {
-        let assignee_t = self.get_type(assignee);
+    pub fn compatible(&self, assignee: usize, slot: usize, index: usize) -> Result<bool, ()> {
+        let assignee_t = self.get_type(assignee).ok_or(())?;
         if let Type::EarlyReturn = assignee_t {
-            return true;
+            return Ok(true);
         }
-        let slot_t = self.get_type(slot);
+        let slot_t = self.get_type(slot).ok_or(())?;
 
         match slot_t {
             Type::Concrete(a) => match assignee_t {
-                Type::Concrete(b) => a == b,
-                Type::Union(a, b) => {
-                    self.compatible(*a, slot, index + 1) || self.compatible(*b, slot, index + 1)
-                }
+                Type::Concrete(b) => Ok(a == b),
+                Type::Union(a, b) => Ok(self.compatible(*a, slot, index + 1)?
+                    || self.compatible(*b, slot, index + 1)?),
                 Type::EarlyReturn => panic!("Early return can't be assigned"),
             },
-            Type::Union(a, b) => {
-                self.compatible(assignee, *a, index + 1) || self.compatible(assignee, *b, index + 1)
-            }
+            Type::Union(a, b) => Ok(self.compatible(assignee, *a, index + 1)?
+                || self.compatible(assignee, *b, index + 1)?),
             Type::EarlyReturn => panic!("Early return can't be a slot"),
         }
     }

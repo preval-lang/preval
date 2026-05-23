@@ -2,5 +2,5 @@ dylib "stdlib/print" fn print(io: IO, text: String);
 dylib "stdlib/print" fn input(io: IO): String;
 
 fn main(compile_io: IO, io: IO) {
-    print(io, opt.value);
+
 }

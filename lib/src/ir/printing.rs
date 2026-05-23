@@ -30,9 +30,7 @@ pub fn to_string(blocks: &Vec<Block>, indentation: usize) -> String {
                     }
                     match operation {
                         Operation::Is { value, typ } => out.push_str("{value} is {typ}"),
-                        Operation::LoadFunction(name, generics) => {
-                            out.push_str(&format!("fn {name:?}<{generics:?}>"))
-                        }
+                        Operation::LoadFunction(num) => out.push_str(&format!("fn {}", num)),
                         Operation::InitializeStruct(name, fields) => {
                             out.push_str(&format!("struct {name:?}({fields:?})"));
                         }

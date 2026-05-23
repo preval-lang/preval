@@ -4,36 +4,36 @@ use crate::ir::error::IRError;
 use crate::ir::error::IRErrorInfo;
 
 use crate::ir::{Declaration, Function, Module, Operation, Statement};
+use crate::parser::typ::InfoTypeExpr;
+use crate::typ::TypeExpr;
 
 pub fn variable(
-    name: String,
+    name: InfoTypeExpr,
     idx: usize,
     function: &mut Function,
     block: &mut usize,
-    _module: &mut Module,
+    module: &mut Module,
     store: Option<usize>,
     declarations: &HashMap<String, Declaration>,
     locals: &mut HashMap<String, Declaration>,
     _next_var: &mut usize,
 ) -> Result<(), IRErrorInfo> {
     if let Some(store) = store {
-        match locals.get(&name).or(declarations.get(&name)) {
-            None => {
-                return Err(IRErrorInfo {
-                    idx,
-                    error: IRError::SymbolUndefined(name),
-                });
-            }
-            Some(Declaration::Variable(v)) => {
+        match name.expr {
+            TypeExpr::Name(name) if locals.contains_key(&name) => match locals[&name] {
+                Declaration::Variable(v) => {
+                    function.ir[*block].statements.push(Statement {
+                        store: Some(store),
+                        operation: Operation::LoadLocal { src: v },
+                    });
+                }
+            },
+            _ => {
                 function.ir[*block].statements.push(Statement {
                     store: Some(store),
-                    operation: Operation::LoadLocal { src: *v },
-                });
-            }
-            Some(Declaration::Constant) => {
-                function.ir[*block].statements.push(Statement {
-                    store: Some(store),
-                    operation: Operation::LoadFunction(name, vec![]),
+                    operation: Operation::LoadFunction(
+                        module.instantiator.instantiate(&name, &vec![]),
+                    ),
                 });
             }
         }

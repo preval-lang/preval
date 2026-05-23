@@ -5,11 +5,12 @@ use crate::{
         Declaration, Function, Module, Operation, Statement, error::IRErrorInfo, variable::variable,
     },
     parser::typ::InfoTypeExpr,
+    typ::TypeExpr,
 };
 
 pub fn is(
     name: String,
-    typ: usize,
+    typ: InfoTypeExpr,
     idx: usize,
     function: &mut Function,
     block: &mut usize,
@@ -25,7 +26,10 @@ pub fn is(
     };
 
     variable(
-        name,
+        InfoTypeExpr {
+            expr: TypeExpr::Name(name),
+            idx,
+        },
         idx,
         function,
         block,
@@ -41,7 +45,7 @@ pub fn is(
             store: Some(store),
             operation: Operation::Is {
                 value: checked_var,
-                typ,
+                typ: module.instantiator.instantiate(&typ, &vec![]),
             },
         });
     }

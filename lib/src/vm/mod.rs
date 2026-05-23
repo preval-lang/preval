@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ir::{Block, Callable, Function, Module, Operation, Partial, Statement, Terminal},
-    typ::{Implementation, TypeExpr, type_id},
+    typ::{ConcreteType, Implementation, Type, TypeExpr, type_id},
     value::{Value, structure::Struct},
     vm::operation::{access, call, guard_phi, index, initialize_struct, is, load_local, phi},
 };
@@ -49,18 +49,23 @@ pub fn evaluate(
                 } => call(function, args, store, &mut out, module, vars),
                 Statement {
                     store,
-                    operation: Operation::LoadFunction(name, generics),
+                    operation: Operation::LoadFunction(type_id),
                 } => {
-                    if let Some(tmp) = module.instantiator.get_template(&name).cloned() {
-                        let typ = module.instantiator.instantiate(&tmp, &generics);
+                    if let Some(typ) = module.instantiator.get_type(type_id) {
                         if let Some(store) = store {
                             vars.insert(
                                 store,
-                                Some(match tmp.expr {
-                                    TypeExpr::Function(_, _, imp) => match imp {
-                                        Implementation::Native(imp) => Value::new(imp, typ),
-                                        Implementation::Normal(imp) => Value::new(imp, typ),
-                                    },
+                                Some(match typ {
+                                    Type::Concrete(ConcreteType::Function(_, _, imp)) => {
+                                        match imp {
+                                            Implementation::Native(imp) => {
+                                                Value::new(imp.clone(), type_id)
+                                            }
+                                            Implementation::Normal(imp) => {
+                                                Value::new(imp.clone(), type_id)
+                                            }
+                                        }
+                                    }
                                     _ => todo!(),
                                 }),
                             );

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::parser::typ::{InfoTypeExpr, parse_type};
 use crate::parser::utility::read_punctuated;
 use crate::tokeniser::Literal;
-use crate::typ::Instantiator;
+use crate::typ::{Instantiator, TypeExpr};
 use crate::{
     ir::error::{IRError, IRErrorInfo},
     tokeniser::{InfoToken, Keyword, Token},
@@ -12,9 +12,10 @@ use crate::{
 #[derive(Debug)]
 pub enum Expr {
     Index(Box<InfoExpr>, Box<InfoExpr>),
-    Var(String),
+    Name(InfoTypeExpr),
     Literal(Literal),
     Call(Box<InfoExpr>, Vec<InfoExpr>),
+    Generics(Box<InfoExpr>, Vec<InfoTypeExpr>),
     Return(Option<Box<InfoExpr>>),
     Block(Vec<InfoExpr>, bool),
     Let(String, Box<InfoExpr>),
@@ -23,7 +24,7 @@ pub enum Expr {
         then: Box<InfoExpr>,
         els: Option<Box<InfoExpr>>,
     },
-    InitializeStruct(usize, HashMap<String, InfoExpr>),
+    InitializeStruct(InfoTypeExpr, HashMap<String, InfoExpr>),
     Access(Box<InfoExpr>, String),
     Guard {
         dependency: Box<InfoExpr>,
@@ -31,7 +32,7 @@ pub enum Expr {
     },
     Is {
         name: String,
-        typ: usize,
+        typ: InfoTypeExpr,
     },
 }
 
@@ -118,15 +119,15 @@ pub fn parse_expression(
         return Ok(expr);
     }
 
-    if let Some(expr) = try_parse_name(tokens)? {
-        return Ok(expr);
-    }
-
     if let Some(expr) = try_parse_literal(tokens)? {
         return Ok(expr);
     }
 
     if let Some(expr) = try_parse_boolean(tokens)? {
+        return Ok(expr);
+    }
+
+    if let Some(expr) = try_parse_name(tokens)? {
         return Ok(expr);
     }
 
@@ -222,10 +223,7 @@ fn try_parse_is(
             idx: *is_idx,
             expr: Expr::Is {
                 name: name.clone(),
-                typ: ins.instantiate(
-                    &parse_type(type_expr, todo!("pass generics to expression parser"))?,
-                    &Vec::new(),
-                ),
+                typ: parse_type(type_expr, &vec![])?,
             },
         }));
     }
@@ -299,14 +297,10 @@ fn try_parse_struct(
             }
         }
 
-        println!("type tokens: {type_tokens:?}");
-
         let type_expr = parse_type(type_tokens, &vec![])?;
 
-        println!("type expr: {type_expr:?}");
-
         Ok(Some(InfoExpr {
-            expr: Expr::InitializeStruct(ins.instantiate(&type_expr.clone(), &vec![]), fields),
+            expr: Expr::InitializeStruct(type_expr, fields),
             idx: type_tokens[0].idx,
         }))
     } else {
@@ -465,19 +459,10 @@ fn try_parse_block(
 }
 
 fn try_parse_name(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError> {
-    if let [
-        InfoToken {
-            token: Token::Name(name),
-            idx,
-        },
-    ] = tokens
-    {
-        return Ok(Some(InfoExpr {
-            expr: Expr::Var(name.clone()),
-            idx: *idx,
-        }));
-    }
-    Ok(None)
+    Ok(Some(InfoExpr {
+        idx: tokens[0].idx,
+        expr: Expr::Name(parse_type(tokens, &vec![])?),
+    }))
 }
 
 fn try_parse_literal(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError> {

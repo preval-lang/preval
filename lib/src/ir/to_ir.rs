@@ -2,8 +2,13 @@ use std::collections::HashMap;
 
 use crate::{
     ir::{
-        Declaration, Function, Module, access::access, error::IRErrorInfo, guard::guard,
-        initialize_struct::initialize_struct, is::is,
+        Declaration, Function, Module,
+        access::access,
+        error::IRErrorInfo,
+        generics::{self, generics},
+        guard::guard,
+        initialize_struct::initialize_struct,
+        is::is,
     },
     parser::expression::{Expr, InfoExpr},
 };
@@ -25,6 +30,18 @@ pub fn to_ir(
     tail: bool,
 ) -> Result<(), IRErrorInfo> {
     match expr.expr {
+        Expr::Generics(base, params) => generics(
+            base,
+            params,
+            function,
+            block,
+            module,
+            store,
+            declarations,
+            locals,
+            next_var,
+            false,
+        ),
         Expr::Literal(lit) => literal(lit, function, block, store),
         Expr::Access(left, right) => access(
             left,
@@ -94,7 +111,7 @@ pub fn to_ir(
             next_var,
             tail,
         ),
-        Expr::Var(name) => variable(
+        Expr::Name(name) => variable(
             name,
             expr.idx,
             function,

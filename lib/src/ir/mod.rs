@@ -3,6 +3,7 @@ mod block;
 mod call;
 mod conditional;
 pub mod error;
+mod generics;
 mod guard;
 mod index;
 mod initialize_struct;
@@ -102,7 +103,7 @@ pub enum Operation {
     Index(usize, usize),
     Access(usize, String),
     InitializeStruct(usize, HashMap<String, usize>),
-    LoadFunction(String, Vec<usize>),
+    LoadFunction(usize),
     Is {
         value: usize,
         typ: usize,
@@ -118,7 +119,6 @@ pub enum Callable {
 #[derive(Debug)]
 pub enum Declaration {
     Variable(usize),
-    Constant,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
