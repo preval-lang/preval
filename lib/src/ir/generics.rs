@@ -20,6 +20,7 @@ pub fn generics(
     next_var: &mut usize,
     tail: bool,
 ) -> Result<(), IRErrorInfo> {
+    todo!("remove this its unused");
     to_ir(
         function,
         block,
