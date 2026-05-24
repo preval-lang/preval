@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ir::{Block, Callable, Function, Module, Operation, Partial, Statement, Terminal},
-    typ::{ConcreteType, Implementation, Type, TypeExpr, type_id},
+    typ::{ConcreteType, Implementation, Type},
     value::{Value, structure::Struct},
     vm::operation::{access, call, guard_phi, index, initialize_struct, is, load_local, phi},
 };
@@ -15,7 +15,7 @@ use crate::{
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum RunResult {
     Concrete(Value),
-    Partial(Vec<Block>, usize),
+    Partial(Partial),
     Residualise, // Native functions only! Because all preval functions can be partially evaluated even if there are no known arguments
 }
 
@@ -24,6 +24,7 @@ pub fn evaluate(
     mut blocks: Vec<Block>,
     vars: &mut HashMap<usize, Option<Value>>,
     start_block: usize,
+    mut generics: Vec<usize>,
 ) -> RunResult {
     let mut last_block_num = start_block;
     let mut block_num = start_block;
@@ -38,7 +39,7 @@ pub fn evaluate(
                 Statement {
                     store,
                     operation: Operation::Is { value, typ },
-                } => is(value, typ, module, vars, &mut out, store),
+                } => is(value, typ, module, vars, &mut out, store, &generics),
                 Statement {
                     store,
                     operation: Operation::GuardPhi { block, var },
@@ -49,21 +50,28 @@ pub fn evaluate(
                 } => call(function, args, store, &mut out, module, vars),
                 Statement {
                     store,
-                    operation: Operation::LoadFunction(type_id),
+                    operation: Operation::LoadFunction(type_expr),
                 } => {
-                    if let Some(typ) = module.instantiator.get_type(type_id) {
+                    let type_id = module.instantiator.instantiate(&type_expr, &generics);
+                    let typ = module.instantiator.get_type(type_id);
+                    if let Some(typ) = typ {
                         if let Some(store) = store {
                             vars.insert(
                                 store,
                                 Some(match typ {
-                                    Type::Concrete(ConcreteType::Function(_, _, imp)) => {
+                                    Type::Concrete(ConcreteType::Function(_, _, imp, generics)) => {
                                         match imp {
                                             Implementation::Native(imp) => {
                                                 Value::new(imp.clone(), type_id)
                                             }
-                                            Implementation::Normal(imp) => {
-                                                Value::new(imp.clone(), type_id)
-                                            }
+                                            Implementation::Normal(imp) => Value::new(
+                                                Function {
+                                                    ir: imp.clone(),
+                                                    exported: false,
+                                                    generics: generics.clone(),
+                                                },
+                                                type_id,
+                                            ),
                                         }
                                     }
                                     _ => todo!(),
@@ -102,7 +110,7 @@ pub fn evaluate(
                     store,
                     operation: Operation::InitializeStruct(name, fields),
                 } => {
-                    initialize_struct(name, fields, store, module, &mut out, vars);
+                    initialize_struct(name, fields, store, module, &mut out, vars, &generics);
                 }
                 Statement {
                     store,
@@ -174,14 +182,18 @@ pub fn evaluate(
             },
             Terminal::TailCall { function, args } => {
                 let mut callable_var = None;
-                let ir: Option<(usize, Vec<Block>)> = match function {
+                let ir: Option<Partial> = match function {
                     Callable::Var(var) => {
                         callable_var = Some(var);
                         if let Some(value) = vars.get(&var) {
                             if let Some(value) = value {
                                 if let Some(result) = value.data.as_any().downcast_ref::<Function>()
                                 {
-                                    Some((0, result.ir.clone()))
+                                    Some(Partial {
+                                        blocks: result.ir.clone(),
+                                        start_block: 0,
+                                        generics: result.generics.clone(),
+                                    })
                                 } else {
                                     match value
                                         .clone()
@@ -198,14 +210,16 @@ pub fn evaluate(
                                                     statements: out,
                                                     terminal: Terminal::Return(90000),
                                                 };
-                                                return RunResult::Partial(blocks, start_block);
+                                                return RunResult::Partial(Partial {
+                                                    blocks,
+                                                    start_block,
+                                                    generics: vec![],
+                                                });
                                             } else {
                                                 return RunResult::Concrete(return_value);
                                             }
                                         }
-                                        RunResult::Partial(blocks, start_block) => {
-                                            Some((start_block, blocks.clone()))
-                                        }
+                                        RunResult::Partial(p) => Some(p),
                                         RunResult::Residualise => None,
                                     }
                                 }
@@ -216,11 +230,9 @@ pub fn evaluate(
                             panic!("Undefined variable in tail call")
                         }
                     }
-                    Callable::Partial(partial) => {
-                        Some((partial.start_block, partial.blocks.clone()))
-                    }
+                    Callable::Partial(partial) => Some(partial),
                 };
-                let (new_start_block, new_blocks) = if let Some(ir) = ir {
+                let new = if let Some(ir) = ir {
                     ir
                 } else {
                     blocks[block_num] = Block {
@@ -231,7 +243,11 @@ pub fn evaluate(
                         },
                     };
 
-                    return RunResult::Partial(blocks, start_block);
+                    return RunResult::Partial(Partial {
+                        blocks,
+                        start_block,
+                        generics: generics.to_vec(),
+                    });
                 };
 
                 let mut new_vars = HashMap::new();
@@ -243,7 +259,7 @@ pub fn evaluate(
                 *vars = new_vars;
 
                 if residualise {
-                    match evaluate(module, new_blocks, vars, new_start_block) {
+                    match evaluate(module, new.blocks, vars, new.start_block, new.generics) {
                         RunResult::Concrete(val) => {
                             out.push(Statement {
                                 store: {
@@ -256,31 +272,41 @@ pub fn evaluate(
                                 statements: out,
                                 terminal: Terminal::Return(90000),
                             };
-                            return RunResult::Partial(blocks, start_block);
+                            return RunResult::Partial(Partial {
+                                blocks,
+                                start_block,
+                                generics: generics.to_vec(),
+                            });
                         }
-                        RunResult::Partial(new_blocks, new_start_block) => {
+                        RunResult::Partial(p) => {
                             blocks[block_num] = Block {
                                 statements: out,
                                 terminal: Terminal::TailCall {
-                                    function: Callable::Partial(Partial {
-                                        blocks: new_blocks,
-                                        start_block: new_start_block,
-                                    }),
+                                    function: Callable::Partial(p),
                                     args,
                                 },
                             };
                         }
                         RunResult::Residualise => {
                             blocks[block_num].statements = out;
-                            return RunResult::Partial(blocks, start_block);
+                            return RunResult::Partial(Partial {
+                                blocks,
+                                start_block,
+                                generics: generics.to_vec(),
+                            });
                         }
                     }
 
-                    return RunResult::Partial(blocks, start_block);
+                    return RunResult::Partial(Partial {
+                        blocks,
+                        start_block,
+                        generics: generics.to_vec(),
+                    });
                 } else {
-                    blocks = new_blocks;
+                    blocks = new.blocks;
                     last_block_num = block_num;
-                    block_num = new_start_block;
+                    block_num = new.start_block;
+                    generics = new.generics;
                 }
 
                 continue;
@@ -305,11 +331,15 @@ pub fn evaluate(
                         statements: out,
                         terminal: Terminal::Branch {
                             cond: cond,
-                            then: evaluate(module, blocks.clone(), vars, then),
-                            els: evaluate(module, blocks.clone(), vars, els),
+                            then: evaluate(module, blocks.clone(), vars, then, generics.clone()),
+                            els: evaluate(module, blocks.clone(), vars, els, generics.clone()),
                         },
                     };
-                    return RunResult::Partial(blocks, start_block);
+                    return RunResult::Partial(Partial {
+                        blocks,
+                        start_block,
+                        generics,
+                    });
                 }
                 None => panic!("Undefined variable in condition"),
             },
@@ -334,7 +364,11 @@ pub fn evaluate(
                             els: els.clone(),
                         },
                     };
-                    return RunResult::Partial(blocks, start_block);
+                    return RunResult::Partial(Partial {
+                        blocks,
+                        start_block,
+                        generics: generics.to_vec(),
+                    });
                 }
                 None => panic!("Undefined variable in condition"),
             },
@@ -357,12 +391,20 @@ pub fn evaluate(
                             return RunResult::Concrete(var.clone());
                         }
                         Some(None) => {
-                            return RunResult::Partial(blocks, start_block);
+                            return RunResult::Partial(Partial {
+                                blocks,
+                                start_block,
+                                generics: generics.to_vec(),
+                            });
                         }
                         None => panic!("Undefined variable in return"),
                     }
                 }
-                return RunResult::Partial(blocks, start_block);
+                return RunResult::Partial(Partial {
+                    blocks,
+                    start_block,
+                    generics: generics.to_vec(),
+                });
             }
         }
     }

@@ -11,7 +11,7 @@ pub fn guard(
     dependency: Box<InfoExpr>,
     body: Box<InfoExpr>,
     _idx: usize,
-    function: &mut Function,
+    function: &mut Vec<Block>,
     block: &mut usize,
     module: &mut Module,
     store: Option<usize>,
@@ -36,18 +36,18 @@ pub fn guard(
         false,
     )?;
 
-    let body_block = function.ir.len();
+    let body_block = function.len();
     let mut body_block_mut = body_block;
     let continuation_block = body_block + 1;
 
-    function.ir.push(Block {
+    function.push(Block {
         statements: Vec::new(),
         terminal: Terminal::Jump(continuation_block),
     });
 
-    let old_terminal = function.ir[*block].terminal.clone();
+    let old_terminal = function[*block].terminal.clone();
 
-    function.ir.push(Block {
+    function.push(Block {
         statements: Vec::new(),
         terminal: old_terminal,
     });
@@ -64,7 +64,7 @@ pub fn guard(
         tail,
     )?;
 
-    function.ir[*block].terminal = Terminal::Guard {
+    function[*block].terminal = Terminal::Guard {
         dependency: dep_var,
         body: body_block,
         continuation: continuation_block,
@@ -72,7 +72,7 @@ pub fn guard(
     *block = continuation_block;
 
     if let Some(store) = store {
-        function.ir[*block].statements.push(Statement {
+        function[*block].statements.push(Statement {
             store: Some(store),
             operation: Operation::GuardPhi {
                 block: body_block,

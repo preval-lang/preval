@@ -1,3 +1,4 @@
+use crate::ir::Block;
 use crate::ir::Declaration;
 use crate::ir::Function;
 use crate::ir::Module;
@@ -14,7 +15,7 @@ use std::collections::HashMap;
 
 pub fn returns(
     value_expr: Option<Box<InfoExpr>>,
-    function: &mut Function,
+    function: &mut Vec<Block>,
     block: &mut usize,
     module: &mut Module,
     _store: Option<usize>,
@@ -26,7 +27,7 @@ pub fn returns(
         *next_var += 1;
         *next_var
     };
-    function.ir[*block].terminal = Terminal::Return(if let Some(value_expr) = value_expr {
+    function[*block].terminal = Terminal::Return(if let Some(value_expr) = value_expr {
         to_ir(
             function,
             block,
@@ -40,7 +41,7 @@ pub fn returns(
         )?;
         return_var
     } else {
-        function.ir[*block].statements.push(Statement {
+        function[*block].statements.push(Statement {
             store: Some(return_var),
             operation: Operation::LoadLiteral(Value::new(EmptyTuple, type_id::empty_tuple)),
         });

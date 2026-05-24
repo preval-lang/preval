@@ -42,14 +42,11 @@ pub fn call(
                 vars.insert(store, Some(value));
             }
         }
-        RunResult::Partial(blocks, start_block) => {
+        RunResult::Partial(p) => {
             out.push(Statement {
                 store,
                 operation: Operation::Call {
-                    function: Callable::Partial(Partial {
-                        blocks,
-                        start_block,
-                    }),
+                    function: Callable::Partial(p),
                     args,
                 },
             });

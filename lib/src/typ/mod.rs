@@ -5,7 +5,7 @@ pub use error::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ir::Function, parser::typ::InfoTypeExpr, passes::type_check_expr::Scope,
+    ir::Block, parser::typ::InfoTypeExpr, passes::type_check_expr::Scope,
     value::native::NativeFunction,
 };
 
@@ -22,7 +22,7 @@ pub enum ConcreteType {
     Bool,
     String,
     Struct(HashMap<String, usize>),
-    Function(Vec<usize>, usize, Implementation),
+    Function(Vec<usize>, usize, Implementation, Vec<usize>),
     Tuple(Vec<usize>),
     IO,
 }
@@ -55,7 +55,7 @@ pub enum TypeExpr {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Implementation {
     Native(NativeFunction),
-    Normal(Function),
+    Normal(Vec<Block>),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -106,23 +106,31 @@ type_ids! {
 
 impl Instantiator {
     pub fn new() -> Self {
-        let mut template_names = HashMap::new();
+        let template_names = HashMap::new();
         let types = Vec::new();
 
+        let mut this = Self {
+            types,
+            template_names,
+        };
+
         for (name, typ) in TYPE_NAMES.iter().zip(TYPES) {
-            template_names.insert(
+            this.add_template(
                 name.to_string(),
                 InfoTypeExpr {
                     expr: typ.clone(),
                     idx: 0,
                 },
             );
+            this.instantiate(
+                &InfoTypeExpr {
+                    expr: typ.clone(),
+                    idx: 0,
+                },
+                &vec![],
+            );
         }
-
-        Self {
-            types,
-            template_names,
-        }
+        this
     }
 
     pub fn instantiate(&mut self, expr: &InfoTypeExpr, generics: &[usize]) -> usize {
@@ -183,6 +191,7 @@ impl Instantiator {
                     args,
                     ret,
                     imp.clone(),
+                    generics.to_vec(),
                 )))
             }
         };

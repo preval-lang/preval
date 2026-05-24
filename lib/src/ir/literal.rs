@@ -1,3 +1,4 @@
+use crate::ir::Block;
 use crate::ir::Function;
 use crate::ir::Operation;
 use crate::ir::Statement;
@@ -8,12 +9,12 @@ use crate::value::Value;
 
 pub fn literal(
     lit: Literal,
-    function: &mut Function,
+    function: &mut Vec<Block>,
     block: &mut usize,
     store: Option<usize>,
 ) -> Result<(), IRErrorInfo> {
     if let Some(store) = store {
-        function.ir[*block].statements.push(Statement {
+        function[*block].statements.push(Statement {
             store: Some(store),
             operation: Operation::LoadLiteral(match lit {
                 // TODO: Add method on Literal for this

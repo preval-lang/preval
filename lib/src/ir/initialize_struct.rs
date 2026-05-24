@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 
 use crate::{
-    ir::{Declaration, Function, Module, Operation, Statement, error::IRErrorInfo, to_ir},
+    ir::{Block, Declaration, Function, Module, Operation, Statement, error::IRErrorInfo, to_ir},
     parser::{expression::InfoExpr, typ::InfoTypeExpr},
 };
 
 pub fn initialize_struct(
     typ: InfoTypeExpr,
     fields: HashMap<String, InfoExpr>,
-    function: &mut Function,
+    function: &mut Vec<Block>,
     block: &mut usize,
     module: &mut Module,
     store: Option<usize>,
@@ -37,12 +37,9 @@ pub fn initialize_struct(
                 false,
             )?;
         }
-        function.ir[*block].statements.push(Statement {
+        function[*block].statements.push(Statement {
             store: Some(store),
-            operation: Operation::InitializeStruct(
-                module.instantiator.instantiate(&typ, &vec![]),
-                field_vars,
-            ),
+            operation: Operation::InitializeStruct(typ, field_vars),
         });
     }
     Ok(())

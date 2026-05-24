@@ -249,18 +249,30 @@ pub fn remove_unused(
                         cond: *cond,
                         then: match then {
                             RunResult::Concrete(v) => RunResult::Concrete(v.clone()),
-                            RunResult::Partial(blocks, start_block) => RunResult::Partial(
-                                remove_unused(&module, blocks, *start_block, poison_vars.clone()),
-                                *start_block,
-                            ),
+                            RunResult::Partial(p) => RunResult::Partial(Partial {
+                                blocks: remove_unused(
+                                    &module,
+                                    blocks,
+                                    p.start_block,
+                                    poison_vars.clone(),
+                                ),
+                                start_block: p.start_block,
+                                generics: p.generics.clone(),
+                            }),
                             RunResult::Residualise => RunResult::Residualise,
                         },
                         els: match els {
                             RunResult::Concrete(v) => RunResult::Concrete(v.clone()),
-                            RunResult::Partial(blocks, start_block) => RunResult::Partial(
-                                remove_unused(&module, blocks, *start_block, poison_vars.clone()),
-                                *start_block,
-                            ),
+                            RunResult::Partial(p) => RunResult::Partial(Partial {
+                                blocks: remove_unused(
+                                    &module,
+                                    blocks,
+                                    p.start_block,
+                                    poison_vars.clone(),
+                                ),
+                                start_block: p.start_block,
+                                generics: p.generics.clone(),
+                            }),
                             RunResult::Residualise => RunResult::Residualise,
                         },
                     },
@@ -304,6 +316,7 @@ pub fn remove_unused(
                                     Callable::Partial(Partial {
                                         blocks,
                                         start_block,
+                                        generics,
                                     }) => Callable::Partial(Partial {
                                         start_block: *start_block,
                                         blocks: remove_unused(
@@ -312,6 +325,7 @@ pub fn remove_unused(
                                             *start_block,
                                             poisoned_args,
                                         ),
+                                        generics: generics.clone(),
                                     }),
                                 },
                                 args: args.clone(),

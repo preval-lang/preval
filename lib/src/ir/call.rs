@@ -1,6 +1,6 @@
+use crate::ir::Block;
 use crate::ir::Callable;
 use crate::ir::Declaration;
-use crate::ir::Function;
 use crate::ir::Module;
 use crate::ir::Operation;
 use crate::ir::Statement;
@@ -14,7 +14,7 @@ use std::collections::HashMap;
 pub fn call(
     callee: Box<InfoExpr>,
     args: Vec<InfoExpr>,
-    function: &mut Function,
+    function: &mut Vec<Block>,
     block: &mut usize,
     module: &mut Module,
     store: Option<usize>,
@@ -62,12 +62,12 @@ pub fn call(
     )?;
 
     if tail {
-        function.ir[*block].terminal = Terminal::TailCall {
+        function[*block].terminal = Terminal::TailCall {
             function: Callable::Var(fn_var),
             args: arg_indexes,
         }
     } else {
-        function.ir[*block].statements.push(Statement {
+        function[*block].statements.push(Statement {
             store,
             operation: Operation::Call {
                 function: Callable::Var(fn_var),

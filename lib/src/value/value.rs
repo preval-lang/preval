@@ -10,7 +10,7 @@ use crate::{
 };
 
 #[repr(C)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Value {
     pub deserializer: TypeDeserializer,
     pub data: Box<dyn ValueData>,
@@ -27,11 +27,11 @@ impl Value {
     }
 }
 
-impl Debug for Value {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Debug::fmt(&self.data, f)
-    }
-}
+// impl Debug for Value {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         Debug::fmt(&self.data, f)
+//     }
+// }
 
 pub trait ValueData: Debug {
     fn vclone(&self) -> Box<dyn ValueData>;

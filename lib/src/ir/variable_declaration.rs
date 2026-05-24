@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::ir::Block;
 use crate::ir::Declaration;
 use crate::ir::Function;
 use crate::ir::Module;
@@ -12,7 +13,7 @@ use crate::parser::expression::InfoExpr;
 pub fn variable_declaration(
     name: String,
     value_expr: Box<InfoExpr>,
-    function: &mut Function,
+    function: &mut Vec<Block>,
     block: &mut usize,
     module: &mut Module,
     store: Option<usize>,
@@ -37,7 +38,7 @@ pub fn variable_declaration(
     )?;
     locals.insert(name, Declaration::Variable(new_var));
     if let Some(store) = store {
-        function.ir[*block].statements.push(Statement {
+        function[*block].statements.push(Statement {
             store: Some(store),
             operation: Operation::LoadLocal { src: new_var },
         });

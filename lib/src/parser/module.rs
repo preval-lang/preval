@@ -31,17 +31,15 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                 let ((name, name_idx), generics, args, args_types, return_type) =
                     expect_function_signature(tokens, &mut module.instantiator, &mut i)?;
 
-                let body = expect_block_or_expr(tokens, &mut i, &mut module.instantiator)?;
+                let body =
+                    expect_block_or_expr(tokens, &mut i, &mut module.instantiator, &generics)?;
 
                 let mut last_var = args.len();
 
-                let mut function = Function {
-                    ir: vec![Block {
-                        terminal: Terminal::Return(last_var),
-                        statements: Vec::new(),
-                    }],
-                    exported: true,
-                };
+                let mut ir = vec![Block {
+                    terminal: Terminal::Return(last_var),
+                    statements: Vec::new(),
+                }];
 
                 let global_scope = module.instantiator.global_scope();
                 let mut scope = global_scope.sub();
@@ -53,7 +51,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                 }
 
                 to_ir(
-                    &mut function,
+                    &mut ir,
                     &mut 0,
                     &mut module,
                     body,
@@ -64,13 +62,13 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                     true,
                 )?;
 
-                let fn_typ = module.instantiator.add_template(
+                module.instantiator.add_template(
                     name,
                     InfoTypeExpr {
                         expr: TypeExpr::Function(
                             args_types,
                             Box::new(return_type),
-                            Implementation::Normal(function),
+                            Implementation::Normal(ir),
                         ),
                         idx: name_idx,
                     },
@@ -354,6 +352,7 @@ pub fn expect_block_or_expr(
     tokens: &[InfoToken],
     i: &mut usize,
     ins: &mut Instantiator,
+    generics: &[String],
 ) -> Result<InfoExpr, InfoParseError> {
     if let Some(InfoToken {
         token: Token::Braces(_),
@@ -361,7 +360,7 @@ pub fn expect_block_or_expr(
     }) = tokens.get(*i)
     {
         *i += 1;
-        return parse_expression(&tokens[*i - 1..*i], ins);
+        return parse_expression(&tokens[*i - 1..*i], ins, generics);
     } else {
         let mut out = Vec::new();
         loop {
@@ -376,6 +375,6 @@ pub fn expect_block_or_expr(
 
             *i += 1;
         }
-        return parse_expression(&out, ins);
+        return parse_expression(&out, ins, generics);
     }
 }

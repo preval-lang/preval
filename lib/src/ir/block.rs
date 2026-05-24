@@ -1,3 +1,4 @@
+use crate::ir::Block;
 use crate::ir::Declaration;
 use crate::ir::Function;
 use crate::ir::Module;
@@ -14,7 +15,7 @@ use std::collections::HashMap;
 pub fn compile_block(
     statements: Vec<InfoExpr>,
     returns: bool,
-    function: &mut Function,
+    function: &mut Vec<Block>,
     block: &mut usize,
     module: &mut Module,
     store: Option<usize>,
@@ -55,7 +56,7 @@ pub fn compile_block(
     }
 
     if (len == 0 || !returns) && store.is_some() {
-        function.ir[*block].statements.push(Statement {
+        function[*block].statements.push(Statement {
             store,
             operation: Operation::LoadLiteral(Value::new(EmptyTuple {}, type_id::empty_tuple)),
         });

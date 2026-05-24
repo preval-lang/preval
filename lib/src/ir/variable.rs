@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::ir::Block;
 use crate::ir::error::IRError;
 use crate::ir::error::IRErrorInfo;
 
@@ -10,7 +11,7 @@ use crate::typ::TypeExpr;
 pub fn variable(
     name: InfoTypeExpr,
     idx: usize,
-    function: &mut Function,
+    function: &mut Vec<Block>,
     block: &mut usize,
     module: &mut Module,
     store: Option<usize>,
@@ -22,18 +23,16 @@ pub fn variable(
         match name.expr {
             TypeExpr::Name(name) if locals.contains_key(&name) => match locals[&name] {
                 Declaration::Variable(v) => {
-                    function.ir[*block].statements.push(Statement {
+                    function[*block].statements.push(Statement {
                         store: Some(store),
                         operation: Operation::LoadLocal { src: v },
                     });
                 }
             },
             _ => {
-                function.ir[*block].statements.push(Statement {
+                function[*block].statements.push(Statement {
                     store: Some(store),
-                    operation: Operation::LoadFunction(
-                        module.instantiator.instantiate(&name, &vec![]),
-                    ),
+                    operation: Operation::LoadFunction(name),
                 });
             }
         }

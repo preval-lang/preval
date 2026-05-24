@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::ir::error::IRErrorInfo;
-use crate::ir::to_ir;
+use crate::ir::{Block, to_ir};
 
 use crate::{
     ir::{Declaration, Function, Module, Operation, Statement},
@@ -12,7 +12,7 @@ pub fn access(
     left: Box<InfoExpr>,
     right: String,
     _idx: usize,
-    function: &mut Function,
+    function: &mut Vec<Block>,
     block: &mut usize,
     module: &mut Module,
     store: Option<usize>,
@@ -36,7 +36,7 @@ pub fn access(
         false,
     )?;
 
-    function.ir[*block].statements.push(Statement {
+    function[*block].statements.push(Statement {
         store,
         operation: Operation::Access(left_var, right),
     });

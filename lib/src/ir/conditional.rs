@@ -11,7 +11,7 @@ pub fn conditional(
     then: Box<InfoExpr>,
     els: Option<Box<InfoExpr>>,
     idx: usize,
-    function: &mut Function,
+    function: &mut Vec<Block>,
     block: &mut usize,
     module: &mut Module,
     store: Option<usize>,
@@ -36,15 +36,15 @@ pub fn conditional(
         false,
     )?;
 
-    let then_block_n = function.ir.len();
-    let mut then_block_n_mut = function.ir.len();
+    let then_block_n = function.len();
+    let mut then_block_n_mut = function.len();
     let then_block_var = {
         *next_var += 1;
         *next_var
     };
-    function.ir.push(Block {
+    function.push(Block {
         statements: Vec::new(),
-        terminal: Terminal::Jump(function.ir.len() + 1 + if els.is_some() { 1 } else { 0 }),
+        terminal: Terminal::Jump(function.len() + 1 + if els.is_some() { 1 } else { 0 }),
     });
     to_ir(
         function,
@@ -59,15 +59,15 @@ pub fn conditional(
     )?;
 
     let else_block = if let Some(els) = els {
-        let else_block_n = function.ir.len();
-        let mut else_block_n_mut = function.ir.len();
+        let else_block_n = function.len();
+        let mut else_block_n_mut = function.len();
         let else_block_var = {
             *next_var += 1;
             *next_var
         };
-        function.ir.push(Block {
+        function.push(Block {
             statements: Vec::new(),
-            terminal: Terminal::Jump(function.ir.len() + 1),
+            terminal: Terminal::Jump(function.len() + 1),
         });
         to_ir(
             function,
@@ -85,16 +85,16 @@ pub fn conditional(
         None
     };
 
-    let old_terminal = function.ir[*block].terminal.clone();
+    let old_terminal = function[*block].terminal.clone();
 
-    function.ir[*block].terminal = Terminal::CondJump {
+    function[*block].terminal = Terminal::CondJump {
         cond: cond_var,
         then: then_block_n,
-        els: else_block.map(|f| f.0).unwrap_or(function.ir.len()),
+        els: else_block.map(|f| f.0).unwrap_or(function.len()),
     };
-    *block = function.ir.len();
+    *block = function.len();
 
-    function.ir.push(Block {
+    function.push(Block {
         statements: Vec::new(),
         terminal: old_terminal,
     });
@@ -104,7 +104,7 @@ pub fn conditional(
             let mut block_to_var = HashMap::new();
             block_to_var.insert(else_block.0, else_block.1);
             block_to_var.insert(then_block_n, then_block_var);
-            function.ir[*block].statements.push(Statement {
+            function[*block].statements.push(Statement {
                 store: Some(store),
                 operation: Operation::Phi { block_to_var },
             });

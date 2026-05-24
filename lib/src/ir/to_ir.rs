@@ -2,13 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     ir::{
-        Declaration, Function, Module,
-        access::access,
-        error::IRErrorInfo,
-        generics::{self, generics},
-        guard::guard,
-        initialize_struct::initialize_struct,
-        is::is,
+        Block, Declaration, Module, access::access, error::IRErrorInfo, generics::generics,
+        guard::guard, initialize_struct::initialize_struct, is::is,
     },
     parser::expression::{Expr, InfoExpr},
 };
@@ -19,7 +14,7 @@ use crate::ir::{
 };
 
 pub fn to_ir(
-    function: &mut Function,
+    ir: &mut Vec<Block>,
     block: &mut usize,
     module: &mut Module,
     expr: InfoExpr,
@@ -33,7 +28,7 @@ pub fn to_ir(
         Expr::Generics(base, params) => generics(
             base,
             params,
-            function,
+            ir,
             block,
             module,
             store,
@@ -42,12 +37,12 @@ pub fn to_ir(
             next_var,
             false,
         ),
-        Expr::Literal(lit) => literal(lit, function, block, store),
+        Expr::Literal(lit) => literal(lit, ir, block, store),
         Expr::Access(left, right) => access(
             left,
             right,
             expr.idx,
-            function,
+            ir,
             block,
             module,
             store,
@@ -58,7 +53,7 @@ pub fn to_ir(
         Expr::Let(name, value_expr) => variable_declaration(
             name,
             value_expr,
-            function,
+            ir,
             block,
             module,
             store,
@@ -69,7 +64,7 @@ pub fn to_ir(
         Expr::Block(statements, returns) => compile_block(
             statements,
             returns,
-            function,
+            ir,
             block,
             module,
             store,
@@ -81,7 +76,7 @@ pub fn to_ir(
         Expr::InitializeStruct(name, fields) => initialize_struct(
             name,
             fields,
-            function,
+            ir,
             block,
             module,
             store,
@@ -91,7 +86,7 @@ pub fn to_ir(
         ),
         Expr::Return(value_expr) => returns(
             value_expr,
-            function,
+            ir,
             block,
             module,
             store,
@@ -102,7 +97,7 @@ pub fn to_ir(
         Expr::Call(callee, args) => call(
             callee,
             args,
-            function,
+            ir,
             block,
             module,
             store,
@@ -114,7 +109,7 @@ pub fn to_ir(
         Expr::Name(name) => variable(
             name,
             expr.idx,
-            function,
+            ir,
             block,
             module,
             store,
@@ -127,7 +122,7 @@ pub fn to_ir(
             then,
             els,
             expr.idx,
-            function,
+            ir,
             block,
             module,
             store,
@@ -140,7 +135,7 @@ pub fn to_ir(
             dependency,
             body,
             expr.idx,
-            function,
+            ir,
             block,
             module,
             store,
@@ -153,7 +148,7 @@ pub fn to_ir(
             left,
             right,
             expr.idx,
-            function,
+            ir,
             block,
             module,
             store,
@@ -165,7 +160,7 @@ pub fn to_ir(
             name,
             typ,
             expr.idx,
-            function,
+            ir,
             block,
             module,
             store,

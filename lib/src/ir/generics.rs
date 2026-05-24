@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::ir::error::IRErrorInfo;
-use crate::ir::to_ir;
+use crate::ir::{Block, to_ir};
 
 use crate::parser::typ::InfoTypeExpr;
 use crate::{
@@ -11,7 +11,7 @@ use crate::{
 pub fn generics(
     base: Box<InfoExpr>,
     _: Vec<InfoTypeExpr>,
-    function: &mut Function,
+    function: &mut Vec<Block>,
     block: &mut usize,
     module: &mut Module,
     store: Option<usize>,
@@ -21,15 +21,4 @@ pub fn generics(
     tail: bool,
 ) -> Result<(), IRErrorInfo> {
     todo!("remove this its unused");
-    to_ir(
-        function,
-        block,
-        module,
-        *base,
-        store,
-        declarations,
-        locals,
-        next_var,
-        tail,
-    )
 }

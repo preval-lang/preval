@@ -1,7 +1,7 @@
 use std::{collections::HashMap, env, fs};
 
 use preval_lib::{
-    ir::Module,
+    ir::{Module, Partial},
     parser::{module::parse_module, typ::InfoTypeExpr},
     passes::remove_unused::{Usage, remove_unused},
     tokeniser::{get_line_and_column, tokenise},
@@ -49,8 +49,8 @@ fn main() {
                     }) = main
                     {
                         let cio = Some(Value::new(IO, type_id::IO));
-                        let args = vec![&cio, &None];
-                        f.vcall(&mut module, args)
+                        let mut args = HashMap::from([(0, cio), (1, None)]);
+                        evaluate(&mut module, f, &mut args, 0, vec![])
                     } else {
                         panic!("No main function")
                     };
@@ -61,10 +61,11 @@ fn main() {
                     let optimized = match eval {
                         RunResult::Residualise => unreachable!(),
                         RunResult::Concrete(c) => RunResult::Concrete(c),
-                        RunResult::Partial(blocks, start_block) => RunResult::Partial(
-                            remove_unused(&module, &blocks, start_block, poisoned_vars),
-                            start_block,
-                        ),
+                        RunResult::Partial(p) => RunResult::Partial(Partial {
+                            blocks: remove_unused(&module, &p.blocks, p.start_block, poisoned_vars),
+                            start_block: p.start_block,
+                            generics: p.generics,
+                        }),
                     };
 
                     fs::write("eval.ir", format!("{optimized:#?}")).unwrap();
@@ -104,9 +105,9 @@ fn run_entire_program(
 ) -> bool {
     match eval {
         RunResult::Concrete(_) => false,
-        RunResult::Partial(blocks, next_block) => {
+        RunResult::Partial(p) => {
             // vars.insert(1, Some(Box::new(IO {})));
-            let e = evaluate(module, blocks, vars, next_block);
+            let e = evaluate(module, p.blocks, vars, p.start_block, p.generics);
             run_entire_program(module, e, vars)
         }
         RunResult::Residualise => panic!(),

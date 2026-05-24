@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     ir::{
-        Declaration, Function, Module, Operation, Statement, error::IRErrorInfo, variable::variable,
+        Block, Declaration, Function, Module, Operation, Statement, error::IRErrorInfo,
+        variable::variable,
     },
     parser::typ::InfoTypeExpr,
     typ::TypeExpr,
@@ -12,7 +13,7 @@ pub fn is(
     name: String,
     typ: InfoTypeExpr,
     idx: usize,
-    function: &mut Function,
+    function: &mut Vec<Block>,
     block: &mut usize,
     module: &mut Module,
     store: Option<usize>,
@@ -41,11 +42,11 @@ pub fn is(
     )?;
 
     if let Some(store) = store {
-        function.ir[*block].statements.push(Statement {
+        function[*block].statements.push(Statement {
             store: Some(store),
             operation: Operation::Is {
                 value: checked_var,
-                typ: module.instantiator.instantiate(&typ, &vec![]),
+                typ,
             },
         });
     }

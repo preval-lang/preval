@@ -23,6 +23,7 @@ use std::{collections::HashMap, fmt::Debug};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    parser::typ::InfoTypeExpr,
     typ::Instantiator,
     value::{PrevalValue, Value, runtime_type::TypeDeserializer},
     vm::{RunResult, evaluate},
@@ -42,6 +43,7 @@ pub struct StructDescriptor {
 pub struct Function {
     pub ir: Vec<Block>,
     pub exported: bool,
+    pub generics: Vec<usize>,
 }
 
 impl PrevalValue for Function {
@@ -54,7 +56,13 @@ impl PrevalValue for Function {
         for (i, arg) in args.iter().enumerate() {
             args_map.insert(i, (**arg).clone());
         }
-        evaluate(module, self.ir.clone(), &mut args_map, 0)
+        evaluate(
+            module,
+            self.ir.clone(),
+            &mut args_map,
+            0,
+            self.generics.clone(),
+        )
     }
 }
 
@@ -62,6 +70,7 @@ impl PrevalValue for Function {
 pub struct Partial {
     pub blocks: Vec<Block>,
     pub start_block: usize,
+    pub generics: Vec<usize>,
 }
 impl PrevalValue for Partial {
     fn get_type(&self) -> TypeDeserializer {
@@ -73,7 +82,13 @@ impl PrevalValue for Partial {
         for (i, arg) in args.iter().enumerate() {
             args_map.insert(i, (**arg).clone());
         }
-        evaluate(module, self.blocks.clone(), &mut args_map, self.start_block)
+        evaluate(
+            module,
+            self.blocks.clone(),
+            &mut args_map,
+            self.start_block,
+            self.generics.clone(),
+        )
     }
 }
 
@@ -102,11 +117,11 @@ pub enum Operation {
     },
     Index(usize, usize),
     Access(usize, String),
-    InitializeStruct(usize, HashMap<String, usize>),
-    LoadFunction(usize),
+    InitializeStruct(InfoTypeExpr, HashMap<String, usize>),
+    LoadFunction(InfoTypeExpr),
     Is {
         value: usize,
-        typ: usize,
+        typ: InfoTypeExpr,
     },
 }
 
