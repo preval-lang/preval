@@ -90,8 +90,8 @@ fn main() {
                     run_entire_program(&mut module, optimized, &mut vars);
                 }
                 Err(err) => {
-                    let (line, column) = get_line_and_column(&src, err.idx).unwrap();
-                    eprintln!("ParseError: {:?} at {file}:{line}:{column}", err.error);
+                    let (line, column) = get_line_and_column(&src, err.info).unwrap();
+                    eprintln!("ParseError: {:?} at {file}:{line}:{column}", err.data);
                 }
             }
         }

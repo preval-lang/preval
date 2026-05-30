@@ -27,7 +27,10 @@ pub fn initialize_struct(
             output_struct.insert(field_name.clone(), value);
         }
 
-        let type_n = module.instantiator.instantiate(&typ, generics);
+        let type_n = module
+            .instantiator
+            .instantiate(&typ, generics)
+            .expect("move this to compile time by specialising the function body");
 
         vars.insert(
             store,

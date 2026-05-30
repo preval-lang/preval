@@ -52,7 +52,10 @@ pub fn evaluate(
                     store,
                     operation: Operation::LoadFunction(type_expr),
                 } => {
-                    let type_id = module.instantiator.instantiate(&type_expr, &generics);
+                    let type_id = module
+                        .instantiator
+                        .instantiate(&type_expr, &generics)
+                        .expect("move this to compile time by specialising function body");
                     let typ = module.instantiator.get_type(type_id);
                     if let Some(typ) = typ {
                         if let Some(store) = store {

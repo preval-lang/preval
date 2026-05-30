@@ -3,7 +3,6 @@ mod block;
 mod call;
 mod conditional;
 pub mod error;
-mod generics;
 mod guard;
 mod index;
 mod initialize_struct;

@@ -9,13 +9,12 @@ use crate::{
     tokeniser::{InfoToken, Keyword, Token},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     Index(Box<InfoExpr>, Box<InfoExpr>),
     Name(InfoTypeExpr),
     Literal(Literal),
     Call(Box<InfoExpr>, Vec<InfoExpr>),
-    Generics(Box<InfoExpr>, Vec<InfoTypeExpr>),
     Return(Option<Box<InfoExpr>>),
     Block(Vec<InfoExpr>, bool),
     Let(String, Box<InfoExpr>),
@@ -36,7 +35,7 @@ pub enum Expr {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InfoExpr {
     pub idx: usize,
     pub expr: Expr,

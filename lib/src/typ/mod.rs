@@ -133,36 +133,46 @@ impl Instantiator {
         this
     }
 
-    pub fn instantiate(&mut self, expr: &InfoTypeExpr, generics: &[usize]) -> usize {
+    pub fn instantiate(
+        &mut self,
+        expr: &InfoTypeExpr,
+        generics: &[usize],
+    ) -> Result<usize, InfoTypeError> {
         let type_ = match &expr.expr {
             TypeExpr::Parameter(i) => generics[*i],
             TypeExpr::Name(n) => {
-                let template = self
-                    .template_names
-                    .get(n)
-                    .expect(&format!("Type exists {n:?}"))
-                    .clone();
-                self.instantiate(&template, generics)
+                let template = match self.template_names.get(n) {
+                    Some(temp) => temp.clone(),
+                    None => {
+                        return Err(InfoTypeError {
+                            idx: expr.idx,
+                            error: TypeError::UnknownType(n.clone()),
+                        });
+                    }
+                };
+                self.instantiate(&template, generics)?
             }
             TypeExpr::Union(a, b) => {
-                let a = self.instantiate(a.as_ref(), generics);
-                let b = self.instantiate(&b, generics);
+                let a = self.instantiate(a.as_ref(), generics)?;
+                let b = self.instantiate(&b, generics)?;
                 self.add(Type::Union(a, b))
             }
             TypeExpr::Generics(base, params) => {
-                let params = params
-                    .iter()
-                    .map(|p| self.instantiate(p, generics))
-                    .collect::<Vec<_>>();
+                let mut ins_params = Vec::new();
 
-                self.instantiate(base.as_ref(), &params)
+                for param in params {
+                    ins_params.push(self.instantiate(param, generics)?);
+                }
+
+                self.instantiate(base.as_ref(), &ins_params)?
             }
             TypeExpr::Struct(fields) => {
-                let fields = fields
-                    .iter()
-                    .map(|(k, v)| (k.clone(), self.instantiate(v, generics)))
-                    .collect::<HashMap<_, _>>();
-                self.add(Type::Concrete(ConcreteType::Struct(fields)))
+                let mut ins_fields = HashMap::new();
+
+                for field in fields {
+                    ins_fields.insert(field.0.clone(), self.instantiate(field.1, generics)?);
+                }
+                self.add(Type::Concrete(ConcreteType::Struct(ins_fields)))
             }
             TypeExpr::Bool => self.add(Type::Concrete(ConcreteType::Bool)),
             TypeExpr::String => self.add(Type::Concrete(ConcreteType::String)),
@@ -175,20 +185,21 @@ impl Instantiator {
                 self.add(Type::Concrete(ConcreteType::Float { size: *size }))
             }
             TypeExpr::Tuple(elems) => {
-                let elems = elems
-                    .iter()
-                    .map(|e| self.instantiate(e, generics))
-                    .collect::<Vec<_>>();
-                self.add(Type::Concrete(ConcreteType::Tuple(elems)))
+                let mut ins_elems = Vec::new();
+
+                for elem in elems {
+                    ins_elems.push(self.instantiate(elem, generics)?);
+                }
+                self.add(Type::Concrete(ConcreteType::Tuple(ins_elems)))
             }
             TypeExpr::Function(args, ret, imp) => {
-                let args = args
-                    .iter()
-                    .map(|e| self.instantiate(e, generics))
-                    .collect::<Vec<_>>();
-                let ret = self.instantiate(ret, generics);
+                let mut ins_args = Vec::new();
+                for arg in args {
+                    ins_args.push(self.instantiate(arg, generics)?);
+                }
+                let ret = self.instantiate(ret, generics)?;
                 self.add(Type::Concrete(ConcreteType::Function(
-                    args,
+                    ins_args,
                     ret,
                     imp.clone(),
                     generics.to_vec(),
@@ -196,7 +207,7 @@ impl Instantiator {
             }
         };
 
-        type_
+        Ok(type_)
     }
 
     pub fn add(&mut self, typ: Type) -> usize {
@@ -234,9 +245,5 @@ impl Instantiator {
                 || self.compatible(assignee, *b, index + 1)?),
             Type::EarlyReturn => panic!("Early return can't be a slot"),
         }
-    }
-
-    pub fn global_scope<'b>(&self) -> Scope<'b> {
-        Scope::new(self.template_names.clone())
     }
 }

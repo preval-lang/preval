@@ -16,7 +16,10 @@ pub fn is(
     store: Option<usize>,
     generics: &[usize],
 ) {
-    let type_n = module.instantiator.instantiate(&typ, generics);
+    let type_n = module
+        .instantiator
+        .instantiate(&typ, generics)
+        .expect("move this to compile time by specialising function body");
     if let Some(store) = store {
         if let Some(value) = &vars[&value] {
             if module

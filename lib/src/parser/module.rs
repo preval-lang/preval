@@ -1,6 +1,7 @@
 use std::{collections::HashMap, usize};
 
 use crate::{
+    error::InfoError,
     ir::{Block, Declaration, Function, Module, Terminal, to_ir},
     parser::{
         expression::{InfoExpr, InfoParseError, ParseError, parse_expression},
@@ -15,7 +16,7 @@ use crate::{
 
 use crate::passes::type_check_expr::Scope;
 
-pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
+pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoError> {
     let mut module = Module {
         instantiator: Instantiator::new(),
     };
@@ -41,20 +42,22 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                     statements: Vec::new(),
                 }];
 
-                let global_scope = module.instantiator.global_scope();
-                let mut scope = global_scope.sub();
+                let mut scope = Scope::new();
 
                 let mut locals = HashMap::new();
                 for (idx, arg) in args.iter().enumerate() {
                     locals.insert(arg.clone(), Declaration::Variable(idx));
-                    scope.insert(arg.clone(), args_types[idx].clone());
+                    scope.insert(
+                        arg.clone(),
+                        module.instantiator.instantiate(&args_types[idx], &vec![])?,
+                    );
                 }
 
                 to_ir(
                     &mut ir,
                     &mut 0,
                     &mut module,
-                    body,
+                    body.clone(),
                     Some(last_var),
                     &mut declarations,
                     &mut locals,
@@ -67,25 +70,40 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                     InfoTypeExpr {
                         expr: TypeExpr::Function(
                             args_types,
-                            Box::new(return_type),
+                            Box::new(return_type.clone()),
                             Implementation::Normal(ir),
                         ),
                         idx: name_idx,
                     },
                 );
 
-                // let body_type =
-                //     infer_expr_type(&body, &mut module.instantiator, &mut scope, return_type)
-                //         .unwrap();
+                println!("TODO: Generic placeholders");
 
-                // if !module.instantiator.compatible(body_type, return_type) {
-                //     panic!(
-                //         "incorrect function return type expected {:?} got {:?}",
-                //         module.instantiator.get_type(signature.returns),
-                //         module.instantiator.get_type(body_type)
-                //     );
-                //     todo!("proper error for function body type mismatch")
-                // }
+                let generics = vec![];
+
+                let return_type_ins = module.instantiator.instantiate(&return_type, &generics)?;
+
+                let body_type = infer_expr_type(
+                    &body,
+                    &mut module.instantiator,
+                    &mut scope,
+                    return_type_ins,
+                    &generics,
+                )
+                .unwrap();
+
+                if !module
+                    .instantiator
+                    .compatible(body_type, return_type_ins, 0)
+                    .unwrap()
+                {
+                    panic!(
+                        "incorrect function return type expected {:?} got {:?}",
+                        module.instantiator.get_type(return_type_ins),
+                        module.instantiator.get_type(body_type)
+                    );
+                    todo!("proper error for function body type mismatch")
+                }
             }
             Token::Keyword(Keyword::Struct) => {
                 let idx = i;
@@ -187,7 +205,8 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                     return Err(InfoParseError {
                         idx: tokens[i].idx,
                         error: ParseError::ExpectedString(tokens[i].clone()),
-                    });
+                    }
+                    .into());
                 };
 
                 i += 1;
@@ -200,7 +219,8 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                     return Err(InfoParseError {
                         idx: tokens[i].idx,
                         error: ParseError::ExpectedSemicolon(tokens[i].clone()),
-                    });
+                    }
+                    .into());
                 }
                 i += 1;
 
@@ -223,7 +243,8 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoParseError> {
                 return Err(InfoParseError {
                     idx: tokens[i].idx,
                     error: ParseError::ExpectedTopLevel,
-                });
+                }
+                .into());
             }
         }
     }

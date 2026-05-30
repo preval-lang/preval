@@ -1,18 +1,7 @@
 dylib "stdlib/print" fn print(io: IO, text: String);
 dylib "stdlib/print" fn input(io: IO): String;
 
-fn is_b<A, B>(a: A): bool {
-    if a is B {
-        true
-    } else {
-        false
-    }
-}
-
-fn main(compile_io: IO, io: IO) {
-    if is_b<String, String>("hello") {
-        print(io, "hello is B")
-    } else {
-        print(io, "hello is not B")
-    }
+fn main(io: IO, compile_io: IO) {
+    let a = 5;
+    a
 }
