@@ -57,7 +57,7 @@ pub enum Implementation {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Instantiator {
+pub struct Program {
     template_names: HashMap<String, InfoTypeExpr>,
     types: Vec<Type>,
 }
@@ -102,7 +102,7 @@ type_ids! {
     IO => TypeExpr::IO,
 }
 
-impl Instantiator {
+impl Program {
     pub fn new() -> Self {
         let template_names = HashMap::new();
         let types = Vec::new();

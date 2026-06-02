@@ -2,7 +2,7 @@ use std::{borrow::Cow, collections::HashMap};
 
 use crate::{
     parser::{expression::InfoExpr, typ::InfoTypeExpr},
-    typ::{ConcreteType, InfoTypeError, Instantiator, Type, TypeError, TypeExpr},
+    typ::{ConcreteType, InfoTypeError, Program, Type, TypeError, TypeExpr},
 };
 
 use crate::parser::expression::Expr;
@@ -43,7 +43,7 @@ impl<'a> Scope<'a> {
 
 pub fn infer_expr_type(
     expr: &InfoExpr,
-    ins: &mut Instantiator,
+    ins: &mut Program,
     scope: &mut Scope,
     return_type: usize,
     generics: &[usize],

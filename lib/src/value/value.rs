@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    ir::Module,
+    typ::Program,
     value::runtime_type::{TypeDeserializer, deserialize_type},
     vm::RunResult,
 };
@@ -38,7 +38,7 @@ pub trait ValueData: Debug {
     fn index(&mut self, _value: &Value) -> Value {
         panic!("Type is not indexable")
     }
-    fn call(&mut self, module: &mut Module, args: Vec<&Option<Value>>) -> RunResult;
+    fn call(&mut self, module: &mut Program, args: Vec<&Option<Value>>) -> RunResult;
     fn vto_string(&self) -> String;
     fn veq(&self, other: &Value) -> bool;
     fn as_any(&self) -> &dyn Any;
@@ -79,7 +79,7 @@ pub trait PrevalValue: PreSerialize {
         panic!("Not indexable: {}", type_name::<Self>())
     }
 
-    fn vcall(&mut self, _module: &mut Module, _args: Vec<&Option<Value>>) -> RunResult {
+    fn vcall(&mut self, _module: &mut Program, _args: Vec<&Option<Value>>) -> RunResult {
         panic!("Not callable: {}", type_name::<Self>())
     }
 
@@ -155,7 +155,7 @@ impl<T: PartialEq + Clone + Debug + PrevalValue + 'static> ValueData for T {
         self.vindex(value)
     }
 
-    fn call(&mut self, module: &mut Module, args: Vec<&Option<Value>>) -> RunResult {
+    fn call(&mut self, module: &mut Program, args: Vec<&Option<Value>>) -> RunResult {
         self.vcall(module, args)
     }
 

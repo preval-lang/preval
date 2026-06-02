@@ -1,11 +1,11 @@
 use std::{collections::HashMap, env, fs};
 
 use preval_lib::{
-    ir::{Module, Partial},
+    ir::Partial,
     parser::{module::parse_module, typ::InfoTypeExpr},
     passes::remove_unused::{Usage, remove_unused},
     tokeniser::{get_line_and_column, tokenise},
-    typ::{Implementation, TypeExpr, type_id},
+    typ::{Implementation, Program, TypeExpr, type_id},
     value::{Value, primitive::IO},
     vm::{RunResult, evaluate},
 };
@@ -14,7 +14,7 @@ use ron::ser::PrettyConfig;
 fn main() {
     if let Some(arg1) = env::args().collect::<Vec<_>>().get(1) {
         if arg1 == "run" {
-            let (mut module, runresult): (Module, RunResult) =
+            let (mut module, runresult): (Program, RunResult) =
                 ron::de::from_bytes(&fs::read("main.pvc").unwrap()).unwrap();
 
             let mut vars: HashMap<usize, Option<Value>> = HashMap::new();
@@ -41,7 +41,7 @@ fn main() {
                 Ok(mut module) => {
                     fs::write("ir.ir", format!("{module:#?}")).unwrap();
 
-                    let main = module.instantiator.get_template("main").cloned();
+                    let main = module.get_template("main").cloned();
 
                     let eval = if let Some(InfoTypeExpr {
                         idx: _,
@@ -62,7 +62,7 @@ fn main() {
                         RunResult::Residualise => unreachable!(),
                         RunResult::Concrete(c) => RunResult::Concrete(c),
                         RunResult::Partial(p) => RunResult::Partial(Partial {
-                            blocks: remove_unused(&module, &p.blocks, p.start_block, poisoned_vars),
+                            blocks: remove_unused(&p.blocks, p.start_block, poisoned_vars),
                             start_block: p.start_block,
                             generics: p.generics,
                         }),
@@ -99,7 +99,7 @@ fn main() {
 }
 
 fn run_entire_program(
-    module: &mut Module,
+    module: &mut Program,
     eval: RunResult,
     vars: &mut HashMap<usize, Option<Value>>,
 ) -> bool {

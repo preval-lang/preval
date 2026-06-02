@@ -4,7 +4,7 @@ use crate::ir::error::IRErrorInfo;
 use crate::ir::{Block, to_ir};
 
 use crate::{
-    ir::{Declaration, Module, Operation, Statement},
+    ir::{Declaration, Operation, Statement},
     parser::expression::InfoExpr,
 };
 
@@ -13,7 +13,6 @@ pub fn access(
     right: String,
     function: &mut Vec<Block>,
     block: &mut usize,
-    module: &mut Module,
     store: Option<usize>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
@@ -25,7 +24,6 @@ pub fn access(
     to_ir(
         function,
         block,
-        module,
         *left,
         Some(left_var),
         locals,

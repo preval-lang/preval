@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use crate::ir::Block;
 use crate::ir::Declaration;
-use crate::ir::Module;
 use crate::ir::Operation;
 use crate::ir::Statement;
 use crate::ir::Terminal;
@@ -17,7 +16,6 @@ pub fn returns(
     value_expr: Option<Box<InfoExpr>>,
     function: &mut Vec<Block>,
     block: &mut usize,
-    module: &mut Module,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
 ) -> Result<(), IRErrorInfo> {
@@ -29,7 +27,6 @@ pub fn returns(
         to_ir(
             function,
             block,
-            module,
             *value_expr,
             Some(return_var),
             locals,

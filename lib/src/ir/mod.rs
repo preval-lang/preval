@@ -21,15 +21,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     parser::typ::InfoTypeExpr,
-    typ::Instantiator,
+    typ::Program,
     value::{PrevalValue, Value, runtime_type::TypeDeserializer},
     vm::{RunResult, evaluate},
 };
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Module {
-    pub instantiator: Instantiator,
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StructDescriptor {
@@ -48,7 +43,7 @@ impl PrevalValue for Function {
         TypeDeserializer::Function
     }
 
-    fn vcall(&mut self, module: &mut Module, args: Vec<&Option<Value>>) -> RunResult {
+    fn vcall(&mut self, module: &mut Program, args: Vec<&Option<Value>>) -> RunResult {
         let mut args_map = HashMap::new();
         for (i, arg) in args.iter().enumerate() {
             args_map.insert(i, (**arg).clone());
@@ -74,7 +69,7 @@ impl PrevalValue for Partial {
         TypeDeserializer::Partial
     }
 
-    fn vcall(&mut self, module: &mut Module, args: Vec<&Option<Value>>) -> RunResult {
+    fn vcall(&mut self, module: &mut Program, args: Vec<&Option<Value>>) -> RunResult {
         let mut args_map: HashMap<usize, Option<Value>> = HashMap::new();
         for (i, arg) in args.iter().enumerate() {
             args_map.insert(i, (**arg).clone());

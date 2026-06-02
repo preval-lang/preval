@@ -1,5 +1,5 @@
-use crate::ir::Module;
 use crate::parser::typ::InfoTypeExpr;
+use crate::typ::Program;
 use crate::value::Value;
 use crate::value::structure::Struct;
 use crate::vm::Statement;
@@ -9,7 +9,7 @@ pub fn initialize_struct(
     typ: InfoTypeExpr,
     fields: HashMap<String, usize>,
     store: Option<usize>,
-    module: &mut Module,
+    module: &mut Program,
     out: &mut Vec<Statement>,
     vars: &mut HashMap<usize, Option<Value>>,
     generics: &[usize],
@@ -28,7 +28,6 @@ pub fn initialize_struct(
         }
 
         let type_n = module
-            .instantiator
             .instantiate(&typ, generics)
             .expect("move this to compile time by specialising the function body");
 

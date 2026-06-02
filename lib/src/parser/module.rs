@@ -2,7 +2,7 @@ use std::{collections::HashMap, usize};
 
 use crate::{
     error::{Error, InfoError},
-    ir::{Block, Declaration, Module, Terminal, to_ir},
+    ir::{Block, Declaration, Terminal, to_ir},
     parser::{
         expression::{InfoExpr, InfoParseError, ParseError, parse_expression},
         typ::{InfoTypeExpr, parse_type},
@@ -10,16 +10,14 @@ use crate::{
     },
     passes::type_check_expr::infer_expr_type,
     tokeniser::{InfoToken, Keyword, Literal, Token},
-    typ::{Implementation, Instantiator, Type, TypeError, TypeExpr},
+    typ::{Implementation, Program, Type, TypeError, TypeExpr},
     value::native::NativeFunction,
 };
 
 use crate::passes::type_check_expr::Scope;
 
-pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoError> {
-    let mut module = Module {
-        instantiator: Instantiator::new(),
-    };
+pub fn parse_module(tokens: &[InfoToken]) -> Result<Program, InfoError> {
+    let mut instantiator = Program::new();
 
     let mut i = 0;
 
@@ -46,14 +44,13 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoError> {
                     locals.insert(arg.clone(), Declaration::Variable(idx));
                     scope.insert(
                         arg.clone(),
-                        module.instantiator.instantiate(&args_types[idx], &vec![])?,
+                        instantiator.instantiate(&args_types[idx], &vec![])?,
                     );
                 }
 
                 to_ir(
                     &mut ir,
                     &mut 0,
-                    &mut module,
                     body.clone(),
                     Some(last_var),
                     &mut locals,
@@ -61,7 +58,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoError> {
                     true,
                 )?;
 
-                module.instantiator.add_template(
+                instantiator.add_template(
                     name,
                     InfoTypeExpr {
                         expr: TypeExpr::Function(
@@ -74,33 +71,28 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoError> {
                 );
 
                 let generics = (0..generics.len())
-                    .map(|i| module.instantiator.add(Type::Placeholder(i)))
+                    .map(|i| instantiator.add(Type::Placeholder(i)))
                     .collect::<Vec<_>>();
 
-                let return_type_ins = module.instantiator.instantiate(&return_type, &generics)?;
+                let return_type_ins = instantiator.instantiate(&return_type, &generics)?;
 
                 let body_type = infer_expr_type(
                     &body,
-                    &mut module.instantiator,
+                    &mut instantiator,
                     &mut scope,
                     return_type_ins,
                     &generics,
                 )?;
 
-                if !module
-                    .instantiator
+                if !instantiator
                     .compatible(body_type, return_type_ins, 0)
                     .unwrap()
                 {
                     return Err(InfoError {
                         info: return_type.idx,
                         data: Error::TypeError(TypeError::IncompatibleTypes {
-                            expected: module
-                                .instantiator
-                                .get_type(return_type_ins)
-                                .unwrap()
-                                .clone(),
-                            got: module.instantiator.get_type(body_type).unwrap().clone(),
+                            expected: instantiator.get_type(return_type_ins).unwrap().clone(),
+                            got: instantiator.get_type(body_type).unwrap().clone(),
                         }),
                     });
                 }
@@ -185,7 +177,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoError> {
                 }
                 i += 1;
 
-                module.instantiator.add_template(
+                instantiator.add_template(
                     name.clone(),
                     InfoTypeExpr {
                         expr: TypeExpr::Struct(fields),
@@ -216,12 +208,12 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoError> {
                     expect_function_signature(tokens, &mut i)?;
 
                 let generics = (0..generics.len())
-                    .map(|i| module.instantiator.add(Type::Placeholder(i)))
+                    .map(|i| instantiator.add(Type::Placeholder(i)))
                     .collect::<Vec<_>>();
 
-                module.instantiator.instantiate(&return_type, &generics)?;
+                instantiator.instantiate(&return_type, &generics)?;
                 for arg in &args {
-                    module.instantiator.instantiate(arg, &generics)?;
+                    instantiator.instantiate(arg, &generics)?;
                 }
 
                 if tokens[i].token != Token::Semicolon {
@@ -233,7 +225,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoError> {
                 }
                 i += 1;
 
-                module.instantiator.add_template(
+                instantiator.add_template(
                     name.clone(),
                     InfoTypeExpr {
                         expr: TypeExpr::Function(
@@ -258,7 +250,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoError> {
         }
     }
 
-    Ok(module)
+    Ok(instantiator)
 }
 
 pub fn expect_function_signature(

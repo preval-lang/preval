@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    ir::{Block, Callable, Module, Operation, Partial, Statement, Terminal},
+    ir::{Block, Callable, Operation, Partial, Statement, Terminal},
     value::{Value, structure::Struct},
     vm::RunResult,
 };
@@ -13,7 +13,6 @@ pub enum Usage {
 }
 
 pub fn remove_unused(
-    module: &Module,
     blocks: &Vec<Block>,
     start_block: usize,
     mut poison_vars: HashMap<usize, Usage>,
@@ -250,12 +249,7 @@ pub fn remove_unused(
                         then: match then {
                             RunResult::Concrete(v) => RunResult::Concrete(v.clone()),
                             RunResult::Partial(p) => RunResult::Partial(Partial {
-                                blocks: remove_unused(
-                                    &module,
-                                    blocks,
-                                    p.start_block,
-                                    poison_vars.clone(),
-                                ),
+                                blocks: remove_unused(blocks, p.start_block, poison_vars.clone()),
                                 start_block: p.start_block,
                                 generics: p.generics.clone(),
                             }),
@@ -264,12 +258,7 @@ pub fn remove_unused(
                         els: match els {
                             RunResult::Concrete(v) => RunResult::Concrete(v.clone()),
                             RunResult::Partial(p) => RunResult::Partial(Partial {
-                                blocks: remove_unused(
-                                    &module,
-                                    blocks,
-                                    p.start_block,
-                                    poison_vars.clone(),
-                                ),
+                                blocks: remove_unused(blocks, p.start_block, poison_vars.clone()),
                                 start_block: p.start_block,
                                 generics: p.generics.clone(),
                             }),
@@ -319,12 +308,7 @@ pub fn remove_unused(
                                         generics,
                                     }) => Callable::Partial(Partial {
                                         start_block: *start_block,
-                                        blocks: remove_unused(
-                                            module,
-                                            blocks,
-                                            *start_block,
-                                            poisoned_args,
-                                        ),
+                                        blocks: remove_unused(blocks, *start_block, poisoned_args),
                                         generics: generics.clone(),
                                     }),
                                 },

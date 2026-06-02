@@ -1,6 +1,5 @@
 use crate::ir::Block;
 use crate::ir::Declaration;
-use crate::ir::Module;
 use crate::ir::Operation;
 use crate::ir::Statement;
 use crate::ir::error::IRErrorInfo;
@@ -16,7 +15,6 @@ pub fn compile_block(
     returns: bool,
     function: &mut Vec<Block>,
     block: &mut usize,
-    module: &mut Module,
     store: Option<usize>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
@@ -26,13 +24,9 @@ pub fn compile_block(
     let len = statements.len();
     for statement in statements {
         if i != len - 1 || !returns {
-            to_ir(
-                function, block, module, statement, None, locals, next_var, false,
-            )?;
+            to_ir(function, block, statement, None, locals, next_var, false)?;
         } else {
-            to_ir(
-                function, block, module, statement, store, locals, next_var, tail,
-            )?;
+            to_ir(function, block, statement, store, locals, next_var, tail)?;
         }
         i += 1;
     }

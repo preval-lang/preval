@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ir::{Block, Callable, Function, Module, Operation, Partial, Statement, Terminal},
-    typ::{ConcreteType, Implementation, Type},
+    ir::{Block, Callable, Function, Operation, Partial, Statement, Terminal},
+    typ::{ConcreteType, Implementation, Program, Type},
     value::{Value, structure::Struct},
     vm::operation::{access, call, guard_phi, index, initialize_struct, is, load_local, phi},
 };
@@ -20,7 +20,7 @@ pub enum RunResult {
 }
 
 pub fn evaluate(
-    module: &mut Module,
+    module: &mut Program,
     mut blocks: Vec<Block>,
     vars: &mut HashMap<usize, Option<Value>>,
     start_block: usize,
@@ -53,10 +53,9 @@ pub fn evaluate(
                     operation: Operation::LoadFunction(type_expr),
                 } => {
                     let type_id = module
-                        .instantiator
                         .instantiate(&type_expr, &generics)
                         .expect("move this to compile time by specialising function body");
-                    let typ = module.instantiator.get_type(type_id);
+                    let typ = module.get_type(type_id);
                     if let Some(typ) = typ {
                         if let Some(store) = store {
                             vars.insert(

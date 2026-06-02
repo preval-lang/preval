@@ -1,7 +1,6 @@
 use crate::ir::Block;
 use crate::ir::Callable;
 use crate::ir::Declaration;
-use crate::ir::Module;
 use crate::ir::Operation;
 use crate::ir::Statement;
 use crate::ir::Terminal;
@@ -16,7 +15,6 @@ pub fn call(
     args: Vec<InfoExpr>,
     function: &mut Vec<Block>,
     block: &mut usize,
-    module: &mut Module,
     store: Option<usize>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
@@ -30,16 +28,7 @@ pub fn call(
             *next_var += 1;
             *next_var
         };
-        to_ir(
-            function,
-            block,
-            module,
-            arg,
-            Some(i),
-            locals,
-            next_var,
-            false,
-        )?;
+        to_ir(function, block, arg, Some(i), locals, next_var, false)?;
         arg_indexes.push(i);
     }
 
@@ -50,7 +39,6 @@ pub fn call(
     to_ir(
         function,
         block,
-        module,
         callee,
         Some(fn_var),
         locals,
