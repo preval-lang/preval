@@ -53,7 +53,7 @@ pub fn infer_expr_type(
         Expr::Name(name) => {
             if let InfoTypeExpr {
                 expr: TypeExpr::Name(name),
-                idx,
+                idx: _,
             } = name
             {
                 if let Some(type_id) = scope.get(name) {

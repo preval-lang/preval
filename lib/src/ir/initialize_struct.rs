@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    ir::{Block, Declaration, Function, Module, Operation, Statement, error::IRErrorInfo, to_ir},
+    ir::{Block, Declaration, Module, Operation, Statement, error::IRErrorInfo, to_ir},
     parser::{expression::InfoExpr, typ::InfoTypeExpr},
 };
 
@@ -12,7 +12,6 @@ pub fn initialize_struct(
     block: &mut usize,
     module: &mut Module,
     store: Option<usize>,
-    declarations: &HashMap<String, Declaration>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
 ) -> Result<(), IRErrorInfo> {
@@ -31,7 +30,6 @@ pub fn initialize_struct(
                 module,
                 field_expr,
                 Some(field_var),
-                declarations,
                 locals,
                 next_var,
                 false,

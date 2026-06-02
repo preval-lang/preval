@@ -6,7 +6,7 @@ use preval_lib::{
     passes::remove_unused::{Usage, remove_unused},
     tokeniser::{get_line_and_column, tokenise},
     typ::{Implementation, TypeExpr, type_id},
-    value::{PrevalValue, Value, primitive::IO},
+    value::{Value, primitive::IO},
     vm::{RunResult, evaluate},
 };
 use ron::ser::PrettyConfig;
@@ -45,7 +45,7 @@ fn main() {
 
                     let eval = if let Some(InfoTypeExpr {
                         idx: _,
-                        expr: TypeExpr::Function(name, generics, Implementation::Normal(mut f)),
+                        expr: TypeExpr::Function(_name, _generics, Implementation::Normal(f)),
                     }) = main
                     {
                         let cio = Some(Value::new(IO, type_id::IO));

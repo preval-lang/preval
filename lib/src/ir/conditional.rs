@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::ir::error::{IRError, IRErrorInfo};
 use crate::{
-    ir::{Block, Declaration, Function, Module, Operation, Statement, Terminal, to_ir},
+    ir::{Block, Declaration, Module, Operation, Statement, Terminal, to_ir},
     parser::expression::InfoExpr,
 };
 
@@ -15,7 +15,6 @@ pub fn conditional(
     block: &mut usize,
     module: &mut Module,
     store: Option<usize>,
-    declarations: &HashMap<String, Declaration>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
     tail: bool,
@@ -30,7 +29,6 @@ pub fn conditional(
         module,
         *cond,
         Some(cond_var),
-        declarations,
         locals,
         next_var,
         false,
@@ -52,7 +50,6 @@ pub fn conditional(
         module,
         *then,
         Some(then_block_var),
-        declarations,
         locals,
         next_var,
         tail,
@@ -75,7 +72,6 @@ pub fn conditional(
             module,
             *els,
             Some(else_block_var),
-            declarations,
             locals,
             next_var,
             tail,

@@ -1,9 +1,6 @@
-use std::fmt::{Debug, Display, Write};
+use std::fmt::Debug;
 
-use crate::{
-    typ::{ConcreteType, IntegerSize},
-    value::Value,
-};
+use crate::typ::{ConcreteType, IntegerSize};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Keyword {

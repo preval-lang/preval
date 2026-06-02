@@ -3,19 +3,17 @@ use std::collections::HashMap;
 use crate::ir::error::IRErrorInfo;
 use crate::ir::{Operation, Statement};
 use crate::{
-    ir::{Block, Declaration, Function, Module, Terminal, to_ir},
+    ir::{Block, Declaration, Module, Terminal, to_ir},
     parser::expression::InfoExpr,
 };
 
 pub fn guard(
     dependency: Box<InfoExpr>,
     body: Box<InfoExpr>,
-    _idx: usize,
     function: &mut Vec<Block>,
     block: &mut usize,
     module: &mut Module,
     store: Option<usize>,
-    declarations: &HashMap<String, Declaration>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
     tail: bool,
@@ -30,7 +28,6 @@ pub fn guard(
         module,
         *dependency,
         Some(dep_var),
-        declarations,
         locals,
         next_var,
         false,
@@ -58,7 +55,6 @@ pub fn guard(
         module,
         *body,
         store,
-        declarations,
         locals,
         next_var,
         tail,

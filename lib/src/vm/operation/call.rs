@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    ir::{Callable, Module, Operation, Partial, Statement},
-    typ::{Instantiator, type_id},
+    ir::{Callable, Module, Operation, Statement},
     value::Value,
     vm::RunResult,
 };

@@ -1,6 +1,5 @@
 use crate::ir::Block;
 use crate::ir::Declaration;
-use crate::ir::Function;
 use crate::ir::Module;
 use crate::ir::Operation;
 use crate::ir::Statement;
@@ -19,7 +18,6 @@ pub fn compile_block(
     block: &mut usize,
     module: &mut Module,
     store: Option<usize>,
-    declarations: &HashMap<String, Declaration>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
     tail: bool,
@@ -29,27 +27,11 @@ pub fn compile_block(
     for statement in statements {
         if i != len - 1 || !returns {
             to_ir(
-                function,
-                block,
-                module,
-                statement,
-                None,
-                declarations,
-                locals,
-                next_var,
-                false,
+                function, block, module, statement, None, locals, next_var, false,
             )?;
         } else {
             to_ir(
-                function,
-                block,
-                module,
-                statement,
-                store,
-                declarations,
-                locals,
-                next_var,
-                tail,
+                function, block, module, statement, store, locals, next_var, tail,
             )?;
         }
         i += 1;

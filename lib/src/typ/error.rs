@@ -1,4 +1,4 @@
-use crate::typ::{Type, TypeExpr};
+use crate::typ::Type;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeError {

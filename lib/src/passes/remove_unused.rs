@@ -61,7 +61,7 @@ pub fn remove_unused(
                 }
                 Statement {
                     store,
-                    operation: Operation::Is { value, typ },
+                    operation: Operation::Is { value, typ: _ },
                 } => {
                     if let Some(store) = store {
                         if let Some(poison) = poison_vars.get(value) {

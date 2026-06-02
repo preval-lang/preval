@@ -2,7 +2,7 @@ use std::{collections::HashMap, usize};
 
 use crate::{
     error::{Error, InfoError},
-    ir::{Block, Declaration, Function, Module, Terminal, to_ir},
+    ir::{Block, Declaration, Module, Terminal, to_ir},
     parser::{
         expression::{InfoExpr, InfoParseError, ParseError, parse_expression},
         typ::{InfoTypeExpr, parse_type},
@@ -10,8 +10,8 @@ use crate::{
     },
     passes::type_check_expr::infer_expr_type,
     tokeniser::{InfoToken, Keyword, Literal, Token},
-    typ::{ConcreteType, Implementation, InfoTypeError, Instantiator, Type, TypeError, TypeExpr},
-    value::{Value, native::NativeFunction, runtime_type::TypeDeserializer},
+    typ::{Implementation, Instantiator, Type, TypeError, TypeExpr},
+    value::native::NativeFunction,
 };
 
 use crate::passes::type_check_expr::Scope;
@@ -21,8 +21,6 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoError> {
         instantiator: Instantiator::new(),
     };
 
-    let mut declarations = HashMap::new();
-
     let mut i = 0;
 
     while i < tokens.len() {
@@ -30,10 +28,9 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoError> {
             Token::Keyword(Keyword::Fn) => {
                 i += 1;
                 let ((name, name_idx), generics, args, args_types, return_type) =
-                    expect_function_signature(tokens, &mut module.instantiator, &mut i)?;
+                    expect_function_signature(tokens, &mut i)?;
 
-                let body =
-                    expect_block_or_expr(tokens, &mut i, &mut module.instantiator, &generics)?;
+                let body = expect_block_or_expr(tokens, &mut i, &generics)?;
 
                 let mut last_var = args.len();
 
@@ -59,7 +56,6 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoError> {
                     &mut module,
                     body.clone(),
                     Some(last_var),
-                    &mut declarations,
                     &mut locals,
                     &mut last_var,
                     true,
@@ -217,7 +213,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoError> {
                 i += 1;
 
                 let ((name, name_idx), generics, _, args, return_type) =
-                    expect_function_signature(tokens, &mut module.instantiator, &mut i)?;
+                    expect_function_signature(tokens, &mut i)?;
 
                 let generics = (0..generics.len())
                     .map(|i| module.instantiator.add(Type::Placeholder(i)))
@@ -267,7 +263,6 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoError> {
 
 pub fn expect_function_signature(
     tokens: &[InfoToken],
-    ins: &mut Instantiator,
     i: &mut usize,
 ) -> Result<
     (
@@ -385,7 +380,6 @@ pub fn expect_function_signature(
 pub fn expect_block_or_expr(
     tokens: &[InfoToken],
     i: &mut usize,
-    ins: &mut Instantiator,
     generics: &[String],
 ) -> Result<InfoExpr, InfoParseError> {
     if let Some(InfoToken {
@@ -394,7 +388,7 @@ pub fn expect_block_or_expr(
     }) = tokens.get(*i)
     {
         *i += 1;
-        return parse_expression(&tokens[*i - 1..*i], ins, generics);
+        return parse_expression(&tokens[*i - 1..*i], generics);
     } else {
         let mut out = Vec::new();
         loop {
@@ -409,6 +403,6 @@ pub fn expect_block_or_expr(
 
             *i += 1;
         }
-        return parse_expression(&out, ins, generics);
+        return parse_expression(&out, generics);
     }
 }

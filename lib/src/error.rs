@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 use crate::{
     ir::error::{IRError, IRErrorInfo},
     parser::expression::{InfoParseError, ParseError},

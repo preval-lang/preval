@@ -91,7 +91,7 @@ fn try_parse_generics(
             if inside < 0 {
                 return Err(InfoParseError {
                     idx: tokens[i].idx,
-                    error: todo!("parse error for unclosed generics"),
+                    error: ParseError::UnclosedAngleBrackets,
                 });
             }
         }

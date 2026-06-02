@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use crate::parser::typ::{InfoTypeExpr, parse_type};
 use crate::parser::utility::read_punctuated;
 use crate::tokeniser::Literal;
-use crate::typ::{Instantiator, TypeExpr};
 use crate::{
     ir::error::{IRError, IRErrorInfo},
     tokeniser::{InfoToken, Keyword, Token},
@@ -59,6 +58,7 @@ pub enum ParseError {
     DuplicateName,
     TypeUndefined(Vec<InfoToken>),
     IRError(IRError),
+    UnclosedAngleBrackets,
 }
 
 impl From<IRErrorInfo> for InfoParseError {
@@ -72,50 +72,49 @@ impl From<IRErrorInfo> for InfoParseError {
 
 pub fn parse_expression(
     tokens: &[InfoToken],
-    ins: &mut Instantiator,
     generics: &[String],
 ) -> Result<InfoExpr, InfoParseError> {
-    if let Some(expr) = try_parse_parens(tokens, ins, generics)? {
+    if let Some(expr) = try_parse_parens(tokens, generics)? {
         return Ok(expr);
     }
 
-    if let Some(expr) = try_parse_block(tokens, ins, generics)? {
+    if let Some(expr) = try_parse_block(tokens, generics)? {
         return Ok(expr);
     }
 
-    if let Some(expr) = try_parse_let(tokens, ins, generics)? {
+    if let Some(expr) = try_parse_let(tokens, generics)? {
         return Ok(expr);
     }
 
-    if let Some(expr) = try_parse_return(tokens, ins, generics)? {
+    if let Some(expr) = try_parse_return(tokens, generics)? {
         return Ok(expr);
     }
 
-    if let Some(expr) = try_parse_if(tokens, ins, generics)? {
+    if let Some(expr) = try_parse_if(tokens, generics)? {
         return Ok(expr);
     }
 
-    if let Some(expr) = try_parse_guard(tokens, ins, generics)? {
+    if let Some(expr) = try_parse_guard(tokens, generics)? {
         return Ok(expr);
     }
 
-    if let Some(expr) = try_parse_index(tokens, ins, generics)? {
+    if let Some(expr) = try_parse_index(tokens, generics)? {
         return Ok(expr);
     }
 
-    if let Some(expr) = try_parse_call(tokens, ins, generics)? {
+    if let Some(expr) = try_parse_call(tokens, generics)? {
         return Ok(expr);
     }
 
-    if let Some(expr) = try_parse_dot(tokens, ins, generics)? {
+    if let Some(expr) = try_parse_dot(tokens, generics)? {
         return Ok(expr);
     }
 
-    if let Some(expr) = try_parse_is(tokens, ins, generics)? {
+    if let Some(expr) = try_parse_is(tokens, generics)? {
         return Ok(expr);
     }
 
-    if let Some(expr) = try_parse_struct(tokens, ins, generics)? {
+    if let Some(expr) = try_parse_struct(tokens, generics)? {
         return Ok(expr);
     }
 
@@ -139,7 +138,6 @@ pub fn parse_expression(
 
 fn try_parse_let(
     tokens: &[InfoToken],
-    ins: &mut Instantiator,
     generics: &[String],
 ) -> Result<Option<InfoExpr>, InfoParseError> {
     if let Some(InfoToken {
@@ -160,7 +158,7 @@ fn try_parse_let(
                 return Ok(Some(InfoExpr {
                     expr: Expr::Let(
                         name.clone(),
-                        Box::new(parse_expression(&tokens[3..], ins, generics)?),
+                        Box::new(parse_expression(&tokens[3..], generics)?),
                     ),
                     idx: *let_idx,
                 }));
@@ -182,7 +180,6 @@ fn try_parse_let(
 
 fn try_parse_guard(
     tokens: &[InfoToken],
-    ins: &mut Instantiator,
     generics: &[String],
 ) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
@@ -200,8 +197,8 @@ fn try_parse_guard(
         return Ok(Some(InfoExpr {
             idx: *guard_idx,
             expr: Expr::Guard {
-                dependency: Box::new(parse_expression(dependency, ins, generics)?),
-                body: Box::new(parse_expression(rest, ins, generics)?),
+                dependency: Box::new(parse_expression(dependency, generics)?),
+                body: Box::new(parse_expression(rest, generics)?),
             },
         }));
     }
@@ -210,7 +207,6 @@ fn try_parse_guard(
 
 fn try_parse_is(
     tokens: &[InfoToken],
-    ins: &mut Instantiator,
     generics: &[String],
 ) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
@@ -238,7 +234,6 @@ fn try_parse_is(
 
 fn try_parse_if(
     tokens: &[InfoToken],
-    ins: &mut Instantiator,
     generics: &[String],
 ) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
@@ -263,13 +258,9 @@ fn try_parse_if(
     {
         return Ok(Some(InfoExpr {
             expr: Expr::If {
-                cond: Box::new(parse_expression(condition, ins, generics)?),
-                then: Box::new(parse_expression(&[then_block.clone()], ins, generics)?),
-                els: Some(Box::new(parse_expression(
-                    &[else_block.clone()],
-                    ins,
-                    generics,
-                )?)),
+                cond: Box::new(parse_expression(condition, generics)?),
+                then: Box::new(parse_expression(&[then_block.clone()], generics)?),
+                els: Some(Box::new(parse_expression(&[else_block.clone()], generics)?)),
             },
             idx: *if_idx,
         }));
@@ -279,7 +270,6 @@ fn try_parse_if(
 
 fn try_parse_struct(
     tokens: &[InfoToken],
-    ins: &mut Instantiator,
     generics: &[String],
 ) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
@@ -304,7 +294,7 @@ fn try_parse_struct(
                 value @ ..,
             ] = &name_colon_value[..]
             {
-                let value = parse_expression(value, ins, generics)?;
+                let value = parse_expression(value, generics)?;
                 fields.insert(name.clone(), value);
             }
         }
@@ -322,7 +312,6 @@ fn try_parse_struct(
 
 fn try_parse_return(
     tokens: &[InfoToken],
-    ins: &mut Instantiator,
     generics: &[String],
 ) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
@@ -338,7 +327,7 @@ fn try_parse_return(
                 if return_tokens.is_empty() {
                     None
                 } else {
-                    Some(Box::new(parse_expression(return_tokens, ins, generics)?))
+                    Some(Box::new(parse_expression(return_tokens, generics)?))
                 }
             }),
             idx: *idx,
@@ -349,7 +338,6 @@ fn try_parse_return(
 
 fn try_parse_index(
     tokens: &[InfoToken],
-    ins: &mut Instantiator,
     generics: &[String],
 ) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
@@ -362,8 +350,8 @@ fn try_parse_index(
     {
         return Ok(Some(InfoExpr {
             expr: Expr::Index(
-                Box::new(parse_expression(left, ins, generics)?),
-                Box::new(parse_expression(index, ins, generics)?),
+                Box::new(parse_expression(left, generics)?),
+                Box::new(parse_expression(index, generics)?),
             ),
             idx: *idx,
         }));
@@ -373,7 +361,6 @@ fn try_parse_index(
 
 fn try_parse_parens(
     tokens: &[InfoToken],
-    ins: &mut Instantiator,
     generics: &[String],
 ) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
@@ -383,14 +370,13 @@ fn try_parse_parens(
         },
     ] = tokens
     {
-        return Ok(Some(parse_expression(contents, ins, generics)?));
+        return Ok(Some(parse_expression(contents, generics)?));
     }
     Ok(None)
 }
 
 fn try_parse_dot(
     tokens: &[InfoToken],
-    ins: &mut Instantiator,
     generics: &[String],
 ) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
@@ -406,10 +392,7 @@ fn try_parse_dot(
     ] = tokens
     {
         return Ok(Some(InfoExpr {
-            expr: Expr::Access(
-                Box::new(parse_expression(left, ins, generics)?),
-                name.clone(),
-            ),
+            expr: Expr::Access(Box::new(parse_expression(left, generics)?), name.clone()),
             idx: *idx,
         }));
     }
@@ -419,7 +402,6 @@ fn try_parse_dot(
 
 fn try_parse_call(
     tokens: &[InfoToken],
-    ins: &mut Instantiator,
     generics: &[String],
 ) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
@@ -431,10 +413,10 @@ fn try_parse_call(
     ] = tokens
     {
         return Ok(Some(InfoExpr {
-            expr: Expr::Call(Box::new(parse_expression(left, ins, generics)?), {
+            expr: Expr::Call(Box::new(parse_expression(left, generics)?), {
                 let mut out = Vec::new();
                 for tokens in read_punctuated(contents, Token::Comma)? {
-                    out.push(parse_expression(&tokens, ins, generics)?);
+                    out.push(parse_expression(&tokens, generics)?);
                 }
                 out
             }),
@@ -446,7 +428,6 @@ fn try_parse_call(
 
 fn try_parse_block(
     tokens: &[InfoToken],
-    ins: &mut Instantiator,
     generics: &[String],
 ) -> Result<Option<InfoExpr>, InfoParseError> {
     if let [
@@ -468,7 +449,7 @@ fn try_parse_block(
         };
         if !contents.is_empty() {
             for tokens in read_punctuated(contents, Token::Semicolon)? {
-                out.push(parse_expression(&tokens, ins, generics)?);
+                out.push(parse_expression(&tokens, generics)?);
             }
         }
         return Ok(Some(InfoExpr {

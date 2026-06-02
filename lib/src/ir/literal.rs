@@ -1,5 +1,4 @@
 use crate::ir::Block;
-use crate::ir::Function;
 use crate::ir::Operation;
 use crate::ir::Statement;
 use crate::ir::error::IRErrorInfo;

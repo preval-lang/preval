@@ -8,13 +8,11 @@ mod index;
 mod initialize_struct;
 mod is;
 mod literal;
-mod printing;
 mod returns;
 mod to_ir;
 mod variable;
 mod variable_declaration;
 
-pub use printing::module_to_string;
 pub use to_ir::*;
 
 use std::{collections::HashMap, fmt::Debug};
@@ -65,7 +63,7 @@ impl PrevalValue for Function {
     }
 }
 
-#[derive(PartialEq, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Clone, Serialize, Deserialize, Debug)]
 pub struct Partial {
     pub blocks: Vec<Block>,
     pub start_block: usize,

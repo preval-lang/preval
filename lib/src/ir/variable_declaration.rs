@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use crate::ir::Block;
 use crate::ir::Declaration;
-use crate::ir::Function;
 use crate::ir::Module;
 use crate::ir::Operation;
 use crate::ir::Statement;
@@ -17,7 +16,6 @@ pub fn variable_declaration(
     block: &mut usize,
     module: &mut Module,
     store: Option<usize>,
-    declarations: &HashMap<String, Declaration>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
 ) -> Result<(), IRErrorInfo> {
@@ -31,7 +29,6 @@ pub fn variable_declaration(
         module,
         *value_expr,
         Some(new_var),
-        declarations,
         locals,
         next_var,
         false,

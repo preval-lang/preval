@@ -1,5 +1,5 @@
 use crate::{
-    typ::{Instantiator, type_id},
+    typ::type_id,
     value::{PrevalValue, Value, primitive::EmptyTuple, runtime_type::TypeDeserializer},
 };
 use libloading::Library;
