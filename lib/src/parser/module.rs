@@ -1,7 +1,7 @@
 use std::{collections::HashMap, usize};
 
 use crate::{
-    error::InfoError,
+    error::{Error, InfoError},
     ir::{Block, Declaration, Function, Module, Terminal, to_ir},
     parser::{
         expression::{InfoExpr, InfoParseError, ParseError, parse_expression},
@@ -77,9 +77,9 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoError> {
                     },
                 );
 
-                println!("TODO: Generic placeholders");
-
-                let generics = vec![];
+                let generics = (0..generics.len())
+                    .map(|i| module.instantiator.add(Type::Placeholder(i)))
+                    .collect::<Vec<_>>();
 
                 let return_type_ins = module.instantiator.instantiate(&return_type, &generics)?;
 
@@ -89,20 +89,24 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoError> {
                     &mut scope,
                     return_type_ins,
                     &generics,
-                )
-                .unwrap();
+                )?;
 
                 if !module
                     .instantiator
                     .compatible(body_type, return_type_ins, 0)
                     .unwrap()
                 {
-                    panic!(
-                        "incorrect function return type expected {:?} got {:?}",
-                        module.instantiator.get_type(return_type_ins),
-                        module.instantiator.get_type(body_type)
-                    );
-                    todo!("proper error for function body type mismatch")
+                    return Err(InfoError {
+                        info: return_type.idx,
+                        data: Error::TypeError(TypeError::IncompatibleTypes {
+                            expected: module
+                                .instantiator
+                                .get_type(return_type_ins)
+                                .unwrap()
+                                .clone(),
+                            got: module.instantiator.get_type(body_type).unwrap().clone(),
+                        }),
+                    });
                 }
             }
             Token::Keyword(Keyword::Struct) => {
@@ -214,6 +218,15 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Module, InfoError> {
 
                 let ((name, name_idx), generics, _, args, return_type) =
                     expect_function_signature(tokens, &mut module.instantiator, &mut i)?;
+
+                let generics = (0..generics.len())
+                    .map(|i| module.instantiator.add(Type::Placeholder(i)))
+                    .collect::<Vec<_>>();
+
+                module.instantiator.instantiate(&return_type, &generics)?;
+                for arg in &args {
+                    module.instantiator.instantiate(arg, &generics)?;
+                }
 
                 if tokens[i].token != Token::Semicolon {
                     return Err(InfoParseError {

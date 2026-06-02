@@ -32,6 +32,7 @@ pub enum Type {
     Concrete(ConcreteType),
     Union(usize, usize),
     EarlyReturn,
+    Placeholder(usize),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -239,11 +240,13 @@ impl Instantiator {
                 Type::Concrete(b) => Ok(a == b),
                 Type::Union(a, b) => Ok(self.compatible(*a, slot, index + 1)?
                     || self.compatible(*b, slot, index + 1)?),
+                Type::Placeholder(n) => Ok(slot_t == assignee_t),
                 Type::EarlyReturn => panic!("Early return can't be assigned"),
             },
             Type::Union(a, b) => Ok(self.compatible(assignee, *a, index + 1)?
                 || self.compatible(assignee, *b, index + 1)?),
             Type::EarlyReturn => panic!("Early return can't be a slot"),
+            Type::Placeholder(n) => Ok(slot_t == assignee_t),
         }
     }
 }

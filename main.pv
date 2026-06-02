@@ -1,7 +1,10 @@
 dylib "stdlib/print" fn print(io: IO, text: String);
 dylib "stdlib/print" fn input(io: IO): String;
 
+fn a<T>(): String {
+    a<T>()
+}
+
 fn main(io: IO, compile_io: IO) {
-    let a = 5;
-    a
+    a<String>()
 }
