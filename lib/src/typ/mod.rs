@@ -19,7 +19,7 @@ pub enum ConcreteType {
     Bool,
     String,
     Struct(HashMap<String, usize>),
-    Function(Vec<usize>, usize, Implementation, Vec<usize>),
+    Function(Vec<usize>, usize, Option<Implementation>, Vec<usize>),
     Tuple(Vec<usize>),
     IO,
 }
@@ -47,7 +47,7 @@ pub enum TypeExpr {
     String,
     IO,
 
-    Function(Vec<InfoTypeExpr>, Box<InfoTypeExpr>, Implementation),
+    Function(Vec<InfoTypeExpr>, Box<InfoTypeExpr>, Option<Implementation>),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

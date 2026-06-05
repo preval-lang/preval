@@ -19,6 +19,17 @@ use crate::passes::type_check_expr::Scope;
 pub fn parse_module(tokens: &[InfoToken]) -> Result<Program, InfoError> {
     let mut instantiator = Program::new();
 
+    module_pass(tokens, &mut instantiator, true)?;
+    module_pass(tokens, &mut instantiator, false)?;
+
+    Ok(instantiator)
+}
+
+fn module_pass(
+    tokens: &[InfoToken],
+    mut instantiator: &mut Program,
+    first: bool,
+) -> Result<(), InfoError> {
     let mut i = 0;
 
     while i < tokens.len() {
@@ -30,71 +41,85 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Program, InfoError> {
 
                 let body = expect_block_or_expr(tokens, &mut i, &generics)?;
 
-                let mut last_var = args.len();
+                if !first {
+                    let mut last_var = args.len();
 
-                let mut ir = vec![Block {
-                    terminal: Terminal::Return(last_var),
-                    statements: Vec::new(),
-                }];
+                    let mut ir = vec![Block {
+                        terminal: Terminal::Return(last_var),
+                        statements: Vec::new(),
+                    }];
 
-                let mut scope = Scope::new();
+                    let mut scope = Scope::new();
 
-                let mut locals = HashMap::new();
-                for (idx, arg) in args.iter().enumerate() {
-                    locals.insert(arg.clone(), Declaration::Variable(idx));
-                    scope.insert(
-                        arg.clone(),
-                        instantiator.instantiate(&args_types[idx], &vec![])?,
+                    let mut locals = HashMap::new();
+                    for (idx, arg) in args.iter().enumerate() {
+                        locals.insert(arg.clone(), Declaration::Variable(idx));
+                        scope.insert(
+                            arg.clone(),
+                            instantiator.instantiate(&args_types[idx], &vec![])?,
+                        );
+                    }
+
+                    to_ir(
+                        &mut ir,
+                        &mut 0,
+                        body.clone(),
+                        Some(last_var),
+                        &mut locals,
+                        &mut last_var,
+                        true,
+                    )?;
+
+                    instantiator.add_template(
+                        name,
+                        InfoTypeExpr {
+                            expr: TypeExpr::Function(
+                                args_types,
+                                Box::new(return_type.clone()),
+                                Some(Implementation::Normal(ir)),
+                            ),
+                            idx: name_idx,
+                        },
                     );
-                }
 
-                to_ir(
-                    &mut ir,
-                    &mut 0,
-                    body.clone(),
-                    Some(last_var),
-                    &mut locals,
-                    &mut last_var,
-                    true,
-                )?;
+                    let generics = (0..generics.len())
+                        .map(|i| instantiator.add(Type::Placeholder(i)))
+                        .collect::<Vec<_>>();
 
-                instantiator.add_template(
-                    name,
-                    InfoTypeExpr {
-                        expr: TypeExpr::Function(
-                            args_types,
-                            Box::new(return_type.clone()),
-                            Implementation::Normal(ir),
-                        ),
-                        idx: name_idx,
-                    },
-                );
+                    let return_type_ins = instantiator.instantiate(&return_type, &generics)?;
 
-                let generics = (0..generics.len())
-                    .map(|i| instantiator.add(Type::Placeholder(i)))
-                    .collect::<Vec<_>>();
+                    let body_type = infer_expr_type(
+                        &body,
+                        &mut instantiator,
+                        &mut scope,
+                        return_type_ins,
+                        &generics,
+                    )?;
 
-                let return_type_ins = instantiator.instantiate(&return_type, &generics)?;
-
-                let body_type = infer_expr_type(
-                    &body,
-                    &mut instantiator,
-                    &mut scope,
-                    return_type_ins,
-                    &generics,
-                )?;
-
-                if !instantiator
-                    .compatible(body_type, return_type_ins, 0)
-                    .unwrap()
-                {
-                    return Err(InfoError {
-                        info: return_type.idx,
-                        data: Error::TypeError(TypeError::IncompatibleTypes {
-                            expected: instantiator.get_type(return_type_ins).unwrap().clone(),
-                            got: instantiator.get_type(body_type).unwrap().clone(),
-                        }),
-                    });
+                    if !instantiator
+                        .compatible(body_type, return_type_ins, 0)
+                        .unwrap()
+                    {
+                        return Err(InfoError {
+                            info: return_type.idx,
+                            data: Error::TypeError(TypeError::IncompatibleTypes {
+                                expected: instantiator.get_type(return_type_ins).unwrap().clone(),
+                                got: instantiator.get_type(body_type).unwrap().clone(),
+                            }),
+                        });
+                    }
+                } else {
+                    instantiator.add_template(
+                        name,
+                        InfoTypeExpr {
+                            expr: TypeExpr::Function(
+                                args_types,
+                                Box::new(return_type.clone()),
+                                None,
+                            ),
+                            idx: name_idx,
+                        },
+                    );
                 }
             }
             Token::Keyword(Keyword::Struct) => {
@@ -231,10 +256,14 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Program, InfoError> {
                         expr: TypeExpr::Function(
                             args,
                             Box::new(return_type),
-                            Implementation::Native(NativeFunction {
-                                lib_name,
-                                func_name: name,
-                            }),
+                            if first {
+                                None
+                            } else {
+                                Some(Implementation::Native(NativeFunction {
+                                    lib_name,
+                                    func_name: name,
+                                }))
+                            },
                         ),
                         idx: name_idx,
                     },
@@ -249,8 +278,7 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Program, InfoError> {
             }
         }
     }
-
-    Ok(instantiator)
+    Ok(())
 }
 
 pub fn expect_function_signature(

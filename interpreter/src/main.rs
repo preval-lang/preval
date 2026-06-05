@@ -45,7 +45,7 @@ fn main() {
 
                     let eval = if let Some(InfoTypeExpr {
                         idx: _,
-                        expr: TypeExpr::Function(_name, _generics, Implementation::Normal(f)),
+                        expr: TypeExpr::Function(_name, _generics, Some(Implementation::Normal(f))),
                     }) = main
                     {
                         let cio = Some(Value::new(IO, type_id::IO));

@@ -62,7 +62,10 @@ pub fn evaluate(
                                 store,
                                 Some(match typ {
                                     Type::Concrete(ConcreteType::Function(_, _, imp, generics)) => {
-                                        match imp {
+                                        match imp
+                                            .clone()
+                                            .expect("Function only declared and not implemented")
+                                        {
                                             Implementation::Native(imp) => {
                                                 Value::new(imp.clone(), type_id)
                                             }
