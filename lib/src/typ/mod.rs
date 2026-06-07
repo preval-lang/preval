@@ -4,7 +4,7 @@ mod error;
 pub use error::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{ir::Block, parser::typ::InfoTypeExpr, value::native::NativeFunction};
+use crate::{error::Span, ir::Block, parser::typ::InfoTypeExpr, value::native::NativeFunction};
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Serialize, Deserialize)]
 pub enum IntegerSize {
@@ -12,7 +12,7 @@ pub enum IntegerSize {
     Number(usize),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ConcreteType {
     Integer { size: IntegerSize, signed: bool },
     Float { size: usize },
@@ -24,7 +24,7 @@ pub enum ConcreteType {
     IO,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Type {
     Concrete(ConcreteType),
     Union(usize, usize),
@@ -32,14 +32,21 @@ pub enum Type {
     Placeholder(usize),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum TypeExpr {
-    Union(Box<InfoTypeExpr>, Box<InfoTypeExpr>),
+pub type TypeExpr<'a> = BaseTypeExpr<InfoTypeExpr<'a>>;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RuntimeTypeExpr {
+    pub expr: BaseTypeExpr<RuntimeTypeExpr>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum BaseTypeExpr<T> {
+    Union(Box<T>, Box<T>),
     Name(String),
-    Generics(Box<InfoTypeExpr>, Vec<InfoTypeExpr>),
+    Generics(Box<T>, Vec<T>),
     Parameter(usize),
-    Struct(HashMap<String, InfoTypeExpr>),
-    Tuple(Vec<InfoTypeExpr>),
+    Struct(HashMap<String, T>),
+    Tuple(Vec<T>),
 
     Integer { size: IntegerSize, signed: bool },
     Float { size: usize },
@@ -47,18 +54,18 @@ pub enum TypeExpr {
     String,
     IO,
 
-    Function(Vec<InfoTypeExpr>, Box<InfoTypeExpr>, Option<Implementation>),
+    Function(Vec<T>, Box<T>, Option<Implementation>),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Implementation {
     Native(NativeFunction),
     Normal(Vec<Block>),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Program {
-    template_names: HashMap<String, InfoTypeExpr>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Program<'a> {
+    template_names: HashMap<String, InfoTypeExpr<'a>>,
     types: Vec<Type>,
 }
 
@@ -102,7 +109,7 @@ type_ids! {
     IO => TypeExpr::IO,
 }
 
-impl Program {
+impl<'a> Program<'a> {
     pub fn new() -> Self {
         let template_names = HashMap::new();
         let types = Vec::new();
@@ -117,13 +124,19 @@ impl Program {
                 name.to_string(),
                 InfoTypeExpr {
                     expr: typ.clone(),
-                    idx: 0,
+                    idx: Span {
+                        file: file!().into(),
+                        index: 0,
+                    },
                 },
             );
             this.instantiate(
                 &InfoTypeExpr {
                     expr: typ.clone(),
-                    idx: 0,
+                    idx: Span {
+                        file: file!().into(),
+                        index: 0,
+                    },
                 },
                 &vec![],
             )
@@ -132,11 +145,90 @@ impl Program {
         this
     }
 
+    pub fn instantiate_rt(
+        &mut self,
+        expr: &RuntimeTypeExpr,
+        generics: &[usize],
+    ) -> Result<usize, TypeError> {
+        let type_ = match &expr.expr {
+            BaseTypeExpr::Parameter(i) => generics[*i],
+            BaseTypeExpr::Name(n) => {
+                let template = match self.template_names.get(n) {
+                    Some(temp) => temp.clone(),
+                    None => {
+                        return Err(TypeError::UnknownType(n.clone()));
+                    }
+                };
+                match self.instantiate(&template, generics) {
+                    Ok(a) => a,
+                    Err(e) => return Err(e.error),
+                }
+            }
+            BaseTypeExpr::Union(a, b) => {
+                let a = self.instantiate_rt(a.as_ref(), generics)?;
+                let b = self.instantiate_rt(&b, generics)?;
+                self.add(Type::Union(a, b))
+            }
+            BaseTypeExpr::Generics(base, params) => {
+                let mut ins_params = Vec::new();
+
+                for param in params {
+                    ins_params.push(self.instantiate_rt(param, generics)?);
+                }
+
+                self.instantiate_rt(base.as_ref(), &ins_params)?
+            }
+            BaseTypeExpr::Struct(fields) => {
+                let mut ins_fields = HashMap::new();
+
+                for field in fields {
+                    ins_fields.insert(field.0.clone(), self.instantiate_rt(field.1, generics)?);
+                }
+                self.add(Type::Concrete(ConcreteType::Struct(ins_fields)))
+            }
+            BaseTypeExpr::Bool => self.add(Type::Concrete(ConcreteType::Bool)),
+            BaseTypeExpr::String => self.add(Type::Concrete(ConcreteType::String)),
+            BaseTypeExpr::IO => self.add(Type::Concrete(ConcreteType::IO)),
+            BaseTypeExpr::Integer { size, signed } => {
+                self.add(Type::Concrete(ConcreteType::Integer {
+                    size: *size,
+                    signed: *signed,
+                }))
+            }
+            BaseTypeExpr::Float { size } => {
+                self.add(Type::Concrete(ConcreteType::Float { size: *size }))
+            }
+            BaseTypeExpr::Tuple(elems) => {
+                let mut ins_elems = Vec::new();
+
+                for elem in elems {
+                    ins_elems.push(self.instantiate_rt(elem, generics)?);
+                }
+                self.add(Type::Concrete(ConcreteType::Tuple(ins_elems)))
+            }
+            BaseTypeExpr::Function(args, ret, imp) => {
+                let mut ins_args = Vec::new();
+                for arg in args {
+                    ins_args.push(self.instantiate_rt(arg, generics)?);
+                }
+                let ret = self.instantiate_rt(ret, generics)?;
+                self.add(Type::Concrete(ConcreteType::Function(
+                    ins_args,
+                    ret,
+                    imp.clone(),
+                    generics.to_vec(),
+                )))
+            }
+        };
+
+        Ok(type_)
+    }
+
     pub fn instantiate(
         &mut self,
-        expr: &InfoTypeExpr,
+        expr: &InfoTypeExpr<'a>,
         generics: &[usize],
-    ) -> Result<usize, InfoTypeError> {
+    ) -> Result<usize, InfoTypeError<'a>> {
         let type_ = match &expr.expr {
             TypeExpr::Parameter(i) => generics[*i],
             TypeExpr::Name(n) => {
@@ -144,7 +236,7 @@ impl Program {
                     Some(temp) => temp.clone(),
                     None => {
                         return Err(InfoTypeError {
-                            idx: expr.idx,
+                            span: expr.idx.clone(),
                             error: TypeError::UnknownType(n.clone()),
                         });
                     }
@@ -214,7 +306,7 @@ impl Program {
         self.types.len() - 1
     }
 
-    pub fn add_template(&mut self, name: String, expr: InfoTypeExpr) {
+    pub fn add_template(&mut self, name: String, expr: InfoTypeExpr<'a>) {
         self.template_names.insert(name, expr);
     }
 

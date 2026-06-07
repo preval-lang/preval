@@ -1,79 +1,70 @@
 use std::collections::HashMap;
 
+use crate::error::Span;
 use crate::parser::typ::{InfoTypeExpr, parse_type};
 use crate::parser::utility::read_punctuated;
 use crate::tokeniser::Literal;
 use crate::{
-    ir::error::{IRError, IRErrorInfo},
+    ir::error::IRError,
     tokeniser::{InfoToken, Keyword, Token},
 };
 
 #[derive(Debug, Clone)]
-pub enum Expr {
-    Index(Box<InfoExpr>, Box<InfoExpr>),
-    Name(InfoTypeExpr),
+pub enum Expr<'a> {
+    Index(Box<InfoExpr<'a>>, Box<InfoExpr<'a>>),
+    Name(InfoTypeExpr<'a>),
     Literal(Literal),
-    Call(Box<InfoExpr>, Vec<InfoExpr>),
-    Return(Option<Box<InfoExpr>>),
-    Block(Vec<InfoExpr>, bool),
-    Let(String, Box<InfoExpr>),
+    Call(Box<InfoExpr<'a>>, Vec<InfoExpr<'a>>),
+    Return(Option<Box<InfoExpr<'a>>>),
+    Block(Vec<InfoExpr<'a>>, bool),
+    Let(String, Box<InfoExpr<'a>>),
     If {
-        cond: Box<InfoExpr>,
-        then: Box<InfoExpr>,
-        els: Option<Box<InfoExpr>>,
+        cond: Box<InfoExpr<'a>>,
+        then: Box<InfoExpr<'a>>,
+        els: Option<Box<InfoExpr<'a>>>,
     },
-    InitializeStruct(InfoTypeExpr, HashMap<String, InfoExpr>),
-    Access(Box<InfoExpr>, String),
+    InitializeStruct(InfoTypeExpr<'a>, HashMap<String, InfoExpr<'a>>),
+    Access(Box<InfoExpr<'a>>, String),
     Guard {
-        dependency: Box<InfoExpr>,
-        body: Box<InfoExpr>,
+        dependency: Box<InfoExpr<'a>>,
+        body: Box<InfoExpr<'a>>,
     },
     Is {
         name: String,
-        typ: InfoTypeExpr,
+        typ: InfoTypeExpr<'a>,
     },
 }
 
 #[derive(Debug, Clone)]
-pub struct InfoExpr {
-    pub idx: usize,
-    pub expr: Expr,
+pub struct InfoExpr<'a> {
+    pub idx: Span<'a>,
+    pub expr: Expr<'a>,
+}
+
+pub struct InfoParseError<'a> {
+    pub span: Span<'a>,
+    pub error: ParseError<'a>,
 }
 
 #[derive(Debug)]
-pub struct InfoParseError {
-    pub idx: usize,
-    pub error: ParseError,
-}
-
-#[derive(Debug)]
-pub enum ParseError {
+pub enum ParseError<'a> {
     ExpectedName,
-    ExpectedExpression(Vec<InfoToken>),
-    ExpectedString(InfoToken),
+    ExpectedExpression(Vec<InfoToken<'a>>),
+    ExpectedString(InfoToken<'a>),
     ExpectedTopLevel,
-    ExpectedFunctionSignature(InfoToken),
-    ExpectedSemicolon(InfoToken),
+    ExpectedFunctionSignature(InfoToken<'a>),
+    ExpectedSemicolon(InfoToken<'a>),
     ExpectedAssign,
     DuplicateName,
-    TypeUndefined(Vec<InfoToken>),
+    TypeUndefined(Vec<InfoToken<'a>>),
     IRError(IRError),
     UnclosedAngleBrackets,
 }
 
-impl From<IRErrorInfo> for InfoParseError {
-    fn from(value: IRErrorInfo) -> Self {
-        InfoParseError {
-            idx: value.idx,
-            error: ParseError::IRError(value.error),
-        }
-    }
-}
-
-pub fn parse_expression(
-    tokens: &[InfoToken],
+pub fn parse_expression<'a>(
+    tokens: &[InfoToken<'a>],
     generics: &[String],
-) -> Result<InfoExpr, InfoParseError> {
+) -> Result<InfoExpr<'a>, InfoParseError<'a>> {
     if let Some(expr) = try_parse_parens(tokens, generics)? {
         return Ok(expr);
     }
@@ -130,29 +121,26 @@ pub fn parse_expression(
         return Ok(expr);
     }
 
-    Err(InfoParseError {
-        idx: 0,
-        error: ParseError::ExpectedExpression(tokens.to_vec()),
-    })
+    todo!("expected expression error span should be passed to parse_expression")
 }
 
-fn try_parse_let(
-    tokens: &[InfoToken],
+fn try_parse_let<'a>(
+    tokens: &[InfoToken<'a>],
     generics: &[String],
-) -> Result<Option<InfoExpr>, InfoParseError> {
+) -> Result<Option<InfoExpr<'a>>, InfoParseError<'a>> {
     if let Some(InfoToken {
         token: Token::Keyword(Keyword::Let),
-        idx: let_idx,
+        span: let_idx,
     }) = tokens.get(0)
     {
         if let Some(InfoToken {
             token: Token::Name(name),
-            idx: _,
+            span: _,
         }) = tokens.get(1)
         {
             if let Some(InfoToken {
                 token: Token::Assignment,
-                idx: _,
+                span: _,
             }) = tokens.get(2)
             {
                 return Ok(Some(InfoExpr {
@@ -160,17 +148,17 @@ fn try_parse_let(
                         name.clone(),
                         Box::new(parse_expression(&tokens[3..], generics)?),
                     ),
-                    idx: *let_idx,
+                    idx: let_idx.clone(),
                 }));
             } else {
                 return Err(InfoParseError {
-                    idx: *let_idx,
+                    span: let_idx.clone(),
                     error: ParseError::ExpectedAssign,
                 });
             }
         } else {
             return Err(InfoParseError {
-                idx: *let_idx,
+                span: let_idx.clone(),
                 error: ParseError::ExpectedName,
             });
         }
@@ -178,24 +166,24 @@ fn try_parse_let(
     Ok(None)
 }
 
-fn try_parse_guard(
-    tokens: &[InfoToken],
+fn try_parse_guard<'a>(
+    tokens: &[InfoToken<'a>],
     generics: &[String],
-) -> Result<Option<InfoExpr>, InfoParseError> {
+) -> Result<Option<InfoExpr<'a>>, InfoParseError<'a>> {
     if let [
         InfoToken {
             token: Token::Keyword(Keyword::Guard),
-            idx: guard_idx,
+            span: guard_idx,
         },
         InfoToken {
             token: Token::Parens(dependency),
-            idx: _,
+            span: _,
         },
         rest @ ..,
     ] = tokens
     {
         return Ok(Some(InfoExpr {
-            idx: *guard_idx,
+            idx: guard_idx.clone(),
             expr: Expr::Guard {
                 dependency: Box::new(parse_expression(dependency, generics)?),
                 body: Box::new(parse_expression(rest, generics)?),
@@ -205,24 +193,24 @@ fn try_parse_guard(
     Ok(None)
 }
 
-fn try_parse_is(
-    tokens: &[InfoToken],
+fn try_parse_is<'a>(
+    tokens: &[InfoToken<'a>],
     generics: &[String],
-) -> Result<Option<InfoExpr>, InfoParseError> {
+) -> Result<Option<InfoExpr<'a>>, InfoParseError<'a>> {
     if let [
         InfoToken {
             token: Token::Name(name),
-            idx: _,
+            span: _,
         },
         InfoToken {
             token: Token::Keyword(Keyword::Is),
-            idx: is_idx,
+            span: is_idx,
         },
         type_expr @ ..,
     ] = tokens
     {
         return Ok(Some(InfoExpr {
-            idx: *is_idx,
+            idx: is_idx.clone(),
             expr: Expr::Is {
                 name: name.clone(),
                 typ: parse_type(type_expr, generics)?,
@@ -232,27 +220,27 @@ fn try_parse_is(
     Ok(None)
 }
 
-fn try_parse_if(
-    tokens: &[InfoToken],
+fn try_parse_if<'a>(
+    tokens: &[InfoToken<'a>],
     generics: &[String],
-) -> Result<Option<InfoExpr>, InfoParseError> {
+) -> Result<Option<InfoExpr<'a>>, InfoParseError<'a>> {
     if let [
         InfoToken {
             token: Token::Keyword(Keyword::If),
-            idx: if_idx,
+            span: if_idx,
         },
         condition @ ..,
         then_block @ InfoToken {
             token: Token::Braces(_),
-            idx: _,
+            span: _,
         },
         InfoToken {
             token: Token::Keyword(Keyword::Else),
-            idx: _,
+            span: _,
         },
         else_block @ InfoToken {
             token: Token::Braces(_),
-            idx: _,
+            span: _,
         },
     ] = tokens
     {
@@ -262,21 +250,21 @@ fn try_parse_if(
                 then: Box::new(parse_expression(&[then_block.clone()], generics)?),
                 els: Some(Box::new(parse_expression(&[else_block.clone()], generics)?)),
             },
-            idx: *if_idx,
+            idx: if_idx.clone(),
         }));
     }
     Ok(None)
 }
 
-fn try_parse_struct(
-    tokens: &[InfoToken],
+fn try_parse_struct<'a>(
+    tokens: &[InfoToken<'a>],
     generics: &[String],
-) -> Result<Option<InfoExpr>, InfoParseError> {
+) -> Result<Option<InfoExpr<'a>>, InfoParseError<'a>> {
     if let [
         type_tokens @ ..,
         InfoToken {
             token: Token::Braces(contents),
-            idx: _brace_idx,
+            span: _brace_idx,
         },
     ] = tokens
     {
@@ -285,11 +273,11 @@ fn try_parse_struct(
             if let [
                 InfoToken {
                     token: Token::Name(name),
-                    idx: _name_idx,
+                    span: _name_idx,
                 },
                 InfoToken {
                     token: Token::Colon,
-                    idx: _colon_idx,
+                    span: _colon_idx,
                 },
                 value @ ..,
             ] = &name_colon_value[..]
@@ -303,21 +291,21 @@ fn try_parse_struct(
 
         Ok(Some(InfoExpr {
             expr: Expr::InitializeStruct(type_expr, fields),
-            idx: type_tokens[0].idx,
+            idx: type_tokens[0].span.clone(),
         }))
     } else {
         Ok(None)
     }
 }
 
-fn try_parse_return(
-    tokens: &[InfoToken],
+fn try_parse_return<'a>(
+    tokens: &[InfoToken<'a>],
     generics: &[String],
-) -> Result<Option<InfoExpr>, InfoParseError> {
+) -> Result<Option<InfoExpr<'a>>, InfoParseError<'a>> {
     if let [
         InfoToken {
             token: Token::Keyword(Keyword::Return),
-            idx,
+            span: idx,
         },
         return_tokens @ ..,
     ] = tokens
@@ -330,20 +318,20 @@ fn try_parse_return(
                     Some(Box::new(parse_expression(return_tokens, generics)?))
                 }
             }),
-            idx: *idx,
+            idx: idx.clone(),
         }));
     }
     Ok(None)
 }
 
-fn try_parse_index(
-    tokens: &[InfoToken],
+fn try_parse_index<'a>(
+    tokens: &[InfoToken<'a>],
     generics: &[String],
-) -> Result<Option<InfoExpr>, InfoParseError> {
+) -> Result<Option<InfoExpr<'a>>, InfoParseError<'a>> {
     if let [
         left @ ..,
         InfoToken {
-            idx,
+            span: idx,
             token: Token::Index(index),
         },
     ] = tokens
@@ -353,20 +341,20 @@ fn try_parse_index(
                 Box::new(parse_expression(left, generics)?),
                 Box::new(parse_expression(index, generics)?),
             ),
-            idx: *idx,
+            idx: idx.clone(),
         }));
     }
     Ok(None)
 }
 
-fn try_parse_parens(
-    tokens: &[InfoToken],
+fn try_parse_parens<'a>(
+    tokens: &[InfoToken<'a>],
     generics: &[String],
-) -> Result<Option<InfoExpr>, InfoParseError> {
+) -> Result<Option<InfoExpr<'a>>, InfoParseError<'a>> {
     if let [
         InfoToken {
             token: Token::Parens(contents),
-            idx: _,
+            span: _,
         },
     ] = tokens
     {
@@ -375,40 +363,40 @@ fn try_parse_parens(
     Ok(None)
 }
 
-fn try_parse_dot(
-    tokens: &[InfoToken],
+fn try_parse_dot<'a>(
+    tokens: &[InfoToken<'a>],
     generics: &[String],
-) -> Result<Option<InfoExpr>, InfoParseError> {
+) -> Result<Option<InfoExpr<'a>>, InfoParseError<'a>> {
     if let [
         left @ ..,
         InfoToken {
             token: Token::Dot,
-            idx,
+            span: idx,
         },
         InfoToken {
             token: Token::Name(name),
-            idx: _name_idx,
+            span: _name_idx,
         },
     ] = tokens
     {
         return Ok(Some(InfoExpr {
             expr: Expr::Access(Box::new(parse_expression(left, generics)?), name.clone()),
-            idx: *idx,
+            idx: idx.clone(),
         }));
     }
 
     Ok(None)
 }
 
-fn try_parse_call(
-    tokens: &[InfoToken],
+fn try_parse_call<'a>(
+    tokens: &[InfoToken<'a>],
     generics: &[String],
-) -> Result<Option<InfoExpr>, InfoParseError> {
+) -> Result<Option<InfoExpr<'a>>, InfoParseError<'a>> {
     if let [
         left @ ..,
         InfoToken {
             token: Token::Parens(contents),
-            idx,
+            span: idx,
         },
     ] = tokens
     {
@@ -420,20 +408,20 @@ fn try_parse_call(
                 }
                 out
             }),
-            idx: *idx,
+            idx: idx.clone(),
         }));
     }
     Ok(None)
 }
 
-fn try_parse_block(
-    tokens: &[InfoToken],
+fn try_parse_block<'a>(
+    tokens: &[InfoToken<'a>],
     generics: &[String],
-) -> Result<Option<InfoExpr>, InfoParseError> {
+) -> Result<Option<InfoExpr<'a>>, InfoParseError<'a>> {
     if let [
         InfoToken {
             token: Token::Braces(contents),
-            idx,
+            span: idx,
         },
     ] = tokens
     {
@@ -454,49 +442,53 @@ fn try_parse_block(
         }
         return Ok(Some(InfoExpr {
             expr: Expr::Block(out, returns),
-            idx: *idx,
+            idx: idx.clone(),
         }));
     }
     Ok(None)
 }
 
-fn try_parse_name(
-    tokens: &[InfoToken],
+fn try_parse_name<'a>(
+    tokens: &[InfoToken<'a>],
     generics: &[String],
-) -> Result<Option<InfoExpr>, InfoParseError> {
+) -> Result<Option<InfoExpr<'a>>, InfoParseError<'a>> {
     Ok(Some(InfoExpr {
-        idx: tokens[0].idx,
+        idx: tokens[0].span.clone(),
         expr: Expr::Name(parse_type(tokens, generics)?),
     }))
 }
 
-fn try_parse_literal(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError> {
+fn try_parse_literal<'a>(
+    tokens: &[InfoToken<'a>],
+) -> Result<Option<InfoExpr<'a>>, InfoParseError<'a>> {
     if let [
         InfoToken {
             token: Token::Literal(value),
-            idx,
+            span: idx,
         },
     ] = tokens
     {
         return Ok(Some(InfoExpr {
             expr: Expr::Literal(value.clone()),
-            idx: *idx,
+            idx: idx.clone(),
         }));
     }
     Ok(None)
 }
 
-fn try_parse_boolean(tokens: &[InfoToken]) -> Result<Option<InfoExpr>, InfoParseError> {
+fn try_parse_boolean<'a>(
+    tokens: &[InfoToken<'a>],
+) -> Result<Option<InfoExpr<'a>>, InfoParseError<'a>> {
     if let [
         InfoToken {
             token: Token::Keyword(Keyword::Bool(value)),
-            idx,
+            span: idx,
         },
     ] = tokens
     {
         return Ok(Some(InfoExpr {
             expr: Expr::Literal(Literal::Bool(*value)),
-            idx: *idx,
+            idx: idx.clone(),
         }));
     }
     Ok(None)

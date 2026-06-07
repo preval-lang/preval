@@ -1,23 +1,24 @@
 use std::collections::HashMap;
 
+use crate::error::Span;
 use crate::ir::error::{IRError, IRErrorInfo};
 use crate::{
     ir::{Block, Declaration, Operation, Statement, Terminal, to_ir},
     parser::expression::InfoExpr,
 };
 
-pub fn conditional(
-    cond: Box<InfoExpr>,
-    then: Box<InfoExpr>,
-    els: Option<Box<InfoExpr>>,
-    idx: usize,
+pub fn conditional<'a>(
+    cond: Box<InfoExpr<'a>>,
+    then: Box<InfoExpr<'a>>,
+    els: Option<Box<InfoExpr<'a>>>,
+    idx: Span<'a>,
     function: &mut Vec<Block>,
     block: &mut usize,
     store: Option<usize>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
     tail: bool,
-) -> Result<(), IRErrorInfo> {
+) -> Result<(), IRErrorInfo<'a>> {
     let cond_var = {
         *next_var += 1;
         *next_var
@@ -102,7 +103,7 @@ pub fn conditional(
             });
         } else {
             return Err(IRErrorInfo {
-                idx,
+                idx: idx,
                 error: IRError::MissingElseBlock(),
             });
         }

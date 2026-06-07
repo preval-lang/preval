@@ -7,13 +7,13 @@ use crate::ir::{Declaration, Operation, Statement};
 use crate::parser::typ::InfoTypeExpr;
 use crate::typ::TypeExpr;
 
-pub fn variable(
-    name: InfoTypeExpr,
+pub fn variable<'a>(
+    name: InfoTypeExpr<'a>,
     function: &mut Vec<Block>,
     block: &mut usize,
     store: Option<usize>,
     locals: &mut HashMap<String, Declaration>,
-) -> Result<(), IRErrorInfo> {
+) -> Result<(), IRErrorInfo<'a>> {
     if let Some(store) = store {
         match name.expr {
             TypeExpr::Name(name) if locals.contains_key(&name) => match locals[&name] {
@@ -27,7 +27,7 @@ pub fn variable(
             _ => {
                 function[*block].statements.push(Statement {
                     store: Some(store),
-                    operation: Operation::LoadFunction(name),
+                    operation: Operation::LoadFunction(name.into()),
                 });
             }
         }

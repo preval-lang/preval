@@ -1,7 +1,7 @@
 use std::{collections::HashMap, usize};
 
 use crate::{
-    error::{Error, InfoError},
+    error::{Error, InfoError, Span},
     ir::{Block, Declaration, Terminal, to_ir},
     parser::{
         expression::{InfoExpr, InfoParseError, ParseError, parse_expression},
@@ -16,7 +16,7 @@ use crate::{
 
 use crate::passes::type_check_expr::Scope;
 
-pub fn parse_module(tokens: &[InfoToken]) -> Result<Program, InfoError> {
+pub fn parse_module<'a>(tokens: &[InfoToken<'a>]) -> Result<Program<'a>, InfoError<'a>> {
     let mut instantiator = Program::new();
 
     module_pass(tokens, &mut instantiator, true)?;
@@ -25,11 +25,11 @@ pub fn parse_module(tokens: &[InfoToken]) -> Result<Program, InfoError> {
     Ok(instantiator)
 }
 
-fn module_pass(
-    tokens: &[InfoToken],
-    mut instantiator: &mut Program,
+fn module_pass<'a>(
+    tokens: &[InfoToken<'a>],
+    mut instantiator: &mut Program<'a>,
     first: bool,
-) -> Result<(), InfoError> {
+) -> Result<(), InfoError<'a>> {
     let mut i = 0;
 
     while i < tokens.len() {
@@ -101,7 +101,7 @@ fn module_pass(
                         .unwrap()
                     {
                         return Err(InfoError {
-                            info: return_type.idx,
+                            span: return_type.idx,
                             data: Error::TypeError(TypeError::IncompatibleTypes {
                                 expected: instantiator.get_type(return_type_ins).unwrap().clone(),
                                 got: instantiator.get_type(body_type).unwrap().clone(),
@@ -129,7 +129,7 @@ fn module_pass(
                     Ok(name)
                 } else {
                     Err(InfoParseError {
-                        idx: tokens[i].idx,
+                        span: tokens[i].span.clone(),
                         error: ParseError::ExpectedName,
                     })
                 }?;
@@ -140,7 +140,7 @@ fn module_pass(
                     loop {
                         if let Some(InfoToken {
                             token: Token::GreaterThan,
-                            idx: _,
+                            span: _,
                         }) = tokens.iter().nth(i)
                         {
                             break;
@@ -160,7 +160,7 @@ fn module_pass(
                             if let [
                                 InfoToken {
                                     token: Token::Name(name),
-                                    idx: _,
+                                    span: _,
                                 },
                             ] = &param_tokens[..]
                             {
@@ -177,7 +177,7 @@ fn module_pass(
                     Ok(block)
                 } else {
                     Err(InfoParseError {
-                        idx: tokens[i].idx,
+                        span: tokens[i].span.clone(),
                         error: ParseError::ExpectedExpression(tokens[i..].to_vec()),
                     })
                 }?;
@@ -188,11 +188,11 @@ fn module_pass(
                     if let [
                         InfoToken {
                             token: Token::Name(name),
-                            idx: _name_idx,
+                            span: _name_idx,
                         },
                         InfoToken {
                             token: Token::Colon,
-                            idx: _colon_idx,
+                            span: _colon_idx,
                         },
                         typ @ ..,
                     ] = field_colon_type.as_slice()
@@ -206,21 +206,21 @@ fn module_pass(
                     name.clone(),
                     InfoTypeExpr {
                         expr: TypeExpr::Struct(fields),
-                        idx,
+                        idx: tokens[idx].span.clone(),
                     },
                 );
             }
             Token::Keyword(Keyword::Dylib) => {
                 i += 1;
                 let lib_name = if let InfoToken {
-                    idx: _,
+                    span: _,
                     token: Token::Literal(Literal::String(s)),
                 } = &tokens[i]
                 {
                     s.clone()
                 } else {
                     return Err(InfoParseError {
-                        idx: tokens[i].idx,
+                        span: tokens[i].span.clone(),
                         error: ParseError::ExpectedString(tokens[i].clone()),
                     }
                     .into());
@@ -243,7 +243,7 @@ fn module_pass(
 
                 if tokens[i].token != Token::Semicolon {
                     return Err(InfoParseError {
-                        idx: tokens[i].idx,
+                        span: tokens[i].span.clone(),
                         error: ParseError::ExpectedSemicolon(tokens[i].clone()),
                     }
                     .into());
@@ -271,7 +271,7 @@ fn module_pass(
             }
             _tk => {
                 return Err(InfoParseError {
-                    idx: tokens[i].idx,
+                    span: tokens[i].span.clone(),
                     error: ParseError::ExpectedTopLevel,
                 }
                 .into());
@@ -281,21 +281,21 @@ fn module_pass(
     Ok(())
 }
 
-pub fn expect_function_signature(
-    tokens: &[InfoToken],
+pub fn expect_function_signature<'a>(
+    tokens: &[InfoToken<'a>],
     i: &mut usize,
 ) -> Result<
     (
-        (String, usize),
+        (String, Span<'a>),
         Vec<String>,
         Vec<String>,
-        Vec<InfoTypeExpr>,
-        InfoTypeExpr,
+        Vec<InfoTypeExpr<'a>>,
+        InfoTypeExpr<'a>,
     ),
-    InfoParseError,
+    InfoParseError<'a>,
 > {
     if let Token::Name(name) = &tokens[*i].token {
-        let name_idx = tokens[*i].idx;
+        let name_idx = tokens[*i].span.clone();
         *i += 1;
 
         let mut args = Vec::new();
@@ -305,7 +305,7 @@ pub fn expect_function_signature(
             loop {
                 if let Some(InfoToken {
                     token: Token::GreaterThan,
-                    idx: _,
+                    span: _,
                 }) = tokens.get(*i)
                 {
                     break;
@@ -325,7 +325,7 @@ pub fn expect_function_signature(
                     if let [
                         InfoToken {
                             token: Token::Name(name),
-                            idx: _,
+                            span: _,
                         },
                     ] = &param_tokens[..]
                     {
@@ -344,11 +344,11 @@ pub fn expect_function_signature(
                 if let [
                     InfoToken {
                         token: Token::Name(name),
-                        idx: _name_idx,
+                        span: _name_idx,
                     },
                     InfoToken {
                         token: Token::Colon,
-                        idx: _colon_idx,
+                        span: _colon_idx,
                     },
                     typ @ ..,
                 ] = &arg_colon_type[..]
@@ -367,7 +367,7 @@ pub fn expect_function_signature(
             loop {
                 if let Some(InfoToken {
                     token: Token::Braces(_) | Token::Semicolon,
-                    idx: _,
+                    span: _,
                 }) = tokens.iter().nth(*i)
                 {
                     break;
@@ -379,7 +379,7 @@ pub fn expect_function_signature(
         } else {
             InfoTypeExpr {
                 expr: TypeExpr::Tuple(Vec::new()),
-                idx: tokens[*i].idx,
+                idx: tokens[*i].span.clone(),
             }
         };
         Ok((
@@ -391,20 +391,20 @@ pub fn expect_function_signature(
         ))
     } else {
         Err(InfoParseError {
-            idx: *i,
+            span: tokens[*i].span.clone(),
             error: ParseError::ExpectedFunctionSignature(tokens[*i].clone()),
         })
     }
 }
 
-pub fn expect_block_or_expr(
-    tokens: &[InfoToken],
+pub fn expect_block_or_expr<'a>(
+    tokens: &[InfoToken<'a>],
     i: &mut usize,
     generics: &[String],
-) -> Result<InfoExpr, InfoParseError> {
+) -> Result<InfoExpr<'a>, InfoParseError<'a>> {
     if let Some(InfoToken {
         token: Token::Braces(_),
-        idx: _,
+        span: _,
     }) = tokens.get(*i)
     {
         *i += 1;

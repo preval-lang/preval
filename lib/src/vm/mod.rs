@@ -53,7 +53,7 @@ pub fn evaluate(
                     operation: Operation::LoadFunction(type_expr),
                 } => {
                     let type_id = module
-                        .instantiate(&type_expr, &generics)
+                        .instantiate_rt(&type_expr, &generics)
                         .expect("move this to compile time by specialising function body");
                     let typ = module.get_type(type_id);
                     if let Some(typ) = typ {

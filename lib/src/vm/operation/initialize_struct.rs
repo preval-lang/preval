@@ -1,12 +1,11 @@
-use crate::parser::typ::InfoTypeExpr;
-use crate::typ::Program;
+use crate::typ::{Program, RuntimeTypeExpr};
 use crate::value::Value;
 use crate::value::structure::Struct;
 use crate::vm::Statement;
 use std::collections::HashMap;
 
 pub fn initialize_struct(
-    typ: InfoTypeExpr,
+    typ: RuntimeTypeExpr,
     fields: HashMap<String, usize>,
     store: Option<usize>,
     module: &mut Program,
@@ -28,7 +27,7 @@ pub fn initialize_struct(
         }
 
         let type_n = module
-            .instantiate(&typ, generics)
+            .instantiate_rt(&typ, generics)
             .expect("move this to compile time by specialising the function body");
 
         vars.insert(

@@ -12,13 +12,13 @@ use crate::typ::type_id;
 use crate::value::Value;
 use crate::value::primitive::EmptyTuple;
 
-pub fn returns(
-    value_expr: Option<Box<InfoExpr>>,
+pub fn returns<'a>(
+    value_expr: Option<Box<InfoExpr<'a>>>,
     function: &mut Vec<Block>,
     block: &mut usize,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
-) -> Result<(), IRErrorInfo> {
+) -> Result<(), IRErrorInfo<'a>> {
     let return_var = {
         *next_var += 1;
         *next_var

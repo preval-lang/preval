@@ -6,15 +6,15 @@ use crate::{
 };
 use std::collections::HashMap;
 
-pub fn index(
-    left: Box<InfoExpr>,
-    right: Box<InfoExpr>,
+pub fn index<'a>(
+    left: Box<InfoExpr<'a>>,
+    right: Box<InfoExpr<'a>>,
     function: &mut Vec<Block>,
     block: &mut usize,
     store: Option<usize>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
-) -> Result<(), IRErrorInfo> {
+) -> Result<(), IRErrorInfo<'a>> {
     let left_var = {
         *next_var += 1;
         *next_var

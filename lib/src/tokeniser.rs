@@ -1,6 +1,9 @@
-use std::fmt::Debug;
+use std::{borrow::Cow, fmt::Debug};
 
-use crate::typ::{ConcreteType, IntegerSize};
+use crate::{
+    error::Span,
+    typ::{ConcreteType, IntegerSize},
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Keyword {
@@ -38,13 +41,13 @@ impl TryFrom<&str> for Keyword {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Token {
+pub enum Token<'a> {
     Name(String),
     Keyword(Keyword),
     Literal(Literal),
-    Parens(Vec<InfoToken>),
-    Braces(Vec<InfoToken>),
-    Index(Vec<InfoToken>),
+    Parens(Vec<InfoToken<'a>>),
+    Braces(Vec<InfoToken<'a>>),
+    Index(Vec<InfoToken<'a>>),
     Semicolon,
     Colon,
     Comma,
@@ -75,21 +78,27 @@ impl Literal {
     }
 }
 
-#[derive(Clone, PartialEq)]
-pub struct InfoToken {
-    pub token: Token,
-    pub idx: usize,
+#[derive(Clone)]
+pub struct InfoToken<'a> {
+    pub token: Token<'a>,
+    pub span: Span<'a>,
 }
 
-impl Debug for InfoToken {
+impl PartialEq for InfoToken<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.token == other.token
+    }
+}
+
+impl Debug for InfoToken<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Token::fmt(&self.token, f)
     }
 }
 
 #[derive(Debug)]
-pub struct TokeniseErrorInfo {
-    pub idx: usize,
+pub struct TokeniseErrorInfo<'a> {
+    pub idx: Span<'a>,
     pub error: TokeniseError,
 }
 
@@ -123,7 +132,11 @@ pub fn get_line_and_column(input: &str, idx: usize) -> Result<(usize, usize), EO
     Err(EOF {})
 }
 
-pub fn tokenise(input: &str, offset: usize) -> Result<Vec<InfoToken>, TokeniseErrorInfo> {
+pub fn tokenise<'a>(
+    input: &str,
+    offset: usize,
+    file: Cow<'a, str>,
+) -> Result<Vec<InfoToken<'a>>, TokeniseErrorInfo<'a>> {
     let mut out = Vec::new();
 
     let mut i = 0;
@@ -132,95 +145,122 @@ pub fn tokenise(input: &str, offset: usize) -> Result<Vec<InfoToken>, TokeniseEr
         match input.chars().nth(i) {
             None => break,
             Some(c) if c.is_alphabetic() || c == '_' => {
-                out.push(read_name(input, &mut i, offset));
+                out.push(read_name(input, &mut i, offset, file.clone()));
             }
             Some('.') => {
                 out.push(InfoToken {
                     token: Token::Dot,
-                    idx: offset + i,
+                    span: Span {
+                        index: offset + i,
+                        file: file.clone(),
+                    },
                 });
                 i += 1;
             }
             Some('=') => {
                 out.push(InfoToken {
                     token: Token::Assignment,
-                    idx: offset + i,
+                    span: Span {
+                        index: offset + i,
+                        file: file.clone(),
+                    },
                 });
                 i += 1;
             }
             Some(';') => {
                 out.push(InfoToken {
                     token: Token::Semicolon,
-                    idx: offset + i,
+                    span: Span {
+                        index: offset + i,
+                        file: file.clone(),
+                    },
                 });
                 i += 1;
             }
             Some(':') => {
                 out.push(InfoToken {
                     token: Token::Colon,
-                    idx: offset + i,
+                    span: Span {
+                        index: offset + i,
+                        file: file.clone(),
+                    },
                 });
                 i += 1;
             }
             Some(',') => {
                 out.push(InfoToken {
                     token: Token::Comma,
-                    idx: offset + i,
+                    span: Span {
+                        index: offset + i,
+                        file: file.clone(),
+                    },
                 });
                 i += 1;
             }
             Some('|') => {
                 out.push(InfoToken {
                     token: Token::Union,
-                    idx: offset + i,
+                    span: Span {
+                        index: offset + i,
+                        file: file.clone(),
+                    },
                 });
                 i += 1;
             }
             Some('<') => {
                 out.push(InfoToken {
                     token: Token::LessThan,
-                    idx: offset + i,
+                    span: Span {
+                        index: offset + i,
+                        file: file.clone(),
+                    },
                 });
                 i += 1;
             }
             Some('>') => {
                 out.push(InfoToken {
                     token: Token::GreaterThan,
-                    idx: offset + i,
+                    span: Span {
+                        index: offset + i,
+                        file: file.clone(),
+                    },
                 });
                 i += 1;
             }
             Some('(') => {
-                let (idx, contents) = read_brackets(input, &mut i, offset, '(', ')')?;
+                let (idx, contents) = read_brackets(input, &mut i, offset, '(', ')', file.clone())?;
                 out.push(InfoToken {
                     token: Token::Parens(contents),
-                    idx,
+                    span: idx,
                 });
             }
             Some('{') => {
-                let (idx, contents) = read_brackets(input, &mut i, offset, '{', '}')?;
+                let (idx, contents) = read_brackets(input, &mut i, offset, '{', '}', file.clone())?;
                 out.push(InfoToken {
                     token: Token::Braces(contents),
-                    idx,
+                    span: idx,
                 });
             }
             Some('[') => {
-                let (idx, contents) = read_brackets(input, &mut i, offset, '[', ']')?;
+                let (idx, contents) = read_brackets(input, &mut i, offset, '[', ']', file.clone())?;
                 out.push(InfoToken {
                     token: Token::Index(contents),
-                    idx,
+                    span: idx,
                 });
             }
             Some('"') => {
-                out.push(read_string(input, &mut i, offset)?);
+                out.push(read_string(input, &mut i, offset, file.clone())?);
             }
             Some(c) if c.is_numeric() => {
-                out.push(read_number(input, &mut i, offset)?);
+                out.push(read_number(input, &mut i, offset, file.clone())?);
             }
             Some(c) if c.is_whitespace() => i += 1,
             Some(a) => {
                 return Err(TokeniseErrorInfo {
-                    idx: offset + i,
+                    idx: Span {
+                        index: offset + i,
+                        file: file.clone(),
+                    },
                     error: TokeniseError::ExpectedToken(a),
                 });
             }
@@ -230,7 +270,12 @@ pub fn tokenise(input: &str, offset: usize) -> Result<Vec<InfoToken>, TokeniseEr
     Ok(out)
 }
 
-fn read_number(input: &str, i: &mut usize, offset: usize) -> Result<InfoToken, TokeniseErrorInfo> {
+fn read_number<'a>(
+    input: &str,
+    i: &mut usize,
+    offset: usize,
+    file: Cow<'a, str>,
+) -> Result<InfoToken<'a>, TokeniseErrorInfo<'a>> {
     let start = *i;
 
     let mut number = String::new();
@@ -239,12 +284,18 @@ fn read_number(input: &str, i: &mut usize, offset: usize) -> Result<InfoToken, T
         let c = input.chars().nth(*i);
         if c.is_none() || !(c.unwrap().is_numeric() || c.unwrap() == '_') {
             return Ok(InfoToken {
-                idx: offset + start,
+                span: Span {
+                    index: offset + start,
+                    file: file.clone(),
+                },
                 token: if let Ok(num) = number.parse::<usize>() {
                     Token::Literal(Literal::Usize(num))
                 } else {
                     return Err(TokeniseErrorInfo {
-                        idx: offset + start,
+                        idx: Span {
+                            index: offset + start,
+                            file,
+                        },
                         error: TokeniseError::ExpectedNumber(number),
                     });
                 },
@@ -255,7 +306,7 @@ fn read_number(input: &str, i: &mut usize, offset: usize) -> Result<InfoToken, T
     }
 }
 
-fn read_name(input: &str, i: &mut usize, offset: usize) -> InfoToken {
+fn read_name<'a>(input: &str, i: &mut usize, offset: usize, file: Cow<'a, str>) -> InfoToken<'a> {
     let start = *i;
 
     let mut name = String::new();
@@ -264,7 +315,10 @@ fn read_name(input: &str, i: &mut usize, offset: usize) -> InfoToken {
         let c = input.chars().nth(*i);
         if c.is_none() || !(c.unwrap().is_alphanumeric() || c.unwrap() == '_') {
             return InfoToken {
-                idx: offset + start,
+                span: Span {
+                    index: offset + start,
+                    file,
+                },
                 token: if let Ok(keyword) = Keyword::try_from(name.as_str()) {
                     Token::Keyword(keyword)
                 } else {
@@ -277,13 +331,14 @@ fn read_name(input: &str, i: &mut usize, offset: usize) -> InfoToken {
     }
 }
 
-fn read_brackets(
+fn read_brackets<'a>(
     input: &str,
     i: &mut usize,
     offset: usize,
     open: char,
     close: char,
-) -> Result<(usize, Vec<InfoToken>), TokeniseErrorInfo> {
+    file: Cow<'a, str>,
+) -> Result<(Span<'a>, Vec<InfoToken<'a>>), TokeniseErrorInfo<'a>> {
     let start = *i;
 
     let mut contents = String::new();
@@ -303,7 +358,13 @@ fn read_brackets(
                 open_parens -= 1;
                 if open_parens == 0 {
                     *i += 1;
-                    return Ok((offset + start, (tokenise(&contents, offset + start + 1)?)));
+                    return Ok((
+                        Span {
+                            index: offset + start,
+                            file: file.clone(),
+                        },
+                        (tokenise(&contents, offset + start + 1, file)?),
+                    ));
                 } else {
                     contents.push(close);
                 }
@@ -313,7 +374,10 @@ fn read_brackets(
             }
             None => {
                 return Err(TokeniseErrorInfo {
-                    idx: start + offset,
+                    idx: Span {
+                        index: offset + start,
+                        file,
+                    },
                     error: TokeniseError::UnclosedParens,
                 });
             }
@@ -322,7 +386,12 @@ fn read_brackets(
     }
 }
 
-fn read_string(input: &str, i: &mut usize, offset: usize) -> Result<InfoToken, TokeniseErrorInfo> {
+fn read_string<'a>(
+    input: &str,
+    i: &mut usize,
+    offset: usize,
+    file: Cow<'a, str>,
+) -> Result<InfoToken<'a>, TokeniseErrorInfo<'a>> {
     // TODO: escape sequences
 
     let start = *i;
@@ -337,7 +406,10 @@ fn read_string(input: &str, i: &mut usize, offset: usize) -> Result<InfoToken, T
             Some('"') => {
                 *i += 1;
                 return Ok(InfoToken {
-                    idx: offset + start,
+                    span: Span {
+                        index: offset + start,
+                        file,
+                    },
                     token: Token::Literal(Literal::String(contents)),
                 });
             }
@@ -346,7 +418,10 @@ fn read_string(input: &str, i: &mut usize, offset: usize) -> Result<InfoToken, T
             }
             None => {
                 return Err(TokeniseErrorInfo {
-                    idx: start + offset,
+                    idx: Span {
+                        file,
+                        index: offset + start,
+                    },
                     error: TokeniseError::UnclosedQuotes,
                 });
             }

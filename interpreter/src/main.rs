@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, fs};
+use std::{borrow::Cow, collections::HashMap, env, fs};
 
 use preval_lib::{
     ir::Partial,
@@ -29,11 +29,11 @@ fn main() {
 
     let file = "main.pv";
     let src = String::from_utf8(fs::read(file).unwrap()).unwrap();
-    let tokens = tokenise(&src, 0);
+    let tokens = tokenise(&src, 0, Cow::Owned(file.to_owned()));
     match tokens {
         Err(err) => {
-            let (line, column) = get_line_and_column(&src, err.idx).unwrap();
-            eprintln!("{:?} at {file}:{line}:{column}", err.error);
+            let (line, column) = get_line_and_column(&src, err.idx.index).unwrap();
+            eprintln!("{:?} at {}:{line}:{column}", err.error, err.idx.file);
         }
         Ok(tokens) => {
             let module = parse_module(&tokens);
@@ -90,8 +90,11 @@ fn main() {
                     run_entire_program(&mut module, optimized, &mut vars);
                 }
                 Err(err) => {
-                    let (line, column) = get_line_and_column(&src, err.info).unwrap();
-                    eprintln!("ParseError: {:?} at {file}:{line}:{column}", err.data);
+                    let (line, column) = get_line_and_column(&src, err.span.index).unwrap();
+                    eprintln!(
+                        "ParseError: {:?} at {}:{line}:{column}",
+                        err.data, err.span.file
+                    );
                 }
             }
         }

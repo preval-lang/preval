@@ -20,8 +20,7 @@ use std::{collections::HashMap, fmt::Debug};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    parser::typ::InfoTypeExpr,
-    typ::Program,
+    typ::{Program, RuntimeTypeExpr},
     value::{PrevalValue, Value, runtime_type::TypeDeserializer},
     vm::{RunResult, evaluate},
 };
@@ -31,7 +30,7 @@ pub struct StructDescriptor {
     pub fields: HashMap<String, usize>,
 }
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct Function {
     pub ir: Vec<Block>,
     pub exported: bool,
@@ -58,7 +57,7 @@ impl PrevalValue for Function {
     }
 }
 
-#[derive(PartialEq, Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct Partial {
     pub blocks: Vec<Block>,
     pub start_block: usize,
@@ -84,13 +83,13 @@ impl PrevalValue for Partial {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Statement {
     pub store: Option<usize>,
     pub operation: Operation,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Operation {
     Call {
         function: Callable,
@@ -109,15 +108,15 @@ pub enum Operation {
     },
     Index(usize, usize),
     Access(usize, String),
-    InitializeStruct(InfoTypeExpr, HashMap<String, usize>),
-    LoadFunction(InfoTypeExpr),
+    InitializeStruct(RuntimeTypeExpr, HashMap<String, usize>),
+    LoadFunction(RuntimeTypeExpr),
     Is {
         value: usize,
-        typ: InfoTypeExpr,
+        typ: RuntimeTypeExpr,
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Callable {
     Var(usize),
     Partial(Partial),
@@ -128,7 +127,7 @@ pub enum Declaration {
     Variable(usize),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Terminal {
     Return(usize),
     Jump(usize),
@@ -153,7 +152,7 @@ pub enum Terminal {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Block {
     pub statements: Vec<Statement>,
     pub terminal: Terminal,

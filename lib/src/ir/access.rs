@@ -8,15 +8,15 @@ use crate::{
     parser::expression::InfoExpr,
 };
 
-pub fn access(
-    left: Box<InfoExpr>,
+pub fn access<'a>(
+    left: Box<InfoExpr<'a>>,
     right: String,
     function: &mut Vec<Block>,
     block: &mut usize,
     store: Option<usize>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
-) -> Result<(), IRErrorInfo> {
+) -> Result<(), IRErrorInfo<'a>> {
     let left_var = {
         *next_var += 1;
         *next_var

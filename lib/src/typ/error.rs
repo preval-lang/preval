@@ -1,4 +1,4 @@
-use crate::typ::Type;
+use crate::{error::Span, typ::Type};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeError {
@@ -13,8 +13,8 @@ pub enum TypeError {
     DuplicateName(String),
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct InfoTypeError {
-    pub idx: usize,
+#[derive(Debug, Clone)]
+pub struct InfoTypeError<'a> {
+    pub span: Span<'a>,
     pub error: TypeError,
 }

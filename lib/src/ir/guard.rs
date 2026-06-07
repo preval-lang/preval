@@ -7,16 +7,16 @@ use crate::{
     parser::expression::InfoExpr,
 };
 
-pub fn guard(
-    dependency: Box<InfoExpr>,
-    body: Box<InfoExpr>,
+pub fn guard<'a>(
+    dependency: Box<InfoExpr<'a>>,
+    body: Box<InfoExpr<'a>>,
     function: &mut Vec<Block>,
     block: &mut usize,
     store: Option<usize>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
     tail: bool,
-) -> Result<(), IRErrorInfo> {
+) -> Result<(), IRErrorInfo<'a>> {
     let dep_var = {
         *next_var += 1;
         *next_var

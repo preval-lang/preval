@@ -10,16 +10,16 @@ use crate::parser::expression::InfoExpr;
 
 use std::collections::HashMap;
 
-pub fn call(
-    callee: Box<InfoExpr>,
-    args: Vec<InfoExpr>,
+pub fn call<'a>(
+    callee: Box<InfoExpr<'a>>,
+    args: Vec<InfoExpr<'a>>,
     function: &mut Vec<Block>,
     block: &mut usize,
     store: Option<usize>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
     tail: bool,
-) -> Result<(), IRErrorInfo> {
+) -> Result<(), IRErrorInfo<'a>> {
     let callee = *callee;
 
     let mut arg_indexes = Vec::new();

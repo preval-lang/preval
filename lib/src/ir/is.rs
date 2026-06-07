@@ -1,21 +1,22 @@
 use std::collections::HashMap;
 
 use crate::{
+    error::Span,
     ir::{Block, Declaration, Operation, Statement, error::IRErrorInfo, variable::variable},
     parser::typ::InfoTypeExpr,
     typ::TypeExpr,
 };
 
-pub fn is(
+pub fn is<'a>(
     name: String,
-    typ: InfoTypeExpr,
-    idx: usize,
+    typ: InfoTypeExpr<'a>,
+    idx: Span<'a>,
     function: &mut Vec<Block>,
     block: &mut usize,
     store: Option<usize>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
-) -> Result<(), IRErrorInfo> {
+) -> Result<(), IRErrorInfo<'a>> {
     let checked_var = {
         *next_var += 1;
         *next_var
@@ -24,7 +25,7 @@ pub fn is(
     variable(
         InfoTypeExpr {
             expr: TypeExpr::Name(name),
-            idx,
+            idx: idx.clone(),
         },
         function,
         block,
@@ -37,7 +38,7 @@ pub fn is(
             store: Some(store),
             operation: Operation::Is {
                 value: checked_var,
-                typ,
+                typ: typ.into(),
             },
         });
     }

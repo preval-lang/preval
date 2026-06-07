@@ -10,8 +10,8 @@ use crate::value::Value;
 use crate::value::primitive::EmptyTuple;
 use std::collections::HashMap;
 
-pub fn compile_block(
-    statements: Vec<InfoExpr>,
+pub fn compile_block<'a>(
+    statements: Vec<InfoExpr<'a>>,
     returns: bool,
     function: &mut Vec<Block>,
     block: &mut usize,
@@ -19,7 +19,7 @@ pub fn compile_block(
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
     tail: bool,
-) -> Result<(), IRErrorInfo> {
+) -> Result<(), IRErrorInfo<'a>> {
     let mut i = 0;
     let len = statements.len();
     for statement in statements {

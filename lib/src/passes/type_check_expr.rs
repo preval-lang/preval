@@ -41,13 +41,13 @@ impl<'a> Scope<'a> {
     }
 }
 
-pub fn infer_expr_type(
-    expr: &InfoExpr,
-    ins: &mut Program,
+pub fn infer_expr_type<'a>(
+    expr: &InfoExpr<'a>,
+    ins: &mut Program<'a>,
     scope: &mut Scope,
     return_type: usize,
     generics: &[usize],
-) -> Result<usize, InfoTypeError> {
+) -> Result<usize, InfoTypeError<'a>> {
     match &expr.expr {
         Expr::Literal(value) => Ok(ins.add(Type::Concrete(value.get_type()))),
         Expr::Name(name) => {
@@ -91,14 +91,14 @@ pub fn infer_expr_type(
                 members.clone()
             } else {
                 return Err(InfoTypeError {
-                    idx: struct_type_expr.idx,
+                    span: struct_type_expr.idx.clone(),
                     error: TypeError::NotAStruct(struct_type.clone()),
                 });
             };
 
             if fields.len() != struct_members.len() {
                 return Err(InfoTypeError {
-                    idx: expr.idx,
+                    span: expr.idx.clone(),
                     error: TypeError::IncorrectFieldCount {
                         expected: struct_members.len(),
                         got: fields.len(),
@@ -113,13 +113,13 @@ pub fn infer_expr_type(
                     *slot
                 } else {
                     return Err(InfoTypeError {
-                        idx: expr.idx,
+                        span: expr.idx.clone(),
                         error: TypeError::UnknownField(name.clone()),
                     });
                 };
                 if !ins.compatible(assignee_type, slot, 0).unwrap() {
                     return Err(InfoTypeError {
-                        idx: expr.idx,
+                        span: expr.idx.clone(),
                         error: TypeError::IncompatibleTypes {
                             expected: ins.get_type(slot).cloned().unwrap(),
                             got: ins.get_type(assignee_type).cloned().unwrap(),
@@ -140,13 +140,13 @@ pub fn infer_expr_type(
                     Ok(*slot)
                 } else {
                     Err(InfoTypeError {
-                        idx: expr.idx,
+                        span: expr.idx.clone(),
                         error: TypeError::UnknownField(field_name.clone()),
                     })
                 }
             } else {
                 Err(InfoTypeError {
-                    idx: expr.idx,
+                    span: expr.idx.clone(),
                     error: TypeError::UnknownType(field_name.clone()),
                 })
             }
@@ -163,7 +163,7 @@ pub fn infer_expr_type(
                     (args, callee_return_type)
                 } else {
                     return Err(InfoTypeError {
-                        idx: expr.idx,
+                        span: expr.idx.clone(),
                         error: TypeError::NotAFunction(
                             ins.get_type(function_type_id).cloned().unwrap(),
                         ),
@@ -172,7 +172,7 @@ pub fn infer_expr_type(
 
             if args_exprs.len() != args.len() {
                 return Err(InfoTypeError {
-                    idx: expr.idx,
+                    span: expr.idx.clone(),
                     error: TypeError::IncorrectArgumentCount {
                         expected: args.len(),
                         got: args_exprs.len(),
@@ -184,7 +184,7 @@ pub fn infer_expr_type(
                 let arg_expr_type = infer_expr_type(arg_expr, ins, scope, return_type, generics)?;
                 if !ins.compatible(arg_expr_type, *arg_type, 0).unwrap() {
                     return Err(InfoTypeError {
-                        idx: expr.idx,
+                        span: expr.idx.clone(),
                         error: TypeError::IncompatibleTypes {
                             expected: ins.get_type(*arg_type).cloned().unwrap(),
                             got: ins.get_type(arg_expr_type).cloned().unwrap(),
@@ -200,7 +200,7 @@ pub fn infer_expr_type(
             let bool = ins.add(Type::Concrete(ConcreteType::Bool));
             if !ins.compatible(cond_type, bool, 0).unwrap() {
                 return Err(InfoTypeError {
-                    idx: expr.idx,
+                    span: expr.idx.clone(),
                     error: TypeError::IncompatibleTypes {
                         expected: Type::Concrete(ConcreteType::Bool),
                         got: ins.get_type(cond_type).cloned().unwrap(),
@@ -250,7 +250,7 @@ pub fn infer_expr_type(
 
             if !ins.compatible(expr_type, return_type, 0).unwrap() {
                 return Err(InfoTypeError {
-                    idx: expr.idx,
+                    span: expr.idx.clone(),
                     error: TypeError::IncompatibleTypes {
                         expected: ins.get_type(return_type).cloned().unwrap(),
                         got: ins.get_type(expr_type).cloned().unwrap(),

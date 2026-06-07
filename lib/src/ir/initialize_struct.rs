@@ -5,15 +5,15 @@ use crate::{
     parser::{expression::InfoExpr, typ::InfoTypeExpr},
 };
 
-pub fn initialize_struct(
-    typ: InfoTypeExpr,
-    fields: HashMap<String, InfoExpr>,
+pub fn initialize_struct<'a>(
+    typ: InfoTypeExpr<'a>,
+    fields: HashMap<String, InfoExpr<'a>>,
     function: &mut Vec<Block>,
     block: &mut usize,
     store: Option<usize>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
-) -> Result<(), IRErrorInfo> {
+) -> Result<(), IRErrorInfo<'a>> {
     if let Some(store) = store {
         let mut field_vars: HashMap<String, usize> = HashMap::new();
         for (field_name, field_expr) in fields {
@@ -35,7 +35,7 @@ pub fn initialize_struct(
         }
         function[*block].statements.push(Statement {
             store: Some(store),
-            operation: Operation::InitializeStruct(typ, field_vars),
+            operation: Operation::InitializeStruct(typ.into(), field_vars),
         });
     }
     Ok(())

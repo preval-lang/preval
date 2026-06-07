@@ -1,47 +1,55 @@
+use std::borrow::Cow;
+
+use serde::{Deserialize, Serialize};
+
 use crate::{
     ir::error::{IRError, IRErrorInfo},
     parser::expression::{InfoParseError, ParseError},
     typ::{InfoTypeError, TypeError},
 };
 
-type ErrorInfo = usize;
-
-#[derive(Debug)]
-pub struct InfoError {
-    pub info: ErrorInfo,
-    pub data: Error,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Span<'a> {
+    pub file: Cow<'a, str>,
+    pub index: usize,
 }
 
 #[derive(Debug)]
-pub enum Error {
-    ParseError(ParseError),
+pub struct InfoError<'a> {
+    pub span: Span<'a>,
+    pub data: Error<'a>,
+}
+
+#[derive(Debug)]
+pub enum Error<'a> {
+    ParseError(ParseError<'a>),
     TypeError(TypeError),
     IRError(IRError),
 }
 
-impl From<InfoParseError> for InfoError {
-    fn from(value: InfoParseError) -> Self {
+impl<'a> From<InfoParseError<'a>> for InfoError<'a> {
+    fn from(value: InfoParseError<'a>) -> Self {
         Self {
             data: Error::ParseError(value.error),
-            info: value.idx,
+            span: value.span,
         }
     }
 }
 
-impl From<InfoTypeError> for InfoError {
-    fn from(value: InfoTypeError) -> Self {
+impl<'a> From<InfoTypeError<'a>> for InfoError<'a> {
+    fn from(value: InfoTypeError<'a>) -> Self {
         Self {
             data: Error::TypeError(value.error),
-            info: value.idx,
+            span: value.span,
         }
     }
 }
 
-impl From<IRErrorInfo> for InfoError {
-    fn from(value: IRErrorInfo) -> Self {
+impl<'a> From<IRErrorInfo<'a>> for InfoError<'a> {
+    fn from(value: IRErrorInfo<'a>) -> Self {
         Self {
             data: Error::IRError(value.error),
-            info: value.idx,
+            span: value.idx,
         }
     }
 }

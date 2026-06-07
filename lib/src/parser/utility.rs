@@ -1,10 +1,10 @@
 use crate::parser::expression::InfoParseError;
 use crate::tokeniser::{InfoToken, Token};
 
-pub fn read_punctuated(
-    tokens: &[InfoToken],
+pub fn read_punctuated<'a>(
+    tokens: &[InfoToken<'a>],
     separator: Token,
-) -> Result<Vec<Vec<InfoToken>>, InfoParseError> {
+) -> Result<Vec<Vec<InfoToken<'a>>>, InfoParseError<'a>> {
     let mut result = Vec::new();
     let mut current = Vec::new();
     for token in tokens {

@@ -1,5 +1,5 @@
 fn main(io: IO, compile_io: IO) {
-    print(io, "Hello, multi-pass compiler!");
+    print("Hello, multi-pass compiler!");
 }
 
 dylib "stdlib/print" fn print(io: IO, text: String);

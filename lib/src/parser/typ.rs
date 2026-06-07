@@ -1,24 +1,92 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    error::Span,
     parser::{
         expression::{InfoParseError, ParseError},
         utility::read_punctuated,
     },
     tokeniser::{InfoToken, Token},
-    typ::TypeExpr,
+    typ::{BaseTypeExpr, RuntimeTypeExpr, TypeExpr},
 };
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
-pub struct InfoTypeExpr {
-    pub expr: TypeExpr,
-    pub idx: usize,
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct InfoTypeExpr<'a> {
+    pub expr: TypeExpr<'a>,
+    pub idx: Span<'a>,
 }
 
-pub fn parse_type(
-    tokens: &[InfoToken],
+impl From<InfoTypeExpr<'_>> for RuntimeTypeExpr {
+    fn from(value: InfoTypeExpr) -> Self {
+        RuntimeTypeExpr {
+            expr: match value.expr {
+                BaseTypeExpr::Bool => BaseTypeExpr::Bool,
+                BaseTypeExpr::Float { size } => BaseTypeExpr::Float { size },
+                BaseTypeExpr::Function(params, return_type, imp) => BaseTypeExpr::Function(
+                    {
+                        let mut out = Vec::new();
+
+                        for param in params {
+                            out.push(Into::<RuntimeTypeExpr>::into(param));
+                        }
+
+                        out
+                    },
+                    Box::new(Into::<RuntimeTypeExpr>::into(*return_type)),
+                    imp,
+                ),
+                BaseTypeExpr::Generics(base, generics) => {
+                    BaseTypeExpr::Generics(Box::new(Into::<RuntimeTypeExpr>::into(*base)), {
+                        let mut out = Vec::new();
+
+                        for param in generics {
+                            out.push(Into::<RuntimeTypeExpr>::into(param));
+                        }
+
+                        out
+                    })
+                }
+                BaseTypeExpr::IO => BaseTypeExpr::IO,
+                BaseTypeExpr::String => BaseTypeExpr::String,
+                BaseTypeExpr::Union(a, b) => BaseTypeExpr::Union(
+                    Box::new(Into::<RuntimeTypeExpr>::into(*a)),
+                    Box::new(Into::<RuntimeTypeExpr>::into(*b)),
+                ),
+                BaseTypeExpr::Integer { size, signed } => BaseTypeExpr::Integer { size, signed },
+                BaseTypeExpr::Name(n) => BaseTypeExpr::Name(n),
+                BaseTypeExpr::Parameter(p) => BaseTypeExpr::Parameter(p),
+                BaseTypeExpr::Struct(s) => {
+                    let mut out = HashMap::new();
+
+                    for key in s.keys() {
+                        out.insert(
+                            key.clone(),
+                            Into::<RuntimeTypeExpr>::into(s.get(key).cloned().unwrap()),
+                        );
+                    }
+
+                    BaseTypeExpr::Struct(out)
+                }
+                BaseTypeExpr::Tuple(t) => {
+                    let mut out = Vec::new();
+
+                    for el in t {
+                        out.push(Into::<RuntimeTypeExpr>::into(el));
+                    }
+
+                    BaseTypeExpr::Tuple(out)
+                }
+            },
+        }
+    }
+}
+
+pub fn parse_type<'a>(
+    tokens: &[InfoToken<'a>],
     generics: &[String],
-) -> Result<InfoTypeExpr, InfoParseError> {
+) -> Result<InfoTypeExpr<'a>, InfoParseError<'a>> {
     if let Some(expr) = try_parse_union(tokens, generics)? {
         return Ok(expr);
     }
@@ -32,20 +100,20 @@ pub fn parse_type(
     }
 
     Err(InfoParseError {
-        idx: tokens[0].idx,
+        span: tokens[0].span.clone(),
         error: ParseError::ExpectedExpression(tokens.to_vec()),
     })
 }
 
-fn try_parse_name(
-    tokens: &[InfoToken],
+fn try_parse_name<'a>(
+    tokens: &[InfoToken<'a>],
     generics: &[String],
-) -> Result<Option<InfoTypeExpr>, InfoParseError> {
+) -> Result<Option<InfoTypeExpr<'a>>, InfoParseError<'a>> {
     if tokens.len() != 1 {
         return Ok(None);
     }
     if let InfoToken {
-        idx,
+        span: idx,
         token: Token::Name(name),
     } = &tokens[0]
     {
@@ -56,22 +124,22 @@ fn try_parse_name(
         {
             return Ok(Some(InfoTypeExpr {
                 expr: TypeExpr::Parameter(generic),
-                idx: *idx,
+                idx: idx.clone(),
             }));
         }
         Ok(Some(InfoTypeExpr {
             expr: TypeExpr::Name(name.clone()),
-            idx: *idx,
+            idx: idx.clone(),
         }))
     } else {
         Ok(None)
     }
 }
 
-fn try_parse_generics(
-    tokens: &[InfoToken],
+fn try_parse_generics<'a>(
+    tokens: &[InfoToken<'a>],
     generics: &[String],
-) -> Result<Option<InfoTypeExpr>, InfoParseError> {
+) -> Result<Option<InfoTypeExpr<'a>>, InfoParseError<'a>> {
     let open_idx = if let Some(open_idx) = tokens.iter().position(|t| t.token == Token::LessThan) {
         open_idx
     } else {
@@ -90,7 +158,7 @@ fn try_parse_generics(
             }
             if inside < 0 {
                 return Err(InfoParseError {
-                    idx: tokens[i].idx,
+                    span: tokens[i].span.clone(),
                     error: ParseError::UnclosedAngleBrackets,
                 });
             }
@@ -112,14 +180,14 @@ fn try_parse_generics(
 
     Ok(Some(InfoTypeExpr {
         expr: TypeExpr::Generics(Box::new(base), param_exprs),
-        idx: open_idx,
+        idx: tokens[open_idx].span.clone(),
     }))
 }
 
-fn try_parse_union(
-    tokens: &[InfoToken],
+fn try_parse_union<'a>(
+    tokens: &[InfoToken<'a>],
     generics: &[String],
-) -> Result<Option<InfoTypeExpr>, InfoParseError> {
+) -> Result<Option<InfoTypeExpr<'a>>, InfoParseError<'a>> {
     let union_idx = if let Some(union_idx) = tokens.iter().position(|t| t.token == Token::Union) {
         union_idx
     } else {
@@ -133,6 +201,6 @@ fn try_parse_union(
 
     Ok(Some(InfoTypeExpr {
         expr: TypeExpr::Union(Box::new(left_expr), Box::new(right_expr)),
-        idx: tokens[union_idx].idx,
+        idx: tokens[union_idx].span.clone(),
     }))
 }

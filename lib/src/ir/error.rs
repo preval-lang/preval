@@ -1,8 +1,8 @@
-use crate::value::runtime_type::TypeDeserializer;
+use crate::{error::Span, value::runtime_type::TypeDeserializer};
 
 #[derive(Debug)]
-pub struct IRErrorInfo {
-    pub idx: usize,
+pub struct IRErrorInfo<'a> {
+    pub idx: Span<'a>,
     pub error: IRError,
 }
 

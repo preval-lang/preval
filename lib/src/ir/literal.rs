@@ -6,12 +6,12 @@ use crate::tokeniser::Literal;
 use crate::typ::type_id;
 use crate::value::Value;
 
-pub fn literal(
+pub fn literal<'a>(
     lit: Literal,
     function: &mut Vec<Block>,
     block: &mut usize,
     store: Option<usize>,
-) -> Result<(), IRErrorInfo> {
+) -> Result<(), IRErrorInfo<'a>> {
     if let Some(store) = store {
         function[*block].statements.push(Statement {
             store: Some(store),

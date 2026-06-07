@@ -8,15 +8,15 @@ use crate::ir::error::IRErrorInfo;
 use crate::ir::to_ir;
 use crate::parser::expression::InfoExpr;
 
-pub fn variable_declaration(
+pub fn variable_declaration<'a>(
     name: String,
-    value_expr: Box<InfoExpr>,
+    value_expr: Box<InfoExpr<'a>>,
     function: &mut Vec<Block>,
     block: &mut usize,
     store: Option<usize>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
-) -> Result<(), IRErrorInfo> {
+) -> Result<(), IRErrorInfo<'a>> {
     let new_var = {
         *next_var += 1;
         *next_var

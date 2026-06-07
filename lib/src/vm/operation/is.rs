@@ -3,13 +3,13 @@ use std::collections::HashMap;
 use crate::{
     ir::{Operation, Statement},
     parser::typ::InfoTypeExpr,
-    typ::{Program, type_id},
+    typ::{Program, RuntimeTypeExpr, type_id},
     value::Value,
 };
 
 pub fn is(
     value: usize,
-    typ: InfoTypeExpr,
+    typ: RuntimeTypeExpr,
     module: &mut Program,
     vars: &mut HashMap<usize, Option<Value>>,
     out: &mut Vec<Statement>,
@@ -17,7 +17,7 @@ pub fn is(
     generics: &[usize],
 ) {
     let type_n = module
-        .instantiate(&typ, generics)
+        .instantiate_rt(&typ, generics)
         .expect("move this to compile time by specialising function body");
     if let Some(store) = store {
         if let Some(value) = &vars[&value] {

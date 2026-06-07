@@ -13,15 +13,15 @@ use crate::ir::{
     returns::returns, variable::variable, variable_declaration::variable_declaration,
 };
 
-pub fn to_ir(
+pub fn to_ir<'a>(
     ir: &mut Vec<Block>,
     block: &mut usize,
-    expr: InfoExpr,
+    expr: InfoExpr<'a>,
     store: Option<usize>,
     locals: &mut HashMap<String, Declaration>,
     next_var: &mut usize,
     tail: bool,
-) -> Result<(), IRErrorInfo> {
+) -> Result<(), IRErrorInfo<'a>> {
     match expr.expr {
         Expr::Literal(lit) => literal(lit, ir, block, store),
         Expr::Access(left, right) => access(left, right, ir, block, store, locals, next_var),
