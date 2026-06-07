@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use crate::{
     ir::{Operation, Statement},
-    parser::typ::InfoTypeExpr,
     typ::{Program, RuntimeTypeExpr, type_id},
     value::Value,
 };

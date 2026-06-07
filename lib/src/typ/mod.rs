@@ -310,7 +310,7 @@ impl<'a> Program<'a> {
         self.template_names.insert(name, expr);
     }
 
-    pub fn get_template(&self, name: &str) -> Option<&InfoTypeExpr> {
+    pub fn get_template(&self, name: &str) -> Option<&InfoTypeExpr<'_>> {
         self.template_names.get(name)
     }
 
