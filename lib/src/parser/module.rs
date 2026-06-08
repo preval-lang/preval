@@ -62,6 +62,31 @@ fn declaration_pass<'a>(
 
 	while i < tokens.len() {
 		match tokens[i].token.clone() {
+			Token::Keyword(Keyword::Mod) => {
+				i += 1;
+				let name = if let Token::Name(name) = &tokens[i].token {
+					name.clone()
+				} else {
+					return Err(InfoParseError {
+						error: ParseError::ExpectedName,
+						span: tokens[i].span.clone(),
+					}
+					.into());
+				};
+				i += 1;
+				let block = if let Token::Braces(contents) = &tokens[i].token {
+					contents
+				} else {
+					return Err(InfoParseError {
+						error: ParseError::ExpectedExpression(vec![tokens[i].clone()]),
+						span: tokens[i].span.clone(),
+					}
+					.into());
+				};
+				i += 1;
+
+				declaration_pass(block, instantiator, &add_prefix(prefix, name))?;
+			}
 			Token::Keyword(Keyword::Fn) => {
 				i += 1;
 				let signature = expect_function_signature(&tokens, &mut i)?;
@@ -197,7 +222,7 @@ fn declaration_pass<'a>(
 				i += 1;
 				i += 1;
 
-				let signature = expect_function_signature(tokens, &mut i)?;
+				let signature = expect_function_signature(&tokens, &mut i)?;
 
 				let generics = (0..signature.generics.len())
 					.map(|i| instantiator.add(Type::Placeholder(i)))

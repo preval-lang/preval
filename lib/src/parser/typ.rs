@@ -109,10 +109,6 @@ fn try_parse_name<'a>(
 	tokens: &[InfoToken<'a>],
 	generics: &[String],
 ) -> Result<Option<InfoTypeExpr<'a>>, InfoParseError<'a>> {
-	if tokens.len() != 1 {
-		return Ok(None);
-	}
-
 	let parts = read_punctuated(tokens, Token::DoubleColon)?;
 
 	let mut span = tokens[0].span.clone();
