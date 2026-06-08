@@ -264,7 +264,15 @@ fn implementation_pass<'a>(
 				}
 				instantiator.instantiate(&sig.return_type, &generics)?;
 			}
-			Symbol::Struct(fields, generics) => {}
+			Symbol::Struct(generics, fields) => {
+				let generics = (0..generics.len())
+					.map(|i| instantiator.add(Type::Placeholder(i)))
+					.collect::<Vec<_>>();
+
+				for (_, arg) in fields {
+					instantiator.instantiate(&arg, &generics)?;
+				}
+			}
 			Symbol::Fn(sig, body) => {
 				let mut last_var = sig.args.len();
 
@@ -342,7 +350,7 @@ fn implementation_pass<'a>(
 	Ok(())
 }
 
-pub fn expect_function_signature<'a>(
+fn expect_function_signature<'a>(
 	tokens: &[InfoToken<'a>],
 	i: &mut usize,
 ) -> Result<Signature<'a>, InfoParseError<'a>> {
