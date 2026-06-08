@@ -9,33 +9,33 @@ use crate::ir::to_ir;
 use crate::parser::expression::InfoExpr;
 
 pub fn variable_declaration<'a>(
-    name: String,
-    value_expr: Box<InfoExpr<'a>>,
-    function: &mut Vec<Block>,
-    block: &mut usize,
-    store: Option<usize>,
-    locals: &mut HashMap<String, Declaration>,
-    next_var: &mut usize,
+	name: String,
+	value_expr: Box<InfoExpr<'a>>,
+	function: &mut Vec<Block>,
+	block: &mut usize,
+	store: Option<usize>,
+	locals: &mut HashMap<String, Declaration>,
+	next_var: &mut usize,
 ) -> Result<(), IRErrorInfo<'a>> {
-    let new_var = {
-        *next_var += 1;
-        *next_var
-    };
-    to_ir(
-        function,
-        block,
-        *value_expr,
-        Some(new_var),
-        locals,
-        next_var,
-        false,
-    )?;
-    locals.insert(name, Declaration::Variable(new_var));
-    if let Some(store) = store {
-        function[*block].statements.push(Statement {
-            store: Some(store),
-            operation: Operation::LoadLocal { src: new_var },
-        });
-    }
-    Ok(())
+	let new_var = {
+		*next_var += 1;
+		*next_var
+	};
+	to_ir(
+		function,
+		block,
+		*value_expr,
+		Some(new_var),
+		locals,
+		next_var,
+		false,
+	)?;
+	locals.insert(name, Declaration::Variable(new_var));
+	if let Some(store) = store {
+		function[*block].statements.push(Statement {
+			store: Some(store),
+			operation: Operation::LoadLocal { src: new_var },
+		});
+	}
+	Ok(())
 }
