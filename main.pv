@@ -1,5 +1,0 @@
-mod std;
-
-fn main(io: IO, compile_io: IO) {
-	std::print(io, "Hi!");
-}

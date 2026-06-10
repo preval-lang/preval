@@ -18,7 +18,6 @@ pub enum Keyword {
 	Guard,
 	Is,
 	Use,
-	Mod,
 }
 
 impl TryFrom<&str> for Keyword {
@@ -38,7 +37,6 @@ impl TryFrom<&str> for Keyword {
 			"guard" => Ok(Keyword::Guard),
 			"is" => Ok(Keyword::Is),
 			"use" => Ok(Keyword::Use),
-			"mod" => Ok(Keyword::Mod),
 			_ => Err(()),
 		}
 	}
@@ -118,11 +116,9 @@ pub enum TokeniseError {
 #[derive(Debug)]
 pub struct EOF {}
 
-pub fn get_line_and_column(file: &str, idx: usize) -> Result<(usize, usize), EOF> {
+pub fn get_line_and_column(input: &str, idx: usize) -> Result<(usize, usize), EOF> {
 	let mut col = 1;
 	let mut line = 1;
-
-	let input = std::fs::read_to_string(file).unwrap();
 
 	for (i, c) in input.char_indices() {
 		if i == idx {

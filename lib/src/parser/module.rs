@@ -8,23 +8,12 @@ use crate::{
 		utility::read_punctuated,
 	},
 	passes::type_check_expr::infer_expr_type,
-	tokeniser::{InfoToken, Keyword, Literal, Token, tokenise},
+	tokeniser::{InfoToken, Keyword, Literal, Token},
 	typ::{GenericImplementation, Program, Type, TypeError, TypeExpr},
 	value::native::NativeFunction,
 };
 
 use crate::passes::type_check_expr::Scope;
-
-pub fn parse_module<'a>(
-	tokens: Vec<InfoToken<'a>>,
-	module: &[String],
-) -> Result<Program<'a>, InfoError<'a>> {
-	let mut instantiator = Program::new();
-	let decl = declaration_pass(&tokens, &mut instantiator, module)?;
-	implementation_pass(decl, &mut instantiator)?;
-
-	Ok(instantiator)
-}
 
 pub fn add_prefix(prefix: &[String], name: String) -> Vec<String> {
 	let mut v = prefix.to_vec();
@@ -33,14 +22,15 @@ pub fn add_prefix(prefix: &[String], name: String) -> Vec<String> {
 }
 
 #[derive(Debug)]
-enum Symbol<'a> {
+pub enum Symbol<'a> {
 	Fn(Signature<'a>, InfoExpr<'a>),
 	DylibFn(Signature<'a>),
 	Struct(Vec<String>, HashMap<String, InfoTypeExpr<'a>>),
+	Alias,
 }
 
 #[derive(Clone, Debug)]
-struct Signature<'a> {
+pub struct Signature<'a> {
 	name: String,
 	name_idx: Span<'a>,
 	generics: Vec<String>,
@@ -49,71 +39,58 @@ struct Signature<'a> {
 	return_type: InfoTypeExpr<'a>,
 }
 
-fn declaration_pass<'a>(
+pub fn declaration_pass<'a>(
 	tokens: &[InfoToken<'a>],
 	instantiator: &mut Program<'a>,
 	prefix: &[String],
-) -> Result<HashMap<Vec<String>, Symbol<'a>>, InfoError<'a>> {
+	symbols: &mut HashMap<Vec<String>, Symbol<'a>>,
+) -> Result<(), InfoError<'a>> {
 	let mut i = 0;
-
-	let mut symbols = HashMap::new();
 
 	while i < tokens.len() {
 		match tokens[i].token.clone() {
-			Token::Keyword(Keyword::Mod) => {
+			Token::Keyword(Keyword::Use) => {
 				i += 1;
-				let name = if let Token::Name(name) = &tokens[i].token {
-					name.clone()
-				} else {
-					return Err(InfoParseError {
-						error: ParseError::ExpectedName,
-						span: tokens[i].span.clone(),
-					}
-					.into());
-				};
-				i += 1;
-				let decls = if let Token::Braces(contents) = &tokens[i].token {
-					declaration_pass(contents, instantiator, &add_prefix(prefix, name))?
-				} else if let Token::Semicolon = &tokens[i].token {
-					let mut mod_tokens = Vec::new();
-
-					let mut path = std::env::current_dir().unwrap();
-
-					for dir in prefix {
-						path = path.join(dir);
-					}
-
-					path = path.join(name.clone());
-
-					for file in std::fs::read_dir(path)
-						.expect("todo: better error for module folder not existing")
-					{
-						let file = file.unwrap();
-
-						let content = std::fs::read_to_string(file.path()).unwrap();
-
-						mod_tokens.extend_from_slice(
-							&tokenise(
-								&content,
-								0,
-								Cow::Owned(file.path().to_string_lossy().into_owned()),
-							)
-							.expect("todo: propagate tokenise error"),
-						);
-					}
-					declaration_pass(&mod_tokens, instantiator, &add_prefix(prefix, name))?
-				} else {
-					return Err(InfoParseError {
-						error: ParseError::ExpectedSemicolon(tokens[i].clone()),
-						span: tokens[i].span.clone(),
-					}
-					.into());
-				};
-				for (key, value) in decls {
-					symbols.insert(key, value);
+				let start = i;
+				while tokens[i].token != Token::Semicolon {
+					i += 1;
 				}
+				let items = read_punctuated(&tokens[start..i], Token::DoubleColon)?;
 				i += 1;
+
+				let mut path = Vec::new();
+
+				for item in items {
+					if let [
+						InfoToken {
+							token: Token::Name(name),
+							span: _,
+						},
+					] = &item[..]
+					{
+						path.push(name.clone());
+					} else {
+						return Err(InfoParseError {
+							error: ParseError::ExpectedName,
+							span: item[0].span.clone(),
+						}
+						.into());
+					}
+				}
+
+				let alias_path = add_prefix(prefix, path.last().unwrap().clone());
+
+				instantiator.add_template(
+					alias_path.clone(),
+					InfoTypeExpr {
+						expr: TypeExpr::Name(path, true),
+						idx: tokens[start].span.clone(),
+					},
+				);
+
+				symbols.insert(alias_path, Symbol::Alias);
 			}
+
 			Token::Keyword(Keyword::Fn) => {
 				i += 1;
 				let signature = expect_function_signature(&tokens, &mut i)?;
@@ -290,15 +267,28 @@ fn declaration_pass<'a>(
 		}
 	}
 
-	Ok(symbols)
+	Ok(())
 }
 
-fn implementation_pass<'a>(
+pub fn implementation_pass<'a>(
 	symbols: HashMap<Vec<String>, Symbol<'a>>,
 	mut instantiator: &mut Program<'a>,
 ) -> Result<(), InfoError<'a>> {
 	for (fqn, symbol) in symbols {
 		match symbol {
+			Symbol::Alias => {
+				instantiator.instantiate(
+					&InfoTypeExpr {
+						expr: TypeExpr::Name(fqn.clone(), true),
+						idx: Span {
+							file: Cow::Owned(file!().into()),
+							index: 0,
+						},
+					},
+					&vec![],
+					&fqn[0..fqn.len() - 1],
+				)?;
+			}
 			Symbol::DylibFn(sig) => {
 				let generics = (0..sig.generics.len())
 					.map(|i| instantiator.add(Type::Placeholder(i)))
