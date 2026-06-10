@@ -1,7 +1,4 @@
-use std::collections::HashMap;
-
-use crate::ir::Block;
-use crate::ir::Declaration;
+use crate::ir::IRContext;
 use crate::ir::Operation;
 use crate::ir::Statement;
 use crate::ir::error::IRErrorInfo;
@@ -11,28 +8,15 @@ use crate::parser::expression::InfoExpr;
 pub fn variable_declaration<'a>(
 	name: String,
 	value_expr: Box<InfoExpr<'a>>,
-	function: &mut Vec<Block>,
 	block: &mut usize,
 	store: Option<usize>,
-	locals: &mut HashMap<String, Declaration>,
-	next_var: &mut usize,
+	context: &mut IRContext<'_, 'a>,
 ) -> Result<(), IRErrorInfo<'a>> {
-	let new_var = {
-		*next_var += 1;
-		*next_var
-	};
-	to_ir(
-		function,
-		block,
-		*value_expr,
-		Some(new_var),
-		locals,
-		next_var,
-		false,
-	)?;
-	locals.insert(name, Declaration::Variable(new_var));
+	let new_var = context.var();
+	to_ir(block, *value_expr, Some(new_var), false, context)?;
+	context.locals.insert(name, new_var);
 	if let Some(store) = store {
-		function[*block].statements.push(Statement {
+		context.blocks[*block].statements.push(Statement {
 			store: Some(store),
 			operation: Operation::LoadLocal { src: new_var },
 		});

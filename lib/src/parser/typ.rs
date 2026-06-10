@@ -1,7 +1,3 @@
-use std::collections::HashMap;
-
-use serde::{Deserialize, Serialize};
-
 use crate::{
 	error::Span,
 	parser::{
@@ -9,78 +5,13 @@ use crate::{
 		utility::read_punctuated,
 	},
 	tokeniser::{InfoToken, Token},
-	typ::{BaseTypeExpr, RuntimeTypeExpr, TypeExpr},
+	typ::TypeExpr,
 };
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Clone)]
 pub struct InfoTypeExpr<'a> {
 	pub expr: TypeExpr<'a>,
 	pub idx: Span<'a>,
-}
-
-impl From<InfoTypeExpr<'_>> for RuntimeTypeExpr {
-	fn from(value: InfoTypeExpr) -> Self {
-		RuntimeTypeExpr {
-			expr: match value.expr {
-				BaseTypeExpr::Bool => BaseTypeExpr::Bool,
-				BaseTypeExpr::Float { size } => BaseTypeExpr::Float { size },
-				BaseTypeExpr::Function(params, return_type, imp) => BaseTypeExpr::Function(
-					{
-						let mut out = Vec::new();
-
-						for param in params {
-							out.push(Into::<RuntimeTypeExpr>::into(param));
-						}
-
-						out
-					},
-					Box::new(Into::<RuntimeTypeExpr>::into(*return_type)),
-					imp,
-				),
-				BaseTypeExpr::Generics(base, generics) => {
-					BaseTypeExpr::Generics(Box::new(Into::<RuntimeTypeExpr>::into(*base)), {
-						let mut out = Vec::new();
-
-						for param in generics {
-							out.push(Into::<RuntimeTypeExpr>::into(param));
-						}
-
-						out
-					})
-				}
-				BaseTypeExpr::IO => BaseTypeExpr::IO,
-				BaseTypeExpr::String => BaseTypeExpr::String,
-				BaseTypeExpr::Union(a, b) => BaseTypeExpr::Union(
-					Box::new(Into::<RuntimeTypeExpr>::into(*a)),
-					Box::new(Into::<RuntimeTypeExpr>::into(*b)),
-				),
-				BaseTypeExpr::Integer { size, signed } => BaseTypeExpr::Integer { size, signed },
-				BaseTypeExpr::Name(n) => BaseTypeExpr::Name(n),
-				BaseTypeExpr::Parameter(p) => BaseTypeExpr::Parameter(p),
-				BaseTypeExpr::Struct(s) => {
-					let mut out = HashMap::new();
-
-					for key in s.keys() {
-						out.insert(
-							key.clone(),
-							Into::<RuntimeTypeExpr>::into(s.get(key).cloned().unwrap()),
-						);
-					}
-
-					BaseTypeExpr::Struct(out)
-				}
-				BaseTypeExpr::Tuple(t) => {
-					let mut out = Vec::new();
-
-					for el in t {
-						out.push(Into::<RuntimeTypeExpr>::into(el));
-					}
-
-					BaseTypeExpr::Tuple(out)
-				}
-			},
-		}
-	}
 }
 
 pub fn parse_type<'a>(
@@ -91,11 +22,11 @@ pub fn parse_type<'a>(
 		return Ok(expr);
 	}
 
-	if let Some(expr) = try_parse_name(tokens, generics)? {
+	if let Some(expr) = try_parse_generics(tokens, generics)? {
 		return Ok(expr);
 	}
 
-	if let Some(expr) = try_parse_generics(tokens, generics)? {
+	if let Some(expr) = try_parse_name(tokens, generics)? {
 		return Ok(expr);
 	}
 
@@ -109,7 +40,13 @@ fn try_parse_name<'a>(
 	tokens: &[InfoToken<'a>],
 	generics: &[String],
 ) -> Result<Option<InfoTypeExpr<'a>>, InfoParseError<'a>> {
-	let parts = read_punctuated(tokens, Token::DoubleColon)?;
+	let global = if tokens[0].token == Token::DoubleColon {
+		true
+	} else {
+		false
+	};
+
+	let parts = read_punctuated(&tokens[if global { 1 } else { 0 }..], Token::DoubleColon)?;
 
 	let mut span = tokens[0].span.clone();
 
@@ -152,7 +89,7 @@ fn try_parse_name<'a>(
 	}
 
 	Ok(Some(InfoTypeExpr {
-		expr: TypeExpr::Name(strings),
+		expr: TypeExpr::Name(strings, global),
 		idx: span,
 	}))
 }

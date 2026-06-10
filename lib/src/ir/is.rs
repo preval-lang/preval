@@ -1,8 +1,6 @@
-use std::collections::HashMap;
-
 use crate::{
 	error::Span,
-	ir::{Block, Declaration, Operation, Statement, error::IRErrorInfo, variable::variable},
+	ir::{IRContext, Operation, Statement, error::IRErrorInfo, variable::variable},
 	parser::typ::InfoTypeExpr,
 	typ::TypeExpr,
 };
@@ -11,34 +9,31 @@ pub fn is<'a>(
 	name: String,
 	typ: InfoTypeExpr<'a>,
 	idx: Span<'a>,
-	function: &mut Vec<Block>,
 	block: &mut usize,
 	store: Option<usize>,
-	locals: &mut HashMap<String, Declaration>,
-	next_var: &mut usize,
+	context: &mut IRContext<'_, 'a>,
 ) -> Result<(), IRErrorInfo<'a>> {
-	let checked_var = {
-		*next_var += 1;
-		*next_var
-	};
+	let checked_var = context.var();
 
 	variable(
 		InfoTypeExpr {
-			expr: TypeExpr::Name(vec![name]),
+			expr: TypeExpr::Name(vec![name], false),
 			idx: idx.clone(),
 		},
-		function,
 		block,
 		Some(checked_var),
-		locals,
+		context,
 	)?;
 
 	if let Some(store) = store {
-		function[*block].statements.push(Statement {
+		context.blocks[*block].statements.push(Statement {
 			store: Some(store),
 			operation: Operation::Is {
 				value: checked_var,
-				typ: typ.into(),
+				typ: context
+					.ins
+					.instantiate(&typ, context.generics, context.prefix)
+					.expect("Pass type errors up as IRErrors"),
 			},
 		});
 	}

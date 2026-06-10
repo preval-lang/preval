@@ -1,37 +1,21 @@
-use std::collections::HashMap;
-
 use crate::ir::error::IRErrorInfo;
-use crate::ir::{Block, to_ir};
-
+use crate::ir::{IRContext, to_ir};
 use crate::{
-	ir::{Declaration, Operation, Statement},
+	ir::{Operation, Statement},
 	parser::expression::InfoExpr,
 };
 
 pub fn access<'a>(
 	left: Box<InfoExpr<'a>>,
 	right: String,
-	function: &mut Vec<Block>,
 	block: &mut usize,
 	store: Option<usize>,
-	locals: &mut HashMap<String, Declaration>,
-	next_var: &mut usize,
+	context: &mut IRContext<'_, 'a>,
 ) -> Result<(), IRErrorInfo<'a>> {
-	let left_var = {
-		*next_var += 1;
-		*next_var
-	};
-	to_ir(
-		function,
-		block,
-		*left,
-		Some(left_var),
-		locals,
-		next_var,
-		false,
-	)?;
+	let left_var = context.var();
+	to_ir(block, *left, Some(left_var), false, context)?;
 
-	function[*block].statements.push(Statement {
+	context.blocks[*block].statements.push(Statement {
 		store,
 		operation: Operation::Access(left_var, right),
 	});

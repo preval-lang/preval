@@ -1,10 +1,15 @@
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 
 mod error;
 pub use error::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{error::Span, ir::Block, parser::typ::InfoTypeExpr, value::native::NativeFunction};
+use crate::{
+	error::Span,
+	ir::{Block, IRContext, Terminal, to_ir},
+	parser::{expression::InfoExpr, typ::InfoTypeExpr},
+	value::native::NativeFunction,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Serialize, Deserialize)]
 pub enum IntegerSize {
@@ -19,7 +24,7 @@ pub enum ConcreteType {
 	Bool,
 	String,
 	Struct(HashMap<String, usize>),
-	Function(Vec<usize>, usize, Option<Implementation>, Vec<usize>),
+	Function(Vec<usize>, usize, Implementation),
 	Tuple(Vec<usize>),
 	IO,
 }
@@ -32,41 +37,52 @@ pub enum Type {
 	Placeholder(usize),
 }
 
-pub type TypeExpr<'a> = BaseTypeExpr<InfoTypeExpr<'a>>;
+pub type TypeExpr<'a> = BaseTypeExpr<'a, InfoTypeExpr<'a>>;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct RuntimeTypeExpr {
-	pub expr: BaseTypeExpr<RuntimeTypeExpr>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum BaseTypeExpr<T> {
+#[derive(Debug, Clone)]
+pub enum BaseTypeExpr<'a, T> {
 	Union(Box<T>, Box<T>),
-	Name(Vec<String>),
+	Name(Vec<String>, bool),
 	Generics(Box<T>, Vec<T>),
 	Parameter(usize),
 	Struct(HashMap<String, T>),
 	Tuple(Vec<T>),
 
-	Integer { size: IntegerSize, signed: bool },
-	Float { size: usize },
+	Integer {
+		size: IntegerSize,
+		signed: bool,
+	},
+	Float {
+		size: usize,
+	},
 	Bool,
 	String,
 	IO,
 
-	Function(Vec<T>, Box<T>, Option<Implementation>),
+	Function(
+		Vec<T>,
+		Box<T>,
+		Option<GenericImplementation<'a>>,
+		Vec<String>,
+	),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub enum Implementation {
 	Native(NativeFunction),
 	Normal(Vec<Block>),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+pub enum GenericImplementation<'a> {
+	Native(NativeFunction),
+	Normal(Box<InfoExpr<'a>>),
+}
+
+#[derive(Debug, Clone)]
 pub struct Program<'a> {
-	template_names: HashMap<Vec<String>, InfoTypeExpr<'a>>,
-	types: Vec<Type>,
+	template_names: HashMap<Vec<String>, (Vec<String>, InfoTypeExpr<'a>)>,
+	pub types: Vec<Type>,
 }
 
 macro_rules! type_ids {
@@ -125,114 +141,41 @@ impl<'a> Program<'a> {
 				InfoTypeExpr {
 					expr: typ.clone(),
 					idx: Span {
-						file: file!().into(),
+						file: Cow::Borrowed(file!().into()),
 						index: 0,
 					},
 				},
 			);
+
 			this.instantiate(
 				&InfoTypeExpr {
-					expr: typ.clone(),
+					expr: TypeExpr::Name(vec![name.to_string()], true),
 					idx: Span {
-						file: file!().into(),
+						file: Cow::Borrowed(file!().into()),
 						index: 0,
 					},
 				},
 				&vec![],
+				&vec![],
 			)
 			.unwrap();
 		}
+
 		this
-	}
-
-	pub fn instantiate_rt(
-		&mut self,
-		expr: &RuntimeTypeExpr,
-		generics: &[usize],
-	) -> Result<usize, TypeError> {
-		let type_ = match &expr.expr {
-			BaseTypeExpr::Parameter(i) => generics[*i],
-			BaseTypeExpr::Name(n) => {
-				let template = match self.template_names.get(n) {
-					Some(temp) => temp.clone(),
-					None => {
-						return Err(TypeError::UnknownType(n.clone()));
-					}
-				};
-				match self.instantiate(&template, generics) {
-					Ok(a) => a,
-					Err(e) => return Err(e.error),
-				}
-			}
-			BaseTypeExpr::Union(a, b) => {
-				let a = self.instantiate_rt(a.as_ref(), generics)?;
-				let b = self.instantiate_rt(&b, generics)?;
-				self.add(Type::Union(a, b))
-			}
-			BaseTypeExpr::Generics(base, params) => {
-				let mut ins_params = Vec::new();
-
-				for param in params {
-					ins_params.push(self.instantiate_rt(param, generics)?);
-				}
-
-				self.instantiate_rt(base.as_ref(), &ins_params)?
-			}
-			BaseTypeExpr::Struct(fields) => {
-				let mut ins_fields = HashMap::new();
-
-				for field in fields {
-					ins_fields.insert(field.0.clone(), self.instantiate_rt(field.1, generics)?);
-				}
-				self.add(Type::Concrete(ConcreteType::Struct(ins_fields)))
-			}
-			BaseTypeExpr::Bool => self.add(Type::Concrete(ConcreteType::Bool)),
-			BaseTypeExpr::String => self.add(Type::Concrete(ConcreteType::String)),
-			BaseTypeExpr::IO => self.add(Type::Concrete(ConcreteType::IO)),
-			BaseTypeExpr::Integer { size, signed } => {
-				self.add(Type::Concrete(ConcreteType::Integer {
-					size: *size,
-					signed: *signed,
-				}))
-			}
-			BaseTypeExpr::Float { size } => {
-				self.add(Type::Concrete(ConcreteType::Float { size: *size }))
-			}
-			BaseTypeExpr::Tuple(elems) => {
-				let mut ins_elems = Vec::new();
-
-				for elem in elems {
-					ins_elems.push(self.instantiate_rt(elem, generics)?);
-				}
-				self.add(Type::Concrete(ConcreteType::Tuple(ins_elems)))
-			}
-			BaseTypeExpr::Function(args, ret, imp) => {
-				let mut ins_args = Vec::new();
-				for arg in args {
-					ins_args.push(self.instantiate_rt(arg, generics)?);
-				}
-				let ret = self.instantiate_rt(ret, generics)?;
-				self.add(Type::Concrete(ConcreteType::Function(
-					ins_args,
-					ret,
-					imp.clone(),
-					generics.to_vec(),
-				)))
-			}
-		};
-
-		Ok(type_)
 	}
 
 	pub fn instantiate(
 		&mut self,
 		expr: &InfoTypeExpr<'a>,
 		generics: &[usize],
+		prefix: &[String],
 	) -> Result<usize, InfoTypeError<'a>> {
 		let type_ = match &expr.expr {
 			TypeExpr::Parameter(i) => generics[*i],
-			TypeExpr::Name(n) => {
-				let template = match self.template_names.get(n) {
+			TypeExpr::Name(n, global) => {
+				let mut fqn = if *global { vec![] } else { prefix.to_vec() };
+				fqn.extend_from_slice(n);
+				let (declaring_prefix, template) = match self.template_names.get(&fqn) {
 					Some(temp) => temp.clone(),
 					None => {
 						return Err(InfoTypeError {
@@ -241,27 +184,30 @@ impl<'a> Program<'a> {
 						});
 					}
 				};
-				self.instantiate(&template, generics)?
+				self.instantiate(&template, generics, &declaring_prefix)?
 			}
 			TypeExpr::Union(a, b) => {
-				let a = self.instantiate(a.as_ref(), generics)?;
-				let b = self.instantiate(&b, generics)?;
+				let a = self.instantiate(a.as_ref(), generics, prefix)?;
+				let b = self.instantiate(&b, generics, prefix)?;
 				self.add(Type::Union(a, b))
 			}
 			TypeExpr::Generics(base, params) => {
 				let mut ins_params = Vec::new();
 
 				for param in params {
-					ins_params.push(self.instantiate(param, generics)?);
+					ins_params.push(self.instantiate(param, generics, prefix)?);
 				}
 
-				self.instantiate(base.as_ref(), &ins_params)?
+				self.instantiate(base.as_ref(), &ins_params, prefix)?
 			}
 			TypeExpr::Struct(fields) => {
 				let mut ins_fields = HashMap::new();
 
 				for field in fields {
-					ins_fields.insert(field.0.clone(), self.instantiate(field.1, generics)?);
+					ins_fields.insert(
+						field.0.clone(),
+						self.instantiate(field.1, generics, prefix)?,
+					);
 				}
 				self.add(Type::Concrete(ConcreteType::Struct(ins_fields)))
 			}
@@ -279,22 +225,58 @@ impl<'a> Program<'a> {
 				let mut ins_elems = Vec::new();
 
 				for elem in elems {
-					ins_elems.push(self.instantiate(elem, generics)?);
+					ins_elems.push(self.instantiate(elem, generics, prefix)?);
 				}
 				self.add(Type::Concrete(ConcreteType::Tuple(ins_elems)))
 			}
-			TypeExpr::Function(args, ret, imp) => {
+			TypeExpr::Function(args, ret, imp, arg_names) => {
 				let mut ins_args = Vec::new();
 				for arg in args {
-					ins_args.push(self.instantiate(arg, generics)?);
+					ins_args.push(self.instantiate(arg, generics, prefix)?);
 				}
-				let ret = self.instantiate(ret, generics)?;
-				self.add(Type::Concrete(ConcreteType::Function(
-					ins_args,
-					ret,
-					imp.clone(),
-					generics.to_vec(),
-				)))
+				let ret = self.instantiate(ret, generics, prefix)?;
+
+				let imp = match imp
+					.as_ref()
+					.expect("should not be null after implementation pass")
+				{
+					GenericImplementation::Native(native) => Implementation::Native(native.clone()),
+					GenericImplementation::Normal(body) => Implementation::Normal({
+						let mut last_var = arg_names.len();
+						let last_var2 = last_var;
+						let mut locals = HashMap::new();
+						let mut ir = vec![Block {
+							terminal: Terminal::Return(last_var),
+							statements: Vec::new(),
+						}];
+						for (idx, arg) in arg_names.iter().enumerate() {
+							locals.insert(arg.clone(), idx);
+						}
+
+						let mut context = IRContext {
+							blocks: &mut ir,
+							generics,
+							ins: self,
+							locals: &mut locals,
+							next_var: &mut last_var,
+							prefix,
+						};
+
+						let mut block = 0;
+						to_ir(
+							&mut block,
+							*(body).clone(),
+							Some(last_var2),
+							true,
+							&mut context,
+						)
+						.expect("propagate IR Error as type-error");
+
+						ir
+					}),
+				};
+
+				self.add(Type::Concrete(ConcreteType::Function(ins_args, ret, imp)))
 			}
 		};
 
@@ -307,11 +289,12 @@ impl<'a> Program<'a> {
 	}
 
 	pub fn add_template(&mut self, name: Vec<String>, expr: InfoTypeExpr<'a>) {
-		self.template_names.insert(name, expr);
+		self.template_names
+			.insert(name.clone(), (name[..name.len() - 1].to_vec(), expr));
 	}
 
-	pub fn get_template(&self, name: &Vec<String>) -> Option<&InfoTypeExpr<'_>> {
-		self.template_names.get(name)
+	pub fn get_template(&'a self, name: &Vec<String>) -> Option<&'a InfoTypeExpr<'a>> {
+		self.template_names.get(name).map(|a| &a.1)
 	}
 
 	pub fn get_type(&self, index: usize) -> Option<&Type> {

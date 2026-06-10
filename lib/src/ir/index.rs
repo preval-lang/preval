@@ -1,48 +1,22 @@
 use crate::ir::error::IRErrorInfo;
-use crate::ir::{Block, to_ir};
+use crate::ir::{IRContext, to_ir};
 use crate::{
-	ir::{Declaration, Operation, Statement},
+	ir::{Operation, Statement},
 	parser::expression::InfoExpr,
 };
-use std::collections::HashMap;
-
 pub fn index<'a>(
 	left: Box<InfoExpr<'a>>,
 	right: Box<InfoExpr<'a>>,
-	function: &mut Vec<Block>,
 	block: &mut usize,
 	store: Option<usize>,
-	locals: &mut HashMap<String, Declaration>,
-	next_var: &mut usize,
+	context: &mut IRContext<'_, 'a>,
 ) -> Result<(), IRErrorInfo<'a>> {
-	let left_var = {
-		*next_var += 1;
-		*next_var
-	};
-	to_ir(
-		function,
-		block,
-		*left,
-		Some(left_var),
-		locals,
-		next_var,
-		false,
-	)?;
-	let right_var = {
-		*next_var += 1;
-		*next_var
-	};
-	to_ir(
-		function,
-		block,
-		*right,
-		Some(right_var),
-		locals,
-		next_var,
-		false,
-	)?;
+	let left_var = context.var();
+	to_ir(block, *left, Some(left_var), false, context)?;
+	let right_var = context.var();
+	to_ir(block, *right, Some(right_var), false, context)?;
 
-	function[*block].statements.push(Statement {
+	context.blocks[*block].statements.push(Statement {
 		store,
 		operation: Operation::Index(left_var, right_var),
 	});

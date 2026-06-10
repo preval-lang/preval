@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
 	ir::{Block, Callable, Function, Operation, Partial, Statement, Terminal},
-	typ::{ConcreteType, Implementation, Program, Type},
+	typ::{ConcreteType, Implementation, Type},
 	value::{Value, structure::Struct},
 	vm::operation::{access, call, guard_phi, index, initialize_struct, is, load_local, phi},
 };
@@ -20,7 +20,7 @@ pub enum RunResult {
 }
 
 pub fn evaluate(
-	module: &mut Program,
+	module: &mut Vec<Type>,
 	mut blocks: Vec<Block>,
 	vars: &mut HashMap<usize, Option<Value>>,
 	start_block: usize,
@@ -39,7 +39,7 @@ pub fn evaluate(
 				Statement {
 					store,
 					operation: Operation::Is { value, typ },
-				} => is(value, typ, module, vars, &mut out, store, &generics),
+				} => is(value, typ, module, vars, &mut out, store),
 				Statement {
 					store,
 					operation: Operation::GuardPhi { block, var },
@@ -50,22 +50,16 @@ pub fn evaluate(
 				} => call(function, args, store, &mut out, module, vars),
 				Statement {
 					store,
-					operation: Operation::LoadFunction(type_expr),
+					operation: Operation::LoadFunction(type_id),
 				} => {
-					let type_id = module
-						.instantiate_rt(&type_expr, &generics)
-						.expect("move this to compile time by specialising function body");
-					let typ = module.get_type(type_id);
+					let typ = module.get(type_id);
 					if let Some(typ) = typ {
 						if let Some(store) = store {
 							vars.insert(
 								store,
 								Some(match typ {
-									Type::Concrete(ConcreteType::Function(_, _, imp, generics)) => {
-										match imp
-											.clone()
-											.expect("Function only declared and not implemented")
-										{
+									Type::Concrete(ConcreteType::Function(_, _, imp)) => {
+										match imp.clone() {
 											Implementation::Native(imp) => {
 												Value::new(imp.clone(), type_id)
 											}
@@ -115,7 +109,7 @@ pub fn evaluate(
 					store,
 					operation: Operation::InitializeStruct(name, fields),
 				} => {
-					initialize_struct(name, fields, store, module, &mut out, vars, &generics);
+					initialize_struct(name, fields, store, &mut out, vars);
 				}
 				Statement {
 					store,

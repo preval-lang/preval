@@ -1,8 +1,5 @@
-fn main(io: IO, compile_io: IO) {
-	std::print(io, "Hello, multi-pass compiler!");
-}
+mod std;
 
-mod std {
-	dylib "stdlib/print" fn print(io: IO, text: String);
-	dylib "stdlib/print" fn input(io: IO): String;
+fn main(io: IO, compile_io: IO) {
+	std::print(io, "Hi!");
 }

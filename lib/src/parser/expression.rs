@@ -426,8 +426,8 @@ fn try_parse_block<'a>(
 	] = tokens
 	{
 		let mut out = Vec::new();
-		let returns = if let Some(token) = tokens.last() {
-			if token.token == Token::Semicolon {
+		let returns = if let Some(token) = contents.last() {
+			if let Token::Semicolon = token.token {
 				false
 			} else {
 				true
@@ -435,6 +435,7 @@ fn try_parse_block<'a>(
 		} else {
 			false
 		};
+
 		if !contents.is_empty() {
 			for tokens in read_punctuated(contents, Token::Semicolon)? {
 				out.push(parse_expression(&tokens, generics)?);

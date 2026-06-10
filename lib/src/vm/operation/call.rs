@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
 	ir::{Callable, Operation, Statement},
-	typ::Program,
+	typ::Type,
 	value::Value,
 	vm::RunResult,
 };
@@ -12,7 +12,7 @@ pub fn call(
 	args: Vec<usize>,
 	store: Option<usize>,
 	out: &mut Vec<Statement>,
-	module: &mut Program,
+	module: &mut Vec<Type>,
 	vars: &mut HashMap<usize, Option<Value>>,
 ) {
 	let mut function_value = match &function {

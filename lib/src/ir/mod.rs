@@ -20,7 +20,7 @@ use std::{collections::HashMap, fmt::Debug};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-	typ::{Program, RuntimeTypeExpr},
+	typ::Type,
 	value::{PrevalValue, Value, runtime_type::TypeDeserializer},
 	vm::{RunResult, evaluate},
 };
@@ -42,7 +42,7 @@ impl PrevalValue for Function {
 		TypeDeserializer::Function
 	}
 
-	fn vcall(&mut self, module: &mut Program, args: Vec<&Option<Value>>) -> RunResult {
+	fn vcall(&mut self, module: &mut Vec<Type>, args: Vec<&Option<Value>>) -> RunResult {
 		let mut args_map = HashMap::new();
 		for (i, arg) in args.iter().enumerate() {
 			args_map.insert(i, (**arg).clone());
@@ -68,7 +68,7 @@ impl PrevalValue for Partial {
 		TypeDeserializer::Partial
 	}
 
-	fn vcall(&mut self, module: &mut Program, args: Vec<&Option<Value>>) -> RunResult {
+	fn vcall(&mut self, module: &mut Vec<Type>, args: Vec<&Option<Value>>) -> RunResult {
 		let mut args_map: HashMap<usize, Option<Value>> = HashMap::new();
 		for (i, arg) in args.iter().enumerate() {
 			args_map.insert(i, (**arg).clone());
@@ -108,11 +108,11 @@ pub enum Operation {
 	},
 	Index(usize, usize),
 	Access(usize, String),
-	InitializeStruct(RuntimeTypeExpr, HashMap<String, usize>),
-	LoadFunction(RuntimeTypeExpr),
+	InitializeStruct(usize, HashMap<String, usize>),
+	LoadFunction(usize),
 	Is {
 		value: usize,
-		typ: RuntimeTypeExpr,
+		typ: usize,
 	},
 }
 

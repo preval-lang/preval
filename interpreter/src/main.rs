@@ -1,38 +1,38 @@
-use std::{borrow::Cow, collections::HashMap, env, fs};
+use std::{borrow::Cow, collections::HashMap, fs};
 
 use preval_lib::{
+	error::Span,
 	ir::Partial,
 	parser::{module::parse_module, typ::InfoTypeExpr},
 	passes::remove_unused::{Usage, remove_unused},
 	tokeniser::{get_line_and_column, tokenise},
-	typ::{Implementation, Program, TypeExpr, type_id},
+	typ::{ConcreteType, Implementation, Type, TypeExpr, type_id},
 	value::{Value, primitive::IO},
 	vm::{RunResult, evaluate},
 };
-use ron::ser::PrettyConfig;
 
 fn main() {
-	if let Some(arg1) = env::args().collect::<Vec<_>>().get(1) {
-		if arg1 == "run" {
-			let (mut module, runresult): (Program, RunResult) =
-				ron::de::from_bytes(&fs::read("main.pvc").unwrap()).unwrap();
+	// if let Some(arg1) = env::args().collect::<Vec<_>>().get(1) {
+	// 	if arg1 == "run" {
+	// 		let (mut module, runresult): (Program, RunResult) =
+	// 			ron::de::from_bytes(&fs::read("main.pvc").unwrap()).unwrap();
 
-			let mut vars: HashMap<usize, Option<Value>> = HashMap::new();
+	// 		let mut vars: HashMap<usize, Option<Value>> = HashMap::new();
 
-			vars.insert(0, Some(Value::new(IO, type_id::IO)));
-			vars.insert(1, Some(Value::new(IO, type_id::IO)));
+	// 		vars.insert(0, Some(Value::new(IO, type_id::IO)));
+	// 		vars.insert(1, Some(Value::new(IO, type_id::IO)));
 
-			run_entire_program(&mut module, runresult, &mut vars);
-			return;
-		}
-	}
+	// 		run_entire_program(&mut module, runresult, &mut vars);
+	// 		return;
+	// 	}
+	// }
 
 	let file = "main.pv";
 	let src = String::from_utf8(fs::read(file).unwrap()).unwrap();
 	let tokens = tokenise(&src, 0, Cow::Owned(file.to_owned()));
 	match tokens {
 		Err(err) => {
-			let (line, column) = get_line_and_column(&src, err.idx.index).unwrap();
+			let (line, column) = get_line_and_column(&err.idx.file, err.idx.index).unwrap();
 			eprintln!("{:?} at {}:{line}:{column}", err.error, err.idx.file);
 		}
 		Ok(tokens) => {
@@ -41,16 +41,31 @@ fn main() {
 				Ok(mut module) => {
 					fs::write("ir.ir", format!("{module:#?}")).unwrap();
 
-					let main = module.get_template(&vec!["main".to_string()]).cloned();
+					let main_type_id = module
+						.instantiate(
+							&InfoTypeExpr {
+								expr: TypeExpr::Name(vec!["main".to_string()], false),
+								idx: Span {
+									file: Cow::Borrowed(file!().into()),
+									index: 0,
+								},
+							},
+							&vec![],
+							&vec![],
+						)
+						.unwrap();
 
-					let eval = if let Some(InfoTypeExpr {
-						idx: _,
-						expr: TypeExpr::Function(_name, _generics, Some(Implementation::Normal(f))),
-					}) = main
+					let mut types = module.types.clone();
+
+					let eval = if let Type::Concrete(ConcreteType::Function(
+						_,
+						_,
+						Implementation::Normal(imp),
+					)) = types[main_type_id].clone()
 					{
 						let cio = Some(Value::new(IO, type_id::IO));
 						let mut args = HashMap::from([(0, cio), (1, None)]);
-						evaluate(&mut module, f, &mut args, 0, vec![])
+						evaluate(&mut types, imp.clone(), &mut args, 0, vec![])
 					} else {
 						panic!("No main function")
 					};
@@ -70,27 +85,28 @@ fn main() {
 
 					fs::write("eval.ir", format!("{optimized:#?}")).unwrap();
 
-					if let Some(arg1) = env::args().collect::<Vec<_>>().get(1) {
-						if arg1 == "compile" {
-							let vec = ron::ser::to_string_pretty(
-								&(module, optimized),
-								PrettyConfig::default(),
-							)
-							.unwrap();
-							fs::write("main.pvc", vec).unwrap();
-							return;
-						}
-					}
+					// if let Some(arg1) = env::args().collect::<Vec<_>>().get(1) {
+					// 	if arg1 == "compile" {
+					// 		let vec = ron::ser::to_string_pretty(
+					// 			&(module, optimized),
+					// 			PrettyConfig::default(),
+					// 		)
+					// 		.unwrap();
+					// 		fs::write("main.pvc", vec).unwrap();
+					// 		return;
+					// 	}
+					// }
 
 					let mut vars: HashMap<usize, Option<Value>> = HashMap::new();
 
 					vars.insert(0, Some(Value::new(IO {}, type_id::IO)));
 					vars.insert(1, Some(Value::new(IO {}, type_id::IO)));
 
-					run_entire_program(&mut module, optimized, &mut vars);
+					run_entire_program(&mut types, optimized, &mut vars);
 				}
 				Err(err) => {
-					let (line, column) = get_line_and_column(&src, err.span.index).unwrap();
+					let (line, column) =
+						get_line_and_column(&err.span.file, err.span.index).unwrap();
 					eprintln!(
 						"ParseError: {:?} at {}:{line}:{column}",
 						err.data, err.span.file
@@ -102,7 +118,7 @@ fn main() {
 }
 
 fn run_entire_program(
-	module: &mut Program,
+	module: &mut Vec<Type>,
 	eval: RunResult,
 	vars: &mut HashMap<usize, Option<Value>>,
 ) -> bool {

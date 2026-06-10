@@ -47,12 +47,13 @@ pub fn infer_expr_type<'a>(
 	scope: &mut Scope,
 	return_type: usize,
 	generics: &[usize],
+	prefix: &[String],
 ) -> Result<usize, InfoTypeError<'a>> {
 	match &expr.expr {
 		Expr::Literal(value) => Ok(ins.add(Type::Concrete(value.get_type()))),
 		Expr::Name(name) => {
 			if let InfoTypeExpr {
-				expr: TypeExpr::Name(name),
+				expr: TypeExpr::Name(name, false),
 				idx: _,
 			} = name
 			{
@@ -62,7 +63,7 @@ pub fn infer_expr_type<'a>(
 					}
 				}
 			};
-			ins.instantiate(name, generics)
+			ins.instantiate(name, generics, prefix)
 		}
 		Expr::Block(statements, returns) => {
 			if statements.len() == 0 || (statements.len() == 1 && !returns) {
@@ -71,7 +72,7 @@ pub fn infer_expr_type<'a>(
 
 			let mut scope = scope.sub();
 			for statement in &statements[..statements.len() - 1] {
-				let _ = infer_expr_type(statement, ins, &mut scope, return_type, generics)?;
+				let _ = infer_expr_type(statement, ins, &mut scope, return_type, generics, prefix)?;
 			}
 			if *returns {
 				infer_expr_type(
@@ -80,13 +81,14 @@ pub fn infer_expr_type<'a>(
 					&mut scope,
 					return_type,
 					generics,
+					prefix,
 				)
 			} else {
 				Ok(ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new()))))
 			}
 		}
 		Expr::InitializeStruct(struct_type_expr, fields) => {
-			let struct_type_id = ins.instantiate(struct_type_expr, generics)?;
+			let struct_type_id = ins.instantiate(struct_type_expr, generics, prefix)?;
 			let struct_type = ins.get_type(struct_type_id).unwrap();
 			let struct_members = if let Type::Concrete(ConcreteType::Struct(members)) = struct_type
 			{
@@ -109,7 +111,8 @@ pub fn infer_expr_type<'a>(
 			}
 
 			for (name, field) in fields {
-				let assignee_type = infer_expr_type(field, ins, scope, return_type, generics)?;
+				let assignee_type =
+					infer_expr_type(field, ins, scope, return_type, generics, prefix)?;
 
 				let slot = if let Some(slot) = struct_members.get(name) {
 					*slot
@@ -133,7 +136,8 @@ pub fn infer_expr_type<'a>(
 			Ok(struct_type_id)
 		}
 		Expr::Access(struct_expr, field_name) => {
-			let struct_type_id = infer_expr_type(struct_expr, ins, scope, return_type, generics)?;
+			let struct_type_id =
+				infer_expr_type(struct_expr, ins, scope, return_type, generics, prefix)?;
 
 			if let Type::Concrete(ConcreteType::Struct(struct_type)) =
 				ins.get_type(struct_type_id).unwrap()
@@ -156,10 +160,10 @@ pub fn infer_expr_type<'a>(
 		Expr::Is { name: _, typ: _ } => Ok(ins.add(Type::Concrete(ConcreteType::Bool))),
 		Expr::Call(function_expr, args_exprs) => {
 			let function_type_id =
-				infer_expr_type(function_expr, ins, scope, return_type, generics)?;
+				infer_expr_type(function_expr, ins, scope, return_type, generics, prefix)?;
 
 			let (args, callee_return_type) =
-				if let Type::Concrete(ConcreteType::Function(args, callee_return_type, _, _)) =
+				if let Type::Concrete(ConcreteType::Function(args, callee_return_type, _imp)) =
 					ins.get_type(function_type_id).cloned().unwrap()
 				{
 					(args, callee_return_type)
@@ -183,7 +187,8 @@ pub fn infer_expr_type<'a>(
 			}
 
 			for (arg_expr, arg_type) in args_exprs.iter().zip(args.iter()) {
-				let arg_expr_type = infer_expr_type(arg_expr, ins, scope, return_type, generics)?;
+				let arg_expr_type =
+					infer_expr_type(arg_expr, ins, scope, return_type, generics, prefix)?;
 				if !ins.compatible(arg_expr_type, *arg_type, 0).unwrap() {
 					return Err(InfoTypeError {
 						span: expr.idx.clone(),
@@ -198,7 +203,7 @@ pub fn infer_expr_type<'a>(
 			Ok(callee_return_type)
 		}
 		Expr::If { cond, then, els } => {
-			let cond_type = infer_expr_type(cond, ins, scope, return_type, generics)?;
+			let cond_type = infer_expr_type(cond, ins, scope, return_type, generics, prefix)?;
 			let bool = ins.add(Type::Concrete(ConcreteType::Bool));
 			if !ins.compatible(cond_type, bool, 0).unwrap() {
 				return Err(InfoTypeError {
@@ -211,12 +216,20 @@ pub fn infer_expr_type<'a>(
 			}
 			let mut then_scope = scope.sub();
 			if let Expr::Is { name, typ } = &cond.expr {
-				let typ = ins.instantiate(typ, generics)?;
+				let typ = ins.instantiate(typ, generics, prefix)?;
 				then_scope.insert(name.clone(), typ);
 			}
-			let then_type = infer_expr_type(then, ins, &mut then_scope, return_type, generics)?;
+			let then_type =
+				infer_expr_type(then, ins, &mut then_scope, return_type, generics, prefix)?;
 			let els_type = if let Some(els) = els {
-				Some(infer_expr_type(els, ins, scope, return_type, generics)?)
+				Some(infer_expr_type(
+					els,
+					ins,
+					scope,
+					return_type,
+					generics,
+					prefix,
+				)?)
 			} else {
 				None
 			};
@@ -231,13 +244,14 @@ pub fn infer_expr_type<'a>(
 			})
 		}
 		Expr::Guard { dependency, body } => {
-			let _ = infer_expr_type(dependency, ins, scope, return_type, generics)?;
-			let body_type = infer_expr_type(body, ins, scope, return_type, generics)?;
+			let _ = infer_expr_type(dependency, ins, scope, return_type, generics, prefix)?;
+			let body_type = infer_expr_type(body, ins, scope, return_type, generics, prefix)?;
 			Ok(body_type)
 		}
 		Expr::Index(_, _) => panic!("TODO: remove indexing until i add operator overloading"),
 		Expr::Let(name, value_expr) => {
-			let value_type_id = infer_expr_type(value_expr, ins, scope, return_type, generics)?;
+			let value_type_id =
+				infer_expr_type(value_expr, ins, scope, return_type, generics, prefix)?;
 
 			scope.insert(name.clone(), value_type_id);
 
@@ -245,7 +259,7 @@ pub fn infer_expr_type<'a>(
 		}
 		Expr::Return(return_expr) => {
 			let expr_type = if let Some(expr) = return_expr {
-				infer_expr_type(expr, ins, scope, return_type, generics)?
+				infer_expr_type(expr, ins, scope, return_type, generics, prefix)?
 			} else {
 				ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new())))
 			};

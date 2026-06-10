@@ -1,25 +1,23 @@
-use std::collections::HashMap;
-
-use crate::ir::Block;
+use crate::ir::IRContext;
 use crate::ir::error::IRErrorInfo;
-
-use crate::ir::{Declaration, Operation, Statement};
+use crate::ir::{Operation, Statement};
 use crate::parser::typ::InfoTypeExpr;
 use crate::typ::TypeExpr;
 
 pub fn variable<'a>(
 	name: InfoTypeExpr<'a>,
-	function: &mut Vec<Block>,
 	block: &mut usize,
 	store: Option<usize>,
-	locals: &mut HashMap<String, Declaration>,
+	context: &mut IRContext<'_, 'a>,
 ) -> Result<(), IRErrorInfo<'a>> {
 	if let Some(store) = store {
 		match name.expr {
-			TypeExpr::Name(name) if name.len() == 1 && locals.contains_key(&name[0]) => {
-				match locals[&name[0]] {
-					Declaration::Variable(v) => {
-						function[*block].statements.push(Statement {
+			TypeExpr::Name(name, global)
+				if !global && name.len() == 1 && context.locals.contains_key(&name[0]) =>
+			{
+				match context.locals[&name[0]] {
+					v => {
+						context.blocks[*block].statements.push(Statement {
 							store: Some(store),
 							operation: Operation::LoadLocal { src: v },
 						});
@@ -27,9 +25,14 @@ pub fn variable<'a>(
 				}
 			}
 			_ => {
-				function[*block].statements.push(Statement {
+				context.blocks[*block].statements.push(Statement {
 					store: Some(store),
-					operation: Operation::LoadFunction(name.into()),
+					operation: Operation::LoadFunction(
+						context
+							.ins
+							.instantiate(&name, context.generics, context.prefix)
+							.expect("pass errors in types to IRError"),
+					),
 				});
 			}
 		}

@@ -1,5 +1,5 @@
 use crate::{
-	typ::{Program, type_id},
+	typ::{Type, type_id},
 	value::{PrevalValue, Value, primitive::EmptyTuple, runtime_type::TypeDeserializer},
 };
 use libloading::Library;
@@ -19,7 +19,7 @@ impl PrevalValue for NativeFunction {
 
 	fn vcall(
 		&mut self,
-		_module: &mut Program,
+		_module: &mut Vec<Type>,
 		args: Vec<&Option<super::Value>>,
 	) -> crate::vm::RunResult {
 		unsafe {

@@ -1,63 +1,40 @@
-use std::collections::HashMap;
-
 use crate::ir::error::IRErrorInfo;
-use crate::ir::{Operation, Statement};
+use crate::ir::{IRContext, Operation, Statement};
 use crate::{
-	ir::{Block, Declaration, Terminal, to_ir},
+	ir::{Block, Terminal, to_ir},
 	parser::expression::InfoExpr,
 };
 
 pub fn guard<'a>(
 	dependency: Box<InfoExpr<'a>>,
 	body: Box<InfoExpr<'a>>,
-	function: &mut Vec<Block>,
 	block: &mut usize,
 	store: Option<usize>,
-	locals: &mut HashMap<String, Declaration>,
-	next_var: &mut usize,
 	tail: bool,
+	context: &mut IRContext<'_, 'a>,
 ) -> Result<(), IRErrorInfo<'a>> {
-	let dep_var = {
-		*next_var += 1;
-		*next_var
-	};
-	to_ir(
-		function,
-		block,
-		*dependency,
-		Some(dep_var),
-		locals,
-		next_var,
-		false,
-	)?;
+	let dep_var = context.var();
+	to_ir(block, *dependency, Some(dep_var), false, context)?;
 
-	let body_block = function.len();
+	let body_block = context.blocks.len();
 	let mut body_block_mut = body_block;
 	let continuation_block = body_block + 1;
 
-	function.push(Block {
+	context.blocks.push(Block {
 		statements: Vec::new(),
 		terminal: Terminal::Jump(continuation_block),
 	});
 
-	let old_terminal = function[*block].terminal.clone();
+	let old_terminal = context.blocks[*block].terminal.clone();
 
-	function.push(Block {
+	context.blocks.push(Block {
 		statements: Vec::new(),
 		terminal: old_terminal,
 	});
 
-	to_ir(
-		function,
-		&mut body_block_mut,
-		*body,
-		store,
-		locals,
-		next_var,
-		tail,
-	)?;
+	to_ir(&mut body_block_mut, *body, store, tail, context)?;
 
-	function[*block].terminal = Terminal::Guard {
+	context.blocks[*block].terminal = Terminal::Guard {
 		dependency: dep_var,
 		body: body_block,
 		continuation: continuation_block,
@@ -65,7 +42,7 @@ pub fn guard<'a>(
 	*block = continuation_block;
 
 	if let Some(store) = store {
-		function[*block].statements.push(Statement {
+		context.blocks[*block].statements.push(Statement {
 			store: Some(store),
 			operation: Operation::GuardPhi {
 				block: body_block,

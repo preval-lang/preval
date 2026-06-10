@@ -1,7 +1,4 @@
-use std::collections::HashMap;
-
-use crate::ir::Block;
-use crate::ir::Declaration;
+use crate::ir::IRContext;
 use crate::ir::Operation;
 use crate::ir::Statement;
 use crate::ir::Terminal;
@@ -14,28 +11,15 @@ use crate::value::primitive::EmptyTuple;
 
 pub fn returns<'a>(
 	value_expr: Option<Box<InfoExpr<'a>>>,
-	function: &mut Vec<Block>,
 	block: &mut usize,
-	locals: &mut HashMap<String, Declaration>,
-	next_var: &mut usize,
+	context: &mut IRContext<'_, 'a>,
 ) -> Result<(), IRErrorInfo<'a>> {
-	let return_var = {
-		*next_var += 1;
-		*next_var
-	};
-	function[*block].terminal = Terminal::Return(if let Some(value_expr) = value_expr {
-		to_ir(
-			function,
-			block,
-			*value_expr,
-			Some(return_var),
-			locals,
-			next_var,
-			true,
-		)?;
+	let return_var = context.var();
+	context.blocks[*block].terminal = Terminal::Return(if let Some(value_expr) = value_expr {
+		to_ir(block, *value_expr, Some(return_var), true, context)?;
 		return_var
 	} else {
-		function[*block].statements.push(Statement {
+		context.blocks[*block].statements.push(Statement {
 			store: Some(return_var),
 			operation: Operation::LoadLiteral(Value::new(EmptyTuple, type_id::empty_tuple)),
 		});

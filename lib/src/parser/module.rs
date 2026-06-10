@@ -1,16 +1,15 @@
-use std::{collections::HashMap, usize};
+use std::{borrow::Cow, collections::HashMap, usize};
 
 use crate::{
 	error::{Error, InfoError, Span},
-	ir::{Block, Declaration, Terminal, to_ir},
 	parser::{
 		expression::{InfoExpr, InfoParseError, ParseError, parse_expression},
 		typ::{InfoTypeExpr, parse_type},
 		utility::read_punctuated,
 	},
 	passes::type_check_expr::infer_expr_type,
-	tokeniser::{InfoToken, Keyword, Literal, Token},
-	typ::{Implementation, Program, Type, TypeError, TypeExpr},
+	tokeniser::{InfoToken, Keyword, Literal, Token, tokenise},
+	typ::{GenericImplementation, Program, Type, TypeError, TypeExpr},
 	value::native::NativeFunction,
 };
 
@@ -21,27 +20,26 @@ pub fn parse_module<'a>(
 	module: &[String],
 ) -> Result<Program<'a>, InfoError<'a>> {
 	let mut instantiator = Program::new();
-	implementation_pass(
-		declaration_pass(&tokens, &mut instantiator, module)?,
-		&mut instantiator,
-	)?;
+	let decl = declaration_pass(&tokens, &mut instantiator, module)?;
+	implementation_pass(decl, &mut instantiator)?;
 
 	Ok(instantiator)
 }
 
-fn add_prefix(prefix: &[String], name: String) -> Vec<String> {
+pub fn add_prefix(prefix: &[String], name: String) -> Vec<String> {
 	let mut v = prefix.to_vec();
 	v.push(name);
 	v
 }
 
+#[derive(Debug)]
 enum Symbol<'a> {
 	Fn(Signature<'a>, InfoExpr<'a>),
 	DylibFn(Signature<'a>),
 	Struct(Vec<String>, HashMap<String, InfoTypeExpr<'a>>),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Signature<'a> {
 	name: String,
 	name_idx: Span<'a>,
@@ -74,18 +72,47 @@ fn declaration_pass<'a>(
 					.into());
 				};
 				i += 1;
-				let block = if let Token::Braces(contents) = &tokens[i].token {
-					contents
+				let decls = if let Token::Braces(contents) = &tokens[i].token {
+					declaration_pass(contents, instantiator, &add_prefix(prefix, name))?
+				} else if let Token::Semicolon = &tokens[i].token {
+					let mut mod_tokens = Vec::new();
+
+					let mut path = std::env::current_dir().unwrap();
+
+					for dir in prefix {
+						path = path.join(dir);
+					}
+
+					path = path.join(name.clone());
+
+					for file in std::fs::read_dir(path)
+						.expect("todo: better error for module folder not existing")
+					{
+						let file = file.unwrap();
+
+						let content = std::fs::read_to_string(file.path()).unwrap();
+
+						mod_tokens.extend_from_slice(
+							&tokenise(
+								&content,
+								0,
+								Cow::Owned(file.path().to_string_lossy().into_owned()),
+							)
+							.expect("todo: propagate tokenise error"),
+						);
+					}
+					declaration_pass(&mod_tokens, instantiator, &add_prefix(prefix, name))?
 				} else {
 					return Err(InfoParseError {
-						error: ParseError::ExpectedExpression(vec![tokens[i].clone()]),
+						error: ParseError::ExpectedSemicolon(tokens[i].clone()),
 						span: tokens[i].span.clone(),
 					}
 					.into());
 				};
+				for (key, value) in decls {
+					symbols.insert(key, value);
+				}
 				i += 1;
-
-				declaration_pass(block, instantiator, &add_prefix(prefix, name))?;
 			}
 			Token::Keyword(Keyword::Fn) => {
 				i += 1;
@@ -103,7 +130,8 @@ fn declaration_pass<'a>(
 						expr: TypeExpr::Function(
 							signature.arg_types,
 							Box::new(signature.return_type.clone()),
-							None,
+							Some(GenericImplementation::Normal(Box::new(body.clone()))),
+							signature.args,
 						),
 						idx: signature.name_idx,
 					},
@@ -224,15 +252,6 @@ fn declaration_pass<'a>(
 
 				let signature = expect_function_signature(&tokens, &mut i)?;
 
-				let generics = (0..signature.generics.len())
-					.map(|i| instantiator.add(Type::Placeholder(i)))
-					.collect::<Vec<_>>();
-
-				instantiator.instantiate(&signature.return_type, &generics)?;
-				for arg in &signature.arg_types {
-					instantiator.instantiate(arg, &generics)?;
-				}
-
 				if tokens[i].token != Token::Semicolon {
 					return Err(InfoParseError {
 						span: tokens[i].span.clone(),
@@ -249,10 +268,11 @@ fn declaration_pass<'a>(
 						expr: TypeExpr::Function(
 							signature.arg_types,
 							Box::new(signature.return_type),
-							Some(Implementation::Native(NativeFunction {
+							Some(GenericImplementation::Native(NativeFunction {
 								lib_name,
 								func_name: signature.name,
 							})),
+							signature.args,
 						),
 						idx: signature.name_idx,
 					},
@@ -284,10 +304,10 @@ fn implementation_pass<'a>(
 					.map(|i| instantiator.add(Type::Placeholder(i)))
 					.collect::<Vec<_>>();
 
-				for arg in sig.arg_types {
-					instantiator.instantiate(&arg, &generics)?;
+				for arg in sig.arg_types.clone() {
+					instantiator.instantiate(&arg, &generics, &fqn[0..fqn.len() - 1])?;
 				}
-				instantiator.instantiate(&sig.return_type, &generics)?;
+				instantiator.instantiate(&sig.return_type, &generics, &fqn[0..fqn.len() - 1])?;
 			}
 			Symbol::Struct(generics, fields) => {
 				let generics = (0..generics.len())
@@ -295,58 +315,32 @@ fn implementation_pass<'a>(
 					.collect::<Vec<_>>();
 
 				for (_, arg) in fields {
-					instantiator.instantiate(&arg, &generics)?;
+					instantiator.instantiate(&arg, &generics, &fqn[0..fqn.len() - 1])?;
 				}
 			}
 			Symbol::Fn(sig, body) => {
-				let mut last_var = sig.args.len();
-
-				let mut ir = vec![Block {
-					terminal: Terminal::Return(last_var),
-					statements: Vec::new(),
-				}];
-
-				let mut scope = Scope::new();
-
-				let mut locals = HashMap::new();
-				for (idx, arg) in sig.args.iter().enumerate() {
-					locals.insert(arg.clone(), Declaration::Variable(idx));
-					scope.insert(
-						arg.clone(),
-						instantiator.instantiate(&sig.arg_types[idx], &vec![])?,
-					);
-				}
-
-				to_ir(
-					&mut ir,
-					&mut 0,
-					body.clone(),
-					Some(last_var),
-					&mut locals,
-					&mut last_var,
-					true,
-				)?;
-
 				let generics = (0..sig.generics.len())
 					.map(|i| instantiator.add(Type::Placeholder(i)))
 					.collect::<Vec<_>>();
 
-				for arg in &sig.arg_types {
-					instantiator.instantiate(arg, &generics)?;
-				}
-				let return_type_ins = instantiator.instantiate(&sig.return_type, &generics)?;
+				let return_type_ins = instantiator.instantiate(
+					&sig.return_type,
+					&generics,
+					&fqn[0..fqn.len() - 1],
+				)?;
 
-				instantiator.add_template(
-					fqn,
-					InfoTypeExpr {
-						expr: TypeExpr::Function(
-							sig.arg_types,
-							Box::new(sig.return_type.clone()),
-							Some(Implementation::Normal(ir)),
-						),
-						idx: sig.name_idx,
-					},
-				);
+				let mut scope = Scope::new();
+
+				for (idx, arg) in sig.args.iter().enumerate() {
+					scope.insert(
+						arg.clone(),
+						instantiator.instantiate(
+							&sig.arg_types[idx],
+							&generics,
+							&fqn[0..fqn.len() - 1],
+						)?,
+					);
+				}
 
 				let body_type = infer_expr_type(
 					&body,
@@ -354,6 +348,7 @@ fn implementation_pass<'a>(
 					&mut scope,
 					return_type_ins,
 					&generics,
+					&fqn[0..fqn.len() - 1],
 				)?;
 
 				if !instantiator
@@ -361,7 +356,7 @@ fn implementation_pass<'a>(
 					.unwrap()
 				{
 					return Err(InfoError {
-						span: sig.return_type.idx,
+						span: sig.return_type.idx.clone(),
 						data: Error::TypeError(TypeError::IncompatibleTypes {
 							expected: instantiator.get_type(return_type_ins).unwrap().clone(),
 							got: instantiator.get_type(body_type).unwrap().clone(),
