@@ -2,6 +2,7 @@ use std::{borrow::Cow, fmt::Debug};
 
 use crate::{
 	error::Span,
+	parser::expression::InfixOp,
 	typ::{ConcreteType, IntegerSize},
 };
 
@@ -59,6 +60,7 @@ pub enum Token<'a> {
 	LessThan,
 	GreaterThan,
 	DoubleColon,
+	InfixOp(InfixOp),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -153,6 +155,26 @@ pub fn tokenise<'a>(
 			Some('.') => {
 				out.push(InfoToken {
 					token: Token::Dot,
+					span: Span {
+						index: offset + i,
+						file: file.clone(),
+					},
+				});
+				i += 1;
+			}
+			Some('+') => {
+				out.push(InfoToken {
+					token: Token::InfixOp(InfixOp::Plus),
+					span: Span {
+						index: offset + i,
+						file: file.clone(),
+					},
+				});
+				i += 1;
+			}
+			Some('-') => {
+				out.push(InfoToken {
+					token: Token::InfixOp(InfixOp::Minus),
 					span: Span {
 						index: offset + i,
 						file: file.clone(),

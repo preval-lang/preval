@@ -4,10 +4,26 @@ use crate::error::Span;
 use crate::parser::typ::{InfoTypeExpr, parse_type};
 use crate::parser::utility::read_punctuated;
 use crate::tokeniser::Literal;
+use crate::typ::TypeExpr;
 use crate::{
 	ir::error::IRError,
 	tokeniser::{InfoToken, Keyword, Token},
 };
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum InfixOp {
+	Plus,
+	Minus,
+}
+
+impl InfixOp {
+	pub fn function(&self) -> &'static [&'static str] {
+		match self {
+			Self::Plus => &["plus"],
+			Self::Minus => &["minus"],
+		}
+	}
+}
 
 #[derive(Debug, Clone)]
 pub enum Expr<'a> {
@@ -89,6 +105,10 @@ pub fn parse_expression<'a>(
 		return Ok(expr);
 	}
 
+	if let Some(expr) = try_parse_infix_op(tokens, generics, InfixOp::Plus)? {
+		return Ok(expr);
+	}
+
 	if let Some(expr) = try_parse_index(tokens, generics)? {
 		return Ok(expr);
 	}
@@ -122,6 +142,42 @@ pub fn parse_expression<'a>(
 	}
 
 	todo!("expected expression error span should be passed to parse_expression")
+}
+
+fn try_parse_infix_op<'a>(
+	tokens: &[InfoToken<'a>],
+	generics: &[String],
+	op: InfixOp,
+) -> Result<Option<InfoExpr<'a>>, InfoParseError<'a>> {
+	let (op_index, _) = if let Some(a) = tokens
+		.iter()
+		.enumerate()
+		.find(|(_, tk)| tk.token == Token::InfixOp(op.clone()))
+	{
+		a
+	} else {
+		return Ok(None);
+	};
+
+	let left = parse_expression(&tokens[0..op_index], generics)?;
+	let right = parse_expression(&tokens[op_index + 1..], generics)?;
+
+	Ok(Some(InfoExpr {
+		idx: tokens[op_index].span.clone(),
+		expr: Expr::Call(
+			Box::new(InfoExpr {
+				idx: tokens[op_index].span.clone(),
+				expr: Expr::Name(InfoTypeExpr {
+					expr: TypeExpr::Name(
+						op.function().iter().map(ToString::to_string).collect(),
+						true,
+					),
+					idx: tokens[op_index].span.clone(),
+				}),
+			}),
+			vec![left, right],
+		),
+	}))
 }
 
 fn try_parse_let<'a>(

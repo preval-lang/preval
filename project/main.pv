@@ -1,6 +1,9 @@
 use std::io::print;
 
 fn main(compile_io: IO, io: IO) {
-	print(io, "Hi!");
-	print(compile_io, "Hi compiler!");
+	2 + 2;
+}
+
+fn plus(a: usize, b: usize): usize {
+	4
 }

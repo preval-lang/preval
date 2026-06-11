@@ -66,12 +66,12 @@ pub fn infer_expr_type<'a>(
 			ins.instantiate(name, generics, prefix)
 		}
 		Expr::Block(statements, returns) => {
-			if statements.len() == 0 || (statements.len() == 1 && !returns) {
+			if statements.len() == 0 {
 				return Ok(ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new()))));
 			}
 
 			let mut scope = scope.sub();
-			for statement in &statements[..statements.len() - 1] {
+			for statement in &statements[..statements.len()] {
 				let _ = infer_expr_type(statement, ins, &mut scope, return_type, generics, prefix)?;
 			}
 			if *returns {
@@ -159,6 +159,8 @@ pub fn infer_expr_type<'a>(
 		}
 		Expr::Is { name: _, typ: _ } => Ok(ins.add(Type::Concrete(ConcreteType::Bool))),
 		Expr::Call(function_expr, args_exprs) => {
+			println!("{function_expr:?}");
+
 			let function_type_id =
 				infer_expr_type(function_expr, ins, scope, return_type, generics, prefix)?;
 

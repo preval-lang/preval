@@ -1,54 +1,4 @@
-(Partial((
-    blocks: [
-        (
-            statements: [
-                (
-                    store: Some(8),
-                    operation: LoadLiteral((NativeFunction, "(lib_name:\"stdlib/print\",func_name:\"print\")", 31)),
-                ),
-                (
-                    store: Some(7),
-                    operation: LoadLiteral((String, "\"Hi compiler!\"", 3)),
-                ),
-                (
-                    store: Some(4),
-                    operation: LoadLiteral((String, "\"Hi!\"", 3)),
-                ),
-                (
-                    store: Some(5),
-                    operation: LoadLiteral((NativeFunction, "(lib_name:\"stdlib/print\",func_name:\"print\")", 27)),
-                ),
-                (
-                    store: Some(2),
-                    operation: LoadLiteral((Tuple([]), "()", 2)),
-                ),
-                (
-                    store: Some(6),
-                    operation: LoadLiteral((IO, "()", 4)),
-                ),
-                (
-                    store: Some(3),
-                    operation: LoadLocal(
-                        src: 1,
-                    ),
-                ),
-                (
-                    store: None,
-                    operation: Call(
-                        function: Var(5),
-                        args: [
-                            3,
-                            4,
-                        ],
-                    ),
-                ),
-            ],
-            terminal: Return(2),
-        ),
-    ],
-    start_block: 0,
-    generics: [],
-)), [
+(Concrete((Tuple([]), "()", 2)), [
     Concrete(Integer(
         size: Size,
         signed: false,
@@ -57,76 +7,123 @@
     Concrete(Tuple([])),
     Concrete(String),
     Concrete(IO),
+    Concrete(Integer(
+        size: Size,
+        signed: false,
+    )),
+    Concrete(Integer(
+        size: Size,
+        signed: false,
+    )),
+    Concrete(Integer(
+        size: Size,
+        signed: false,
+    )),
+    Concrete(Integer(
+        size: Size,
+        signed: false,
+    )),
+    Concrete(Integer(
+        size: Size,
+        signed: false,
+    )),
+    Concrete(Tuple([])),
     Concrete(IO),
-    Concrete(String),
+    Concrete(IO),
+    Concrete(Integer(
+        size: Size,
+        signed: false,
+    )),
+    Concrete(Integer(
+        size: Size,
+        signed: false,
+    )),
+    Concrete(Integer(
+        size: Size,
+        signed: false,
+    )),
+    Concrete(Function([
+        13,
+        14,
+    ], 15, Normal([
+        (
+            statements: [
+                (
+                    store: Some(2),
+                    operation: LoadLiteral((USize, "4", 0)),
+                ),
+            ],
+            terminal: Return(2),
+        ),
+    ]))),
+    Concrete(Integer(
+        size: Size,
+        signed: false,
+    )),
+    Concrete(Integer(
+        size: Size,
+        signed: false,
+    )),
     Concrete(Tuple([])),
     Concrete(IO),
     Concrete(String),
     Concrete(Tuple([])),
     Concrete(Function([
-        8,
-        9,
-    ], 10, Native((
-        lib_name: "stdlib/print",
-        func_name: "print",
-    )))),
-    Concrete(Tuple([])),
-    Concrete(IO),
-    Concrete(IO),
-    Concrete(IO),
-    Concrete(String),
-    Concrete(Tuple([])),
-    Concrete(Function([
-        15,
-        16,
-    ], 17, Native((
-        lib_name: "stdlib/print",
-        func_name: "print",
-    )))),
-    Concrete(String),
-    Concrete(Tuple([])),
-    Concrete(IO),
-    Concrete(IO),
-    Concrete(Tuple([])),
-    Concrete(IO),
-    Concrete(String),
-    Concrete(Tuple([])),
-    Concrete(Function([
-        24,
-        25,
-    ], 26, Native((
-        lib_name: "stdlib/print",
-        func_name: "print",
-    )))),
-    Concrete(IO),
-    Concrete(String),
-    Concrete(Tuple([])),
-    Concrete(Function([
-        28,
-        29,
-    ], 30, Native((
-        lib_name: "stdlib/print",
-        func_name: "print",
-    )))),
-    Concrete(Function([
+        20,
         21,
-        22,
-    ], 23, Normal([
+    ], 22, Native((
+        lib_name: "stdlib/print",
+        func_name: "print",
+    )))),
+    Concrete(IO),
+    Concrete(String),
+    Concrete(Tuple([])),
+    Concrete(IO),
+    Concrete(IO),
+    Concrete(Tuple([])),
+    Concrete(Integer(
+        size: Size,
+        signed: false,
+    )),
+    Concrete(Integer(
+        size: Size,
+        signed: false,
+    )),
+    Concrete(Integer(
+        size: Size,
+        signed: false,
+    )),
+    Concrete(Function([
+        30,
+        31,
+    ], 32, Normal([
+        (
+            statements: [
+                (
+                    store: Some(2),
+                    operation: LoadLiteral((USize, "4", 0)),
+                ),
+            ],
+            terminal: Return(2),
+        ),
+    ]))),
+    Concrete(Function([
+        27,
+        28,
+    ], 29, Normal([
         (
             statements: [
                 (
                     store: Some(3),
-                    operation: LoadLocal(
-                        src: 1,
-                    ),
+                    operation: LoadLiteral((USize, "2", 0)),
                 ),
                 (
                     store: Some(4),
-                    operation: LoadLiteral((String, "\"Hi!\"", 3)),
+                    operation: LoadLiteral((USize, "2", 0)),
                 ),
                 (
                     store: Some(5),
-                    operation: LoadFunction(27),
+                    operation: LoadFunction(33),
                 ),
                 (
                     store: None,
@@ -135,30 +132,6 @@
                         args: [
                             3,
                             4,
-                        ],
-                    ),
-                ),
-                (
-                    store: Some(6),
-                    operation: LoadLocal(
-                        src: 0,
-                    ),
-                ),
-                (
-                    store: Some(7),
-                    operation: LoadLiteral((String, "\"Hi compiler!\"", 3)),
-                ),
-                (
-                    store: Some(8),
-                    operation: LoadFunction(31),
-                ),
-                (
-                    store: None,
-                    operation: Call(
-                        function: Var(8),
-                        args: [
-                            6,
-                            7,
                         ],
                     ),
                 ),
