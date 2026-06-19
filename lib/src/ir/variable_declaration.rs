@@ -1,7 +1,6 @@
 use crate::ir::IRContext;
 use crate::ir::Operation;
 use crate::ir::Statement;
-use crate::ir::error::IRErrorInfo;
 use crate::ir::to_ir;
 use crate::parser::expression::InfoExpr;
 
@@ -11,9 +10,9 @@ pub fn variable_declaration<'a>(
 	block: &mut usize,
 	store: Option<usize>,
 	context: &mut IRContext<'_, 'a>,
-) -> Result<(), IRErrorInfo<'a>> {
+) {
 	let new_var = context.var();
-	to_ir(block, *value_expr, Some(new_var), false, context)?;
+	to_ir(block, *value_expr, Some(new_var), false, context);
 	context.locals.insert(name, new_var);
 	if let Some(store) = store {
 		context.blocks[*block].statements.push(Statement {
@@ -21,5 +20,4 @@ pub fn variable_declaration<'a>(
 			operation: Operation::LoadLocal { src: new_var },
 		});
 	}
-	Ok(())
 }

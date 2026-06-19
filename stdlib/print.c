@@ -3,7 +3,13 @@
 #include <string.h>
 #include "preval.h"
 
-__declspec(dllexport) Value* print(API* api, size_t argc, const Value * const * args) {
+#ifdef __WIN32
+#define EXPORT __declspec(dllexport)
+#else
+#define EXPORT
+#endif
+
+EXPORT Value* print(API* api, size_t argc, const Value * const * args) {
     if (!args[0] || !args[1]) {
         return NULL;
     }
@@ -12,7 +18,7 @@ __declspec(dllexport) Value* print(API* api, size_t argc, const Value * const * 
     return api->new_tuple_value();
 }
 
-__declspec(dllexport) Value* input(API* api, size_t argc, const Value * const * args) {
+EXPORT Value* input(API* api, size_t argc, const Value * const * args) {
     if (!args[0]) {
         return NULL;
     }

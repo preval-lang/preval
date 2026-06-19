@@ -2,7 +2,6 @@ mod access;
 mod block;
 mod call;
 mod conditional;
-pub mod error;
 mod guard;
 mod index;
 mod initialize_struct;

@@ -1,19 +1,16 @@
-use std::{borrow::Cow, collections::HashMap, usize};
+use std::{collections::HashMap, usize};
 
 use crate::{
-	error::{Error, InfoError, Span},
+	error::{InfoError, Span},
 	parser::{
 		expression::{InfoExpr, InfoParseError, ParseError, parse_expression},
 		typ::{InfoTypeExpr, parse_type},
 		utility::read_punctuated,
 	},
-	passes::type_check_expr::infer_expr_type,
 	tokeniser::{InfoToken, Keyword, Literal, Token},
-	typ::{GenericImplementation, Program, Type, TypeError, TypeExpr},
+	typ::{GenericImplementation, Template, TypeExpr},
 	value::native::NativeFunction,
 };
-
-use crate::passes::type_check_expr::Scope;
 
 pub fn add_prefix(prefix: &[String], name: String) -> Vec<String> {
 	let mut v = prefix.to_vec();
@@ -41,9 +38,7 @@ pub struct Signature<'a> {
 
 pub fn declaration_pass<'a>(
 	tokens: &[InfoToken<'a>],
-	instantiator: &mut Program<'a>,
-	prefix: &[String],
-	symbols: &mut HashMap<Vec<String>, Symbol<'a>>,
+	module: &mut HashMap<String, Template<'a>>,
 ) -> Result<(), InfoError<'a>> {
 	let mut i = 0;
 
@@ -55,7 +50,8 @@ pub fn declaration_pass<'a>(
 				while tokens[i].token != Token::Semicolon {
 					i += 1;
 				}
-				let items = read_punctuated(&tokens[start..i], Token::DoubleColon)?;
+				let end = i;
+				let items = read_punctuated(&tokens[start..end], Token::DoubleColon)?;
 				i += 1;
 
 				let mut path = Vec::new();
@@ -78,43 +74,35 @@ pub fn declaration_pass<'a>(
 					}
 				}
 
-				let alias_path = add_prefix(prefix, path.last().unwrap().clone());
-
-				instantiator.add_template(
-					alias_path.clone(),
-					InfoTypeExpr {
-						expr: TypeExpr::Name(path, true),
-						idx: tokens[start].span.clone(),
+				module.insert(
+					path.last().unwrap().clone(),
+					Template {
+						expr: parse_type(&tokens[start..end], &vec![])?,
+						parameters: 0,
 					},
 				);
-
-				symbols.insert(alias_path, Symbol::Alias);
 			}
-
 			Token::Keyword(Keyword::Fn) => {
 				i += 1;
 				let signature = expect_function_signature(&tokens, &mut i)?;
 
 				let body = expect_block_or_expr(&tokens, &mut i, &signature.generics)?;
 
-				let sig2 = signature.clone();
-
-				let fqn = add_prefix(prefix, signature.name);
-
-				instantiator.add_template(
-					fqn.clone(),
-					InfoTypeExpr {
-						expr: TypeExpr::Function(
-							signature.arg_types,
-							Box::new(signature.return_type.clone()),
-							Some(GenericImplementation::Normal(Box::new(body.clone()))),
-							signature.args,
-						),
-						idx: signature.name_idx,
+				module.insert(
+					signature.name,
+					Template {
+						expr: InfoTypeExpr {
+							expr: TypeExpr::Function(
+								signature.arg_types,
+								Box::new(signature.return_type.clone()),
+								Some(GenericImplementation::Normal(Box::new(body.clone()))),
+								signature.args,
+							),
+							idx: signature.name_idx,
+						},
+						parameters: signature.generics.len(),
 					},
 				);
-
-				symbols.insert(fqn, Symbol::Fn(sig2, body));
 			}
 			Token::Keyword(Keyword::Struct) => {
 				let idx = i;
@@ -196,17 +184,16 @@ pub fn declaration_pass<'a>(
 				}
 				i += 1;
 
-				let fqn = add_prefix(prefix, name.clone());
-
-				instantiator.add_template(
-					fqn.clone(),
-					InfoTypeExpr {
-						expr: TypeExpr::Struct(fields.clone()),
-						idx: tokens[idx].span.clone(),
+				module.insert(
+					name.clone(),
+					Template {
+						expr: InfoTypeExpr {
+							expr: TypeExpr::Struct(fields.clone()),
+							idx: tokens[idx].span.clone(),
+						},
+						parameters: generics.len(),
 					},
 				);
-
-				symbols.insert(fqn, Symbol::Struct(generics, fields));
 			}
 			Token::Keyword(Keyword::Dylib) => {
 				i += 1;
@@ -237,25 +224,24 @@ pub fn declaration_pass<'a>(
 					.into());
 				}
 				i += 1;
-				let sig2 = signature.clone();
-				let fqn = add_prefix(prefix, signature.name.clone());
-				instantiator.add_template(
-					fqn.clone(),
-					InfoTypeExpr {
-						expr: TypeExpr::Function(
-							signature.arg_types,
-							Box::new(signature.return_type),
-							Some(GenericImplementation::Native(NativeFunction {
-								lib_name,
-								func_name: signature.name,
-							})),
-							signature.args,
-						),
-						idx: signature.name_idx,
+				module.insert(
+					signature.name.clone(),
+					Template {
+						expr: InfoTypeExpr {
+							expr: TypeExpr::Function(
+								signature.arg_types,
+								Box::new(signature.return_type),
+								Some(GenericImplementation::Native(NativeFunction {
+									lib_name,
+									func_name: signature.name,
+								})),
+								signature.args,
+							),
+							idx: signature.name_idx,
+						},
+						parameters: signature.generics.len(),
 					},
 				);
-
-				symbols.insert(fqn, Symbol::DylibFn(sig2));
 			}
 			_tk => {
 				return Err(InfoParseError {
@@ -270,95 +256,94 @@ pub fn declaration_pass<'a>(
 	Ok(())
 }
 
-pub fn implementation_pass<'a>(
-	symbols: HashMap<Vec<String>, Symbol<'a>>,
-	mut instantiator: &mut Program<'a>,
-) -> Result<(), InfoError<'a>> {
-	for (fqn, symbol) in symbols {
-		match symbol {
-			Symbol::Alias => {
-				instantiator.instantiate(
-					&InfoTypeExpr {
-						expr: TypeExpr::Name(fqn.clone(), true),
-						idx: Span {
-							file: Cow::Owned(file!().into()),
-							index: 0,
-						},
-					},
-					&vec![],
-					&fqn[0..fqn.len() - 1],
-				)?;
-			}
-			Symbol::DylibFn(sig) => {
-				let generics = (0..sig.generics.len())
-					.map(|i| instantiator.add(Type::Placeholder(i)))
-					.collect::<Vec<_>>();
+// pub fn implementation_pass<'a>(
+// 	mut instantiator: &mut Instantiator<'a>,
+// ) -> Result<(), InfoError<'a>> {
+// 	for (name, template) in &instantiator.global_namespace {
+// 		match template.expr {
+// 			Symbol::Alias => {
+// 				instantiator.instantiate(
+// 					&InfoTypeExpr {
+// 						expr: TypeExpr::Name(fqn.clone(), true, vec![]),
+// 						idx: Span {
+// 							file: Cow::Owned(file!().into()),
+// 							index: 0,
+// 						},
+// 					},
+// 					&vec![],
+// 					&fqn[0..fqn.len() - 1],
+// 				)?;
+// 			}
+// 			Symbol::DylibFn(sig) => {
+// 				let generics = (0..sig.generics.len())
+// 					.map(|i| instantiator.add(Type::Placeholder(i)))
+// 					.collect::<Vec<_>>();
 
-				for arg in sig.arg_types.clone() {
-					instantiator.instantiate(&arg, &generics, &fqn[0..fqn.len() - 1])?;
-				}
-				instantiator.instantiate(&sig.return_type, &generics, &fqn[0..fqn.len() - 1])?;
-			}
-			Symbol::Struct(generics, fields) => {
-				let generics = (0..generics.len())
-					.map(|i| instantiator.add(Type::Placeholder(i)))
-					.collect::<Vec<_>>();
+// 				for arg in sig.arg_types.clone() {
+// 					instantiator.instantiate(&arg, &generics, &fqn[0..fqn.len() - 1])?;
+// 				}
+// 				instantiator.instantiate(&sig.return_type, &generics, &fqn[0..fqn.len() - 1])?;
+// 			}
+// 			Symbol::Struct(generics, fields) => {
+// 				let generics = (0..generics.len())
+// 					.map(|i| instantiator.add(Type::Placeholder(i)))
+// 					.collect::<Vec<_>>();
 
-				for (_, arg) in fields {
-					instantiator.instantiate(&arg, &generics, &fqn[0..fqn.len() - 1])?;
-				}
-			}
-			Symbol::Fn(sig, body) => {
-				let generics = (0..sig.generics.len())
-					.map(|i| instantiator.add(Type::Placeholder(i)))
-					.collect::<Vec<_>>();
+// 				for (_, arg) in fields {
+// 					instantiator.instantiate(&arg, &generics, &fqn[0..fqn.len() - 1])?;
+// 				}
+// 			}
+// 			Symbol::Fn(sig, body) => {
+// 				let generics = (0..sig.generics.len())
+// 					.map(|i| instantiator.add(Type::Placeholder(i)))
+// 					.collect::<Vec<_>>();
 
-				let return_type_ins = instantiator.instantiate(
-					&sig.return_type,
-					&generics,
-					&fqn[0..fqn.len() - 1],
-				)?;
+// 				let return_type_ins = instantiator.instantiate(
+// 					&sig.return_type,
+// 					&generics,
+// 					&fqn[0..fqn.len() - 1],
+// 				)?;
 
-				let mut scope = Scope::new();
+// 				let mut scope = Scope::new();
 
-				for (idx, arg) in sig.args.iter().enumerate() {
-					scope.insert(
-						arg.clone(),
-						instantiator.instantiate(
-							&sig.arg_types[idx],
-							&generics,
-							&fqn[0..fqn.len() - 1],
-						)?,
-					);
-				}
+// 				for (idx, arg) in sig.args.iter().enumerate() {
+// 					scope.insert(
+// 						arg.clone(),
+// 						instantiator.instantiate(
+// 							&sig.arg_types[idx],
+// 							&generics,
+// 							&fqn[0..fqn.len() - 1],
+// 						)?,
+// 					);
+// 				}
 
-				let body_type = infer_expr_type(
-					&body,
-					&mut instantiator,
-					&mut scope,
-					return_type_ins,
-					&generics,
-					&fqn[0..fqn.len() - 1],
-				)?;
+// 				let body_type = infer_expr_type(
+// 					body,
+// 					&mut instantiator,
+// 					&mut scope,
+// 					return_type_ins,
+// 					&generics,
+// 					&fqn[0..fqn.len() - 1],
+// 				)?;
 
-				if !instantiator
-					.compatible(body_type, return_type_ins, 0)
-					.unwrap()
-				{
-					return Err(InfoError {
-						span: sig.return_type.idx.clone(),
-						data: Error::TypeError(TypeError::IncompatibleTypes {
-							expected: instantiator.get_type(return_type_ins).unwrap().clone(),
-							got: instantiator.get_type(body_type).unwrap().clone(),
-						}),
-					});
-				}
-			}
-		}
-	}
+// 				if !instantiator
+// 					.compatible(body_type.typ, return_type_ins, 0)
+// 					.unwrap()
+// 				{
+// 					return Err(InfoError {
+// 						span: sig.return_type.idx.clone(),
+// 						data: Error::TypeError(TypeError::IncompatibleTypes {
+// 							expected: instantiator.get_type(return_type_ins).unwrap().clone(),
+// 							got: instantiator.get_type(body_type.typ).unwrap().clone(),
+// 						}),
+// 					});
+// 				}
+// 			}
+// 		}
+// 	}
 
-	Ok(())
-}
+// 	Ok(())
+// }
 
 fn expect_function_signature<'a>(
 	tokens: &[InfoToken<'a>],

@@ -1,6 +1,6 @@
 use crate::{
 	error::Span,
-	ir::{IRContext, Operation, Statement, error::IRErrorInfo, variable::variable},
+	ir::{IRContext, Operation, Statement, variable::variable},
 	parser::typ::InfoTypeExpr,
 	typ::TypeExpr,
 };
@@ -12,18 +12,18 @@ pub fn is<'a>(
 	block: &mut usize,
 	store: Option<usize>,
 	context: &mut IRContext<'_, 'a>,
-) -> Result<(), IRErrorInfo<'a>> {
+) {
 	let checked_var = context.var();
 
 	variable(
 		InfoTypeExpr {
-			expr: TypeExpr::Name(vec![name], false),
+			expr: TypeExpr::Name(name, vec![]),
 			idx: idx.clone(),
 		},
 		block,
 		Some(checked_var),
 		context,
-	)?;
+	);
 
 	if let Some(store) = store {
 		context.blocks[*block].statements.push(Statement {
@@ -32,11 +32,9 @@ pub fn is<'a>(
 				value: checked_var,
 				typ: context
 					.ins
-					.instantiate(&typ, context.generics, context.prefix)
+					.instantiate(&typ, context.generics)
 					.expect("Pass type errors up as IRErrors"),
 			},
 		});
 	}
-
-	Ok(())
 }

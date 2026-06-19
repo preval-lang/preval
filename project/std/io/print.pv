@@ -1,1 +1,1 @@
-dylib "stdlib/print" fn print(io: ::IO, text: ::String);
+dylib "print" fn print(io: IO, text: String);

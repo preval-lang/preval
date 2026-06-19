@@ -1,14 +1,13 @@
 use std::collections::HashMap;
+use std::convert::Infallible;
+use std::fmt::Debug;
 
 use crate::error::Span;
 use crate::parser::typ::{InfoTypeExpr, parse_type};
 use crate::parser::utility::read_punctuated;
 use crate::tokeniser::Literal;
+use crate::tokeniser::{InfoToken, Keyword, Token};
 use crate::typ::TypeExpr;
-use crate::{
-	ir::error::IRError,
-	tokeniser::{InfoToken, Keyword, Token},
-};
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum InfixOp {
@@ -26,35 +25,36 @@ impl InfixOp {
 }
 
 #[derive(Debug, Clone)]
-pub enum Expr<'a> {
-	Index(Box<InfoExpr<'a>>, Box<InfoExpr<'a>>),
-	Name(InfoTypeExpr<'a>),
+pub enum Expr<Expression: Clone + Debug, Type: Clone + Debug, LocalType: Clone + Debug> {
+	Index(Box<Expression>, Box<Expression>),
+	Name(Type),
 	Literal(Literal),
-	Call(Box<InfoExpr<'a>>, Vec<InfoExpr<'a>>),
-	Return(Option<Box<InfoExpr<'a>>>),
-	Block(Vec<InfoExpr<'a>>, bool),
-	Let(String, Box<InfoExpr<'a>>),
+	Call(Box<Expression>, Vec<Expression>),
+	Return(Option<Box<Expression>>),
+	Block(Vec<Expression>, bool),
+	Let(String, Box<Expression>),
 	If {
-		cond: Box<InfoExpr<'a>>,
-		then: Box<InfoExpr<'a>>,
-		els: Option<Box<InfoExpr<'a>>>,
+		cond: Box<Expression>,
+		then: Box<Expression>,
+		els: Option<Box<Expression>>,
 	},
-	InitializeStruct(InfoTypeExpr<'a>, HashMap<String, InfoExpr<'a>>),
-	Access(Box<InfoExpr<'a>>, String),
+	InitializeStruct(Type, HashMap<String, Expression>),
+	Access(Box<Expression>, String),
 	Guard {
-		dependency: Box<InfoExpr<'a>>,
-		body: Box<InfoExpr<'a>>,
+		dependency: Box<Expression>,
+		body: Box<Expression>,
 	},
 	Is {
 		name: String,
-		typ: InfoTypeExpr<'a>,
+		typ: Type,
 	},
+	Local(LocalType),
 }
 
 #[derive(Debug, Clone)]
 pub struct InfoExpr<'a> {
 	pub idx: Span<'a>,
-	pub expr: Expr<'a>,
+	pub expr: Expr<InfoExpr<'a>, InfoTypeExpr<'a>, Infallible>,
 }
 
 pub struct InfoParseError<'a> {
@@ -73,7 +73,6 @@ pub enum ParseError<'a> {
 	ExpectedAssign,
 	DuplicateName,
 	TypeUndefined(Vec<InfoToken<'a>>),
-	IRError(IRError),
 	UnclosedAngleBrackets,
 }
 
@@ -170,7 +169,7 @@ fn try_parse_infix_op<'a>(
 				expr: Expr::Name(InfoTypeExpr {
 					expr: TypeExpr::Name(
 						op.function().iter().map(ToString::to_string).collect(),
-						true,
+						vec![],
 					),
 					idx: tokens[op_index].span.clone(),
 				}),

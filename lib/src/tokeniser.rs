@@ -19,6 +19,9 @@ pub enum Keyword {
 	Guard,
 	Is,
 	Use,
+	Type,
+	Capability,
+	Impl,
 }
 
 impl TryFrom<&str> for Keyword {
@@ -38,6 +41,9 @@ impl TryFrom<&str> for Keyword {
 			"guard" => Ok(Keyword::Guard),
 			"is" => Ok(Keyword::Is),
 			"use" => Ok(Keyword::Use),
+			"type" => Ok(Keyword::Type),
+			"capability" => Ok(Keyword::Capability),
+			"impl" => Ok(Keyword::Impl),
 			_ => Err(()),
 		}
 	}

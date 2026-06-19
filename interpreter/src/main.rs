@@ -1,78 +1,114 @@
-use std::{borrow::Cow, collections::HashMap, path::PathBuf};
+use std::{borrow::Cow, collections::HashMap, fs::read_dir, path::PathBuf};
 
 use preval_lib::{
 	error::Span,
 	ir::Partial,
-	parser::{
-		module::{declaration_pass, implementation_pass},
-		typ::InfoTypeExpr,
-	},
+	parser::{module::declaration_pass, typ::InfoTypeExpr},
 	passes::remove_unused::{Usage, remove_unused},
 	tokeniser::{get_line_and_column, tokenise},
-	typ::{ConcreteType, Implementation, Program, Type, TypeExpr, type_id},
+	typ::{ConcreteType, Implementation, Instantiator, Template, Type, TypeExpr, type_id},
 	value::{Value, primitive::IO},
 	vm::{RunResult, evaluate},
 };
 use ron::ser::PrettyConfig;
 
+fn add_dir(path: PathBuf, module: &mut HashMap<String, Template<'_>>, path_strings: Vec<String>) {
+	for entry in read_dir(path).unwrap() {
+		let entry = entry.unwrap();
+		if entry.file_type().unwrap().is_dir() {
+			let mut child = HashMap::new();
+			let mut new_path_strings = path_strings.clone();
+			new_path_strings.push(entry.file_name().into_string().unwrap());
+			add_dir(entry.path(), &mut child, new_path_strings.clone());
+			if let Some(_) = module.insert(
+				entry.file_name().into_string().unwrap(),
+				Template {
+					parameters: 0,
+					expr: InfoTypeExpr {
+						expr: TypeExpr::Module(child, new_path_strings),
+						idx: Span {
+							file: Cow::Owned("asldjlasjd".to_owned()),
+							index: 0,
+						},
+					},
+				},
+			) {
+				panic!("duplicate modules {path_strings:?}");
+			}
+		} else if entry.file_type().unwrap().is_file() {
+			if entry.path().extension().unwrap() == "pv" {
+				let contents = std::fs::read_to_string(entry.path()).unwrap();
+
+				let tokens = match tokenise(
+					&contents,
+					0,
+					Cow::Owned(entry.path().to_str().unwrap().to_owned()),
+				) {
+					Ok(tokens) => tokens,
+					Err(error) => {
+						let (line, column) =
+							get_line_and_column(&contents, error.idx.index).unwrap();
+						panic!(
+							"{:?} at {:?}:{line}:{column}",
+							error.error,
+							entry.path().to_str().unwrap()
+						);
+					}
+				};
+
+				match declaration_pass(&tokens, module) {
+					Ok(tokens) => tokens,
+					Err(error) => {
+						let (line, column) =
+							get_line_and_column(&contents, error.span.index).unwrap();
+						panic!(
+							"{:?} at {:?}:{line}:{column}",
+							error.data,
+							entry.path().to_str().unwrap()
+						);
+					}
+				};
+			}
+		}
+	}
+}
+
 fn compile(project_path: Vec<PathBuf>) -> (RunResult, Vec<Type>) {
-	let mut files = Vec::new();
+	println!("TODO: Solve unification types");
+	println!("TODO: Check types 💀");
+
+	let mut ins = Instantiator::new();
 
 	for path in project_path {
-		get_all_pv_files(&mut files, vec![], path.into());
+		add_dir(path, &mut ins.global_namespace, vec![]);
 	}
 
-	let mut symbols = HashMap::new();
+	// match implementation_pass(symbols, &mut module) {
+	// 	Ok(tokens) => tokens,
+	// 	Err(error) => {
+	// 		let (line, column) = get_line_and_column(
+	// 			&std::fs::read_to_string(error.span.file.as_ref()).unwrap(),
+	// 			error.span.index,
+	// 		)
+	// 		.unwrap();
+	// 		panic!("{:?} at {:?}:{line}:{column}", error.data, error.span.file);
+	// 	}
+	// };
 
-	let mut module = Program::new();
-
-	for (file, prefix) in files {
-		let contents = std::fs::read_to_string(&file).unwrap();
-
-		let tokens = match tokenise(&contents, 0, Cow::Owned(file.to_str().unwrap().to_owned())) {
-			Ok(tokens) => tokens,
-			Err(error) => {
-				let (line, column) = get_line_and_column(&contents, error.idx.index).unwrap();
-				panic!("{:?} at {:?}:{line}:{column}", error.error, file);
-			}
-		};
-
-		match declaration_pass(&tokens, &mut module, &prefix, &mut symbols) {
-			Ok(tokens) => tokens,
-			Err(error) => {
-				let (line, column) = get_line_and_column(&contents, error.span.index).unwrap();
-				panic!("{:?} at {:?}:{line}:{column}", error.data, file);
-			}
-		};
-	}
-
-	match implementation_pass(symbols, &mut module) {
-		Ok(tokens) => tokens,
-		Err(error) => {
-			let (line, column) = get_line_and_column(
-				&std::fs::read_to_string(error.span.file.as_ref()).unwrap(),
-				error.span.index,
-			)
-			.unwrap();
-			panic!("{:?} at {:?}:{line}:{column}", error.data, error.span.file);
-		}
-	};
-
-	let main_type_id = module
+	let main_type_id = ins
 		.instantiate(
 			&InfoTypeExpr {
-				expr: TypeExpr::Name(vec!["main".to_string()], false),
+				expr: TypeExpr::Name("main".to_string(), vec![]),
 				idx: Span {
 					file: Cow::Borrowed(file!().into()),
 					index: 0,
 				},
 			},
 			&vec![],
-			&vec![],
 		)
 		.unwrap();
 
-	let mut types = module.types;
+	let mut types = ins.types;
 
 	let eval = if let Type::Concrete(ConcreteType::Function(_, _, Implementation::Normal(imp))) =
 		types[main_type_id].clone()
@@ -132,26 +168,6 @@ fn main() {
 		}
 		_ => {
 			eprintln!("Subcommands:\n\tcompile [...module paths]\n\trun [.pvc file]")
-		}
-	}
-
-	// let (main_type_id, types) = compile(project_paths);
-	// run(main_type_id, types);
-}
-
-fn get_all_pv_files(files: &mut Vec<(PathBuf, Vec<String>)>, path: Vec<String>, base: PathBuf) {
-	let mut dir = base.clone();
-	for subdir in &path {
-		dir = dir.join(subdir);
-	}
-	for file in std::fs::read_dir(dir).unwrap() {
-		let file = file.unwrap();
-		if file.path().is_dir() {
-			let mut mod_path = path.clone();
-			mod_path.push(file.file_name().into_string().unwrap());
-			get_all_pv_files(files, mod_path, base.clone());
-		} else {
-			files.push((file.path(), path.clone()));
 		}
 	}
 }

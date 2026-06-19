@@ -1,4 +1,3 @@
-use crate::ir::error::IRErrorInfo;
 use crate::ir::{IRContext, Operation, Statement};
 use crate::{
 	ir::{Block, Terminal, to_ir},
@@ -12,9 +11,9 @@ pub fn guard<'a>(
 	store: Option<usize>,
 	tail: bool,
 	context: &mut IRContext<'_, 'a>,
-) -> Result<(), IRErrorInfo<'a>> {
+) {
 	let dep_var = context.var();
-	to_ir(block, *dependency, Some(dep_var), false, context)?;
+	to_ir(block, *dependency, Some(dep_var), false, context);
 
 	let body_block = context.blocks.len();
 	let mut body_block_mut = body_block;
@@ -32,7 +31,7 @@ pub fn guard<'a>(
 		terminal: old_terminal,
 	});
 
-	to_ir(&mut body_block_mut, *body, store, tail, context)?;
+	to_ir(&mut body_block_mut, *body, store, tail, context);
 
 	context.blocks[*block].terminal = Terminal::Guard {
 		dependency: dep_var,
@@ -50,6 +49,4 @@ pub fn guard<'a>(
 			},
 		});
 	}
-
-	Ok(())
 }

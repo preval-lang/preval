@@ -4,13 +4,14 @@ use crate::{error::Span, typ::Type};
 pub enum TypeError {
 	UnknownVariable(String),
 	UnknownField(String),
-	UnknownType(Vec<String>),
+	UnknownType(String),
 	IncompatibleTypes { expected: Type, got: Type },
 	NotAStruct(Type),
 	NotAFunction(Type),
 	IncorrectArgumentCount { expected: usize, got: usize },
 	IncorrectFieldCount { expected: usize, got: usize },
 	DuplicateName(String),
+	NotAParent,
 }
 
 #[derive(Debug, Clone)]

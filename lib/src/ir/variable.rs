@@ -1,5 +1,4 @@
 use crate::ir::IRContext;
-use crate::ir::error::IRErrorInfo;
 use crate::ir::{Operation, Statement};
 use crate::parser::typ::InfoTypeExpr;
 use crate::typ::TypeExpr;
@@ -9,13 +8,13 @@ pub fn variable<'a>(
 	block: &mut usize,
 	store: Option<usize>,
 	context: &mut IRContext<'_, 'a>,
-) -> Result<(), IRErrorInfo<'a>> {
+) {
 	if let Some(store) = store {
 		match name.expr {
-			TypeExpr::Name(name, global)
-				if !global && name.len() == 1 && context.locals.contains_key(&name[0]) =>
+			TypeExpr::Name(name, generics)
+				if generics.len() == 0 && context.locals.contains_key(&name) =>
 			{
-				match context.locals[&name[0]] {
+				match context.locals[&name] {
 					v => {
 						context.blocks[*block].statements.push(Statement {
 							store: Some(store),
@@ -30,12 +29,11 @@ pub fn variable<'a>(
 					operation: Operation::LoadFunction(
 						context
 							.ins
-							.instantiate(&name, context.generics, context.prefix)
+							.instantiate(&name, context.generics)
 							.expect("pass errors in types to IRError"),
 					),
 				});
 			}
 		}
 	}
-	Ok(())
 }

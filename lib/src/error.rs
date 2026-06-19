@@ -3,7 +3,6 @@ use std::borrow::Cow;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-	ir::error::{IRError, IRErrorInfo},
 	parser::expression::{InfoParseError, ParseError},
 	typ::{InfoTypeError, TypeError},
 };
@@ -24,7 +23,6 @@ pub struct InfoError<'a> {
 pub enum Error<'a> {
 	ParseError(ParseError<'a>),
 	TypeError(TypeError),
-	IRError(IRError),
 }
 
 impl<'a> From<InfoParseError<'a>> for InfoError<'a> {
@@ -41,15 +39,6 @@ impl<'a> From<InfoTypeError<'a>> for InfoError<'a> {
 		Self {
 			data: Error::TypeError(value.error),
 			span: value.span,
-		}
-	}
-}
-
-impl<'a> From<IRErrorInfo<'a>> for InfoError<'a> {
-	fn from(value: IRErrorInfo<'a>) -> Self {
-		Self {
-			data: Error::IRError(value.error),
-			span: value.idx,
 		}
 	}
 }

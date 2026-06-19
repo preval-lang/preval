@@ -1,25 +1,24 @@
-use std::collections::HashMap;
-
-use crate::error::Span;
 use crate::ir::IRContext;
-use crate::ir::error::{IRError, IRErrorInfo};
+use crate::typ::type_id;
+use crate::value::Value;
+use crate::value::primitive::EmptyTuple;
 use crate::{
 	ir::{Block, Operation, Statement, Terminal, to_ir},
 	parser::expression::InfoExpr,
 };
+use std::collections::HashMap;
 
 pub fn conditional<'a>(
 	cond: Box<InfoExpr<'a>>,
 	then: Box<InfoExpr<'a>>,
 	els: Option<Box<InfoExpr<'a>>>,
-	idx: Span<'a>,
 	block: &mut usize,
 	store: Option<usize>,
 	tail: bool,
 	context: &mut IRContext<'_, 'a>,
-) -> Result<(), IRErrorInfo<'a>> {
+) {
 	let cond_var = context.var();
-	to_ir(block, *cond, Some(cond_var), false, context)?;
+	to_ir(block, *cond, Some(cond_var), false, context);
 
 	let then_block_n = context.blocks.len();
 	let mut then_block_n_mut = context.blocks.len();
@@ -34,7 +33,7 @@ pub fn conditional<'a>(
 		Some(then_block_var),
 		tail,
 		context,
-	)?;
+	);
 
 	let else_block = if let Some(els) = els {
 		let else_block_n = context.blocks.len();
@@ -50,7 +49,7 @@ pub fn conditional<'a>(
 			Some(else_block_var),
 			tail,
 			context,
-		)?;
+		);
 		Some((else_block_n, else_block_var))
 	} else {
 		None
@@ -80,12 +79,10 @@ pub fn conditional<'a>(
 				operation: Operation::Phi { block_to_var },
 			});
 		} else {
-			return Err(IRErrorInfo {
-				idx: idx,
-				error: IRError::MissingElseBlock(),
+			context.blocks[*block].statements.push(Statement {
+				store: Some(store),
+				operation: Operation::LoadLiteral(Value::new(EmptyTuple, type_id::empty_tuple)),
 			});
 		}
 	}
-
-	Ok(())
 }

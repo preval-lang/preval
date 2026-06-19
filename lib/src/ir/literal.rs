@@ -1,7 +1,6 @@
 use crate::ir::Block;
 use crate::ir::Operation;
 use crate::ir::Statement;
-use crate::ir::error::IRErrorInfo;
 use crate::tokeniser::Literal;
 use crate::typ::type_id;
 use crate::value::Value;
@@ -11,7 +10,7 @@ pub fn literal<'a>(
 	function: &mut Vec<Block>,
 	block: &mut usize,
 	store: Option<usize>,
-) -> Result<(), IRErrorInfo<'a>> {
+) {
 	if let Some(store) = store {
 		function[*block].statements.push(Statement {
 			store: Some(store),
@@ -23,5 +22,4 @@ pub fn literal<'a>(
 			}),
 		});
 	}
-	Ok(())
 }

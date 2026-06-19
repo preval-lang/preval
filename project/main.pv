@@ -1,9 +1,5 @@
-use std::io::print;
+use std::io;
 
 fn main(compile_io: IO, io: IO) {
-	2 + 2;
-}
-
-fn plus(a: usize, b: usize): usize {
-	4
+    io::print(io, "Hello");
 }

@@ -2,7 +2,7 @@ use std::{borrow::Cow, collections::HashMap};
 
 use crate::{
 	parser::{expression::InfoExpr, typ::InfoTypeExpr},
-	typ::{ConcreteType, InfoTypeError, Program, Type, TypeError, TypeExpr},
+	typ::{ConcreteType, InfoTypeError, Instantiator, Type, TypeError, TypeExpr},
 };
 
 use crate::parser::expression::Expr;
@@ -41,54 +41,74 @@ impl<'a> Scope<'a> {
 	}
 }
 
+#[derive(Debug, Clone)]
+pub struct TypedExpr {
+	pub typ: usize,
+	pub expr: Expr<TypedExpr, usize, String>,
+}
+
 pub fn infer_expr_type<'a>(
-	expr: &InfoExpr<'a>,
-	ins: &mut Program<'a>,
+	expr: InfoExpr<'a>,
+	ins: &mut Instantiator<'a>,
 	scope: &mut Scope,
 	return_type: usize,
 	generics: &[usize],
 	prefix: &[String],
-) -> Result<usize, InfoTypeError<'a>> {
-	match &expr.expr {
-		Expr::Literal(value) => Ok(ins.add(Type::Concrete(value.get_type()))),
+) -> Result<TypedExpr, InfoTypeError<'a>> {
+	match expr.expr {
+		Expr::Local(_) => unreachable!("At this stage locals will be Names instead"),
+		Expr::Literal(value) => Ok(TypedExpr {
+			typ: ins.add(Type::Concrete(value.get_type())),
+			expr: Expr::Literal(value.clone()),
+		}),
 		Expr::Name(name) => {
 			if let InfoTypeExpr {
-				expr: TypeExpr::Name(name, false),
+				expr: TypeExpr::Name(name, params),
 				idx: _,
-			} = name
+			} = &name
 			{
-				if name.len() == 1 {
-					if let Some(type_id) = scope.get(&name[0]) {
-						return Ok(type_id);
+				if name.len() == 1 && params.len() == 0 {
+					if let Some(type_id) = scope.get(name) {
+						return Ok(TypedExpr {
+							typ: type_id,
+							expr: Expr::Local(name.clone()),
+						});
 					}
 				}
 			};
-			ins.instantiate(name, generics, prefix)
+			let typ = ins.instantiate(&name, generics)?;
+			Ok(TypedExpr {
+				typ: typ.clone(),
+				expr: Expr::Name(typ),
+			})
 		}
 		Expr::Block(statements, returns) => {
-			if statements.len() == 0 {
-				return Ok(ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new()))));
-			}
-
 			let mut scope = scope.sub();
-			for statement in &statements[..statements.len()] {
-				let _ = infer_expr_type(statement, ins, &mut scope, return_type, generics, prefix)?;
-			}
-			if *returns {
-				infer_expr_type(
-					statements.last().unwrap(),
+			let mut typed_statements = Vec::new();
+			for statement in statements {
+				typed_statements.push(infer_expr_type(
+					statement,
 					ins,
 					&mut scope,
 					return_type,
 					generics,
 					prefix,
-				)
-			} else {
-				Ok(ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new()))))
+				)?);
 			}
+
+			let typ = if typed_statements.len() == 0 || !returns {
+				ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new())))
+			} else {
+				typed_statements.last().unwrap().typ
+			};
+
+			Ok(TypedExpr {
+				typ,
+				expr: Expr::Block(typed_statements, returns.clone()),
+			})
 		}
 		Expr::InitializeStruct(struct_type_expr, fields) => {
-			let struct_type_id = ins.instantiate(struct_type_expr, generics, prefix)?;
+			let struct_type_id = ins.instantiate(&struct_type_expr, generics)?;
 			let struct_type = ins.get_type(struct_type_id).unwrap();
 			let struct_members = if let Type::Concrete(ConcreteType::Struct(members)) = struct_type
 			{
@@ -110,11 +130,16 @@ pub fn infer_expr_type<'a>(
 				});
 			}
 
-			for (name, field) in fields {
-				let assignee_type =
-					infer_expr_type(field, ins, scope, return_type, generics, prefix)?;
+			let mut assignees = HashMap::new();
 
-				let slot = if let Some(slot) = struct_members.get(name) {
+			for (name, field) in fields {
+				let assignee = infer_expr_type(field, ins, scope, return_type, generics, prefix)?;
+
+				let assignee_type = assignee.typ;
+
+				assignees.insert(name.clone(), assignee);
+
+				let slot = if let Some(slot) = struct_members.get(&name) {
 					*slot
 				} else {
 					return Err(InfoTypeError {
@@ -133,16 +158,19 @@ pub fn infer_expr_type<'a>(
 				}
 			}
 
-			Ok(struct_type_id)
+			Ok(TypedExpr {
+				typ: struct_type_id,
+				expr: Expr::InitializeStruct(struct_type_id, assignees),
+			})
 		}
 		Expr::Access(struct_expr, field_name) => {
-			let struct_type_id =
-				infer_expr_type(struct_expr, ins, scope, return_type, generics, prefix)?;
+			let struct_typed =
+				infer_expr_type(*struct_expr, ins, scope, return_type, generics, prefix)?;
 
-			if let Type::Concrete(ConcreteType::Struct(struct_type)) =
-				ins.get_type(struct_type_id).unwrap()
+			let typ = if let Type::Concrete(ConcreteType::Struct(struct_type)) =
+				ins.get_type(struct_typed.typ).unwrap()
 			{
-				if let Some(slot) = struct_type.get(field_name) {
+				if let Some(slot) = struct_type.get(&field_name) {
 					Ok(*slot)
 				} else {
 					Err(InfoTypeError {
@@ -153,27 +181,39 @@ pub fn infer_expr_type<'a>(
 			} else {
 				Err(InfoTypeError {
 					span: expr.idx.clone(),
-					error: TypeError::NotAStruct(ins.get_type(struct_type_id).unwrap().clone()),
+					error: TypeError::NotAStruct(ins.get_type(struct_typed.typ).unwrap().clone()),
 				})
-			}
-		}
-		Expr::Is { name: _, typ: _ } => Ok(ins.add(Type::Concrete(ConcreteType::Bool))),
-		Expr::Call(function_expr, args_exprs) => {
-			println!("{function_expr:?}");
+			}?;
 
-			let function_type_id =
-				infer_expr_type(function_expr, ins, scope, return_type, generics, prefix)?;
+			Ok(TypedExpr {
+				typ,
+				expr: Expr::Access(Box::new(struct_typed), field_name.clone()),
+			})
+		}
+		Expr::Is {
+			name,
+			typ: comparison_type,
+		} => Ok(TypedExpr {
+			typ: ins.add(Type::Concrete(ConcreteType::Bool)),
+			expr: Expr::Is {
+				name: name,
+				typ: ins.instantiate(&comparison_type, generics)?,
+			},
+		}),
+		Expr::Call(function_expr, args_exprs) => {
+			let function_expr =
+				infer_expr_type(*function_expr, ins, scope, return_type, generics, prefix)?;
 
 			let (args, callee_return_type) =
 				if let Type::Concrete(ConcreteType::Function(args, callee_return_type, _imp)) =
-					ins.get_type(function_type_id).cloned().unwrap()
+					ins.get_type(function_expr.typ).cloned().unwrap()
 				{
 					(args, callee_return_type)
 				} else {
 					return Err(InfoTypeError {
 						span: expr.idx.clone(),
 						error: TypeError::NotAFunction(
-							ins.get_type(function_type_id).cloned().unwrap(),
+							ins.get_type(function_expr.typ).cloned().unwrap(),
 						),
 					});
 				};
@@ -188,44 +228,55 @@ pub fn infer_expr_type<'a>(
 				});
 			}
 
-			for (arg_expr, arg_type) in args_exprs.iter().zip(args.iter()) {
-				let arg_expr_type =
-					infer_expr_type(arg_expr, ins, scope, return_type, generics, prefix)?;
-				if !ins.compatible(arg_expr_type, *arg_type, 0).unwrap() {
+			let mut typed_arg_exprs = Vec::new();
+
+			for i in 0..args.len() {
+				let arg_expr = infer_expr_type(
+					args_exprs[i].clone(),
+					ins,
+					scope,
+					return_type,
+					generics,
+					prefix,
+				)?;
+				if !ins.compatible(arg_expr.typ, args[i], 0).unwrap() {
 					return Err(InfoTypeError {
 						span: expr.idx.clone(),
 						error: TypeError::IncompatibleTypes {
-							expected: ins.get_type(*arg_type).cloned().unwrap(),
-							got: ins.get_type(arg_expr_type).cloned().unwrap(),
+							expected: ins.get_type(args[i]).cloned().unwrap(),
+							got: ins.get_type(arg_expr.typ).cloned().unwrap(),
 						},
 					});
 				}
+				typed_arg_exprs.push(arg_expr);
 			}
 
-			Ok(callee_return_type)
+			Ok(TypedExpr {
+				typ: callee_return_type,
+				expr: Expr::Call(Box::new(function_expr), typed_arg_exprs),
+			})
 		}
 		Expr::If { cond, then, els } => {
-			let cond_type = infer_expr_type(cond, ins, scope, return_type, generics, prefix)?;
+			let cond_typed = infer_expr_type(*cond, ins, scope, return_type, generics, prefix)?;
 			let bool = ins.add(Type::Concrete(ConcreteType::Bool));
-			if !ins.compatible(cond_type, bool, 0).unwrap() {
+			if !ins.compatible(cond_typed.typ, bool, 0).unwrap() {
 				return Err(InfoTypeError {
 					span: expr.idx.clone(),
 					error: TypeError::IncompatibleTypes {
 						expected: Type::Concrete(ConcreteType::Bool),
-						got: ins.get_type(cond_type).cloned().unwrap(),
+						got: ins.get_type(cond_typed.typ).cloned().unwrap(),
 					},
 				});
 			}
 			let mut then_scope = scope.sub();
-			if let Expr::Is { name, typ } = &cond.expr {
-				let typ = ins.instantiate(typ, generics, prefix)?;
-				then_scope.insert(name.clone(), typ);
+			if let Expr::Is { name, typ } = &cond_typed.expr {
+				then_scope.insert(name.clone(), *typ);
 			}
-			let then_type =
-				infer_expr_type(then, ins, &mut then_scope, return_type, generics, prefix)?;
-			let els_type = if let Some(els) = els {
+			let then_typed =
+				infer_expr_type(*then, ins, &mut then_scope, return_type, generics, prefix)?;
+			let els_typed = if let Some(els) = els {
 				Some(infer_expr_type(
-					els,
+					*els,
 					ins,
 					scope,
 					return_type,
@@ -235,35 +286,62 @@ pub fn infer_expr_type<'a>(
 			} else {
 				None
 			};
-			Ok(if let Some(els_type) = els_type {
-				if !ins.compatible(then_type, els_type, 0).unwrap() {
-					ins.add(Type::Union(then_type, els_type))
+			let typ = if let Some(els_typed) = &els_typed {
+				if !ins.compatible(then_typed.typ, els_typed.typ, 0).unwrap() {
+					ins.add(Type::Union(then_typed.typ, els_typed.typ))
 				} else {
-					then_type
+					then_typed.typ
 				}
 			} else {
-				then_type
+				then_typed.typ
+			};
+
+			Ok(TypedExpr {
+				typ,
+				expr: Expr::If {
+					cond: Box::new(cond_typed),
+					then: Box::new(then_typed),
+					els: els_typed.map(Box::new),
+				},
 			})
 		}
 		Expr::Guard { dependency, body } => {
-			let _ = infer_expr_type(dependency, ins, scope, return_type, generics, prefix)?;
-			let body_type = infer_expr_type(body, ins, scope, return_type, generics, prefix)?;
-			Ok(body_type)
+			let dependency =
+				infer_expr_type(*dependency, ins, scope, return_type, generics, prefix)?;
+			let body = infer_expr_type(*body, ins, scope, return_type, generics, prefix)?;
+			Ok(TypedExpr {
+				typ: body.typ,
+				expr: Expr::Guard {
+					dependency: Box::new(dependency),
+					body: Box::new(body),
+				},
+			})
 		}
 		Expr::Index(_, _) => panic!("TODO: remove indexing until i add operator overloading"),
 		Expr::Let(name, value_expr) => {
-			let value_type_id =
-				infer_expr_type(value_expr, ins, scope, return_type, generics, prefix)?;
+			let value_typed =
+				infer_expr_type(*value_expr, ins, scope, return_type, generics, prefix)?;
 
-			scope.insert(name.clone(), value_type_id);
+			scope.insert(name.clone(), value_typed.typ);
 
-			Ok(ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new()))))
+			Ok(TypedExpr {
+				typ: ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new()))),
+				expr: Expr::Let(name, Box::new(value_typed)),
+			})
 		}
 		Expr::Return(return_expr) => {
-			let expr_type = if let Some(expr) = return_expr {
-				infer_expr_type(expr, ins, scope, return_type, generics, prefix)?
+			let (expr_type, out) = if let Some(expr) = return_expr {
+				let return_expr_typed =
+					infer_expr_type(*expr, ins, scope, return_type, generics, prefix)?;
+				(
+					return_expr_typed.typ,
+					Expr::Return(Some(Box::new(return_expr_typed))),
+				)
 			} else {
-				ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new())))
+				(
+					ins.add(Type::Concrete(ConcreteType::Tuple(Vec::new()))),
+					Expr::Return(None),
+				)
 			};
 
 			if !ins.compatible(expr_type, return_type, 0).unwrap() {
@@ -276,7 +354,10 @@ pub fn infer_expr_type<'a>(
 				});
 			}
 
-			Ok(ins.add(Type::EarlyReturn))
+			Ok(TypedExpr {
+				typ: ins.add(Type::EarlyReturn),
+				expr: out,
+			})
 		}
 	}
 }

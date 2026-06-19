@@ -18,80 +18,52 @@ pub fn parse_type<'a>(
 	tokens: &[InfoToken<'a>],
 	generics: &[String],
 ) -> Result<InfoTypeExpr<'a>, InfoParseError<'a>> {
-	if let Some(expr) = try_parse_union(tokens, generics)? {
-		return Ok(expr);
-	}
+	let expr = if let Some(expr) = try_parse_union(tokens, generics)? {
+		expr
+	} else if let Some(expr) = try_parse_subtype(tokens, generics)? {
+		expr
+	} else if let Some(expr) = try_parse_generics(tokens, generics)? {
+		expr
+	} else if let Some(expr) = try_parse_name(tokens, generics)? {
+		expr
+	} else {
+		return Err(InfoParseError {
+			span: tokens[0].span.clone(),
+			error: ParseError::ExpectedExpression(tokens.to_vec()),
+		});
+	};
 
-	if let Some(expr) = try_parse_generics(tokens, generics)? {
-		return Ok(expr);
-	}
-
-	if let Some(expr) = try_parse_name(tokens, generics)? {
-		return Ok(expr);
-	}
-
-	Err(InfoParseError {
-		span: tokens[0].span.clone(),
-		error: ParseError::ExpectedExpression(tokens.to_vec()),
-	})
+	Ok(expr)
 }
 
 fn try_parse_name<'a>(
 	tokens: &[InfoToken<'a>],
 	generics: &[String],
 ) -> Result<Option<InfoTypeExpr<'a>>, InfoParseError<'a>> {
-	let global = if tokens[0].token == Token::DoubleColon {
-		true
+	let (name, span) = if let Some(InfoToken {
+		token: Token::Name(name),
+		span,
+	}) = tokens.get(0)
+	{
+		(name, span)
 	} else {
-		false
+		return Ok(None);
 	};
-
-	let parts = read_punctuated(&tokens[if global { 1 } else { 0 }..], Token::DoubleColon)?;
-
-	let mut span = tokens[0].span.clone();
-
-	if parts.len() == 1 {
-		let name = match &parts[0][0].token {
-			Token::Name(name) => name,
-			_ => return Ok(None),
-		};
-		if let Some(generic) = generics
-			.iter()
-			.enumerate()
-			.find_map(|i| if i.1 == name { Some(i.0) } else { None })
-		{
-			return Ok(Some(InfoTypeExpr {
-				expr: TypeExpr::Parameter(generic),
-				idx: span,
-			}));
-		}
+	if let Some(generic) = generics
+		.iter()
+		.enumerate()
+		.find_map(|i| if i.1 == name { Some(i.0) } else { None })
+	{
+		return Ok(Some(InfoTypeExpr {
+			expr: TypeExpr::Parameter(generic),
+			idx: span.clone(),
+		}));
+	} else {
+		return Ok(Some(InfoTypeExpr {
+			expr: TypeExpr::Name(name.clone(), Vec::new()),
+			idx: span.clone(),
+		}));
 	}
-
-	let mut strings = Vec::new();
-
-	for part in parts {
-		if part.len() != 1 {
-			return Err(InfoParseError {
-				span,
-				error: ParseError::ExpectedName,
-			});
-		}
-		span = part[0].span.clone();
-		match &part[0].token {
-			Token::Name(name) => strings.push(name.clone()),
-			_ => {
-				return Err(InfoParseError {
-					span,
-					error: ParseError::ExpectedName,
-				});
-			}
-		}
-	}
-
-	Ok(Some(InfoTypeExpr {
-		expr: TypeExpr::Name(strings, global),
-		idx: span,
-	}))
 }
 
 fn try_parse_generics<'a>(
@@ -130,15 +102,80 @@ fn try_parse_generics<'a>(
 
 	let mut param_exprs = Vec::new();
 
-	let base = parse_type(&tokens[..open_idx], generics)?;
+	let name = match parse_type(&tokens[..open_idx], generics)? {
+		InfoTypeExpr {
+			expr: TypeExpr::Name(name, _),
+			idx: _,
+		} => name,
+		_ => {
+			return Err(InfoParseError {
+				span: tokens[0].span.clone(),
+				error: ParseError::ExpectedName,
+			});
+		}
+	};
 
 	for generic_param_tokens in generics_tokens {
-		param_exprs.push(parse_type(&generic_param_tokens, generics)?)
+		if generic_param_tokens.len() == 1 {
+			if let Token::Name(n) = &generic_param_tokens[0].token {
+				if n == "_" {
+					param_exprs.push(None);
+					continue;
+				}
+			}
+		}
+		param_exprs.push(Some(parse_type(&generic_param_tokens, generics)?));
 	}
 
 	Ok(Some(InfoTypeExpr {
-		expr: TypeExpr::Generics(Box::new(base), param_exprs),
+		expr: TypeExpr::Name(name, param_exprs),
 		idx: tokens[open_idx].span.clone(),
+	}))
+}
+
+fn try_parse_subtype<'a>(
+	tokens: &[InfoToken<'a>],
+	generics: &[String],
+) -> Result<Option<InfoTypeExpr<'a>>, InfoParseError<'a>> {
+	let (left, right, span) = if let Some((
+		idx,
+		InfoToken {
+			token: Token::DoubleColon,
+			span,
+		},
+	)) = tokens
+		.iter()
+		.enumerate()
+		.rfind(|t| t.1.token == Token::DoubleColon)
+	{
+		(&tokens[0..idx], &tokens[idx + 1..], span)
+	} else {
+		return Ok(None);
+	};
+
+	if left.len() == 0 {
+		panic!(":: with no preceding type {tokens:?}");
+	}
+
+	let left = parse_type(left, generics)?;
+	let right = parse_type(right, generics)?;
+
+	let (right_name, right_generics) = if let InfoTypeExpr {
+		expr: TypeExpr::Name(name, generics),
+		idx: _,
+	} = right
+	{
+		(name, generics)
+	} else {
+		return Err(InfoParseError {
+			span: right.idx,
+			error: ParseError::ExpectedName,
+		});
+	};
+
+	Ok(Some(InfoTypeExpr {
+		expr: TypeExpr::Subtype(Some(Box::new(left)), right_name, right_generics),
+		idx: span.clone(),
 	}))
 }
 
