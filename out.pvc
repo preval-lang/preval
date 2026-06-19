@@ -7,12 +7,12 @@
                     operation: LoadLiteral((Tuple([]), "()", 2)),
                 ),
                 (
-                    store: Some(5),
-                    operation: LoadLiteral((NativeFunction, "(lib_name:\"print\",func_name:\"print\")", 7)),
-                ),
-                (
                     store: Some(4),
                     operation: LoadLiteral((String, "\"Hello\"", 3)),
+                ),
+                (
+                    store: Some(5),
+                    operation: LoadLiteral((NativeFunction, "(lib_name:\"print\",func_name:\"print\")", 7)),
                 ),
                 (
                     store: Some(3),

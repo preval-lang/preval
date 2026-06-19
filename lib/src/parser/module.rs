@@ -8,7 +8,7 @@ use crate::{
 		utility::read_punctuated,
 	},
 	tokeniser::{InfoToken, Keyword, Literal, Token},
-	typ::{GenericImplementation, Template, TypeExpr},
+	typ::{GenericImplementation, Instantiator, Template, Type, TypeExpr},
 	value::native::NativeFunction,
 };
 
@@ -256,94 +256,42 @@ pub fn declaration_pass<'a>(
 	Ok(())
 }
 
-// pub fn implementation_pass<'a>(
-// 	mut instantiator: &mut Instantiator<'a>,
-// ) -> Result<(), InfoError<'a>> {
-// 	for (name, template) in &instantiator.global_namespace {
-// 		match template.expr {
-// 			Symbol::Alias => {
-// 				instantiator.instantiate(
-// 					&InfoTypeExpr {
-// 						expr: TypeExpr::Name(fqn.clone(), true, vec![]),
-// 						idx: Span {
-// 							file: Cow::Owned(file!().into()),
-// 							index: 0,
-// 						},
-// 					},
-// 					&vec![],
-// 					&fqn[0..fqn.len() - 1],
-// 				)?;
-// 			}
-// 			Symbol::DylibFn(sig) => {
-// 				let generics = (0..sig.generics.len())
-// 					.map(|i| instantiator.add(Type::Placeholder(i)))
-// 					.collect::<Vec<_>>();
+pub fn implementation_pass<'a>(
+	ins: &mut Instantiator<'a>,
+	subtype: Option<usize>,
+) -> Result<(), InfoError<'a>> {
+	let ns = if let Some(subtype) = subtype {
+		ins.subtype_members.get(&subtype).unwrap()
+	} else {
+		&ins.global_namespace
+	};
 
-// 				for arg in sig.arg_types.clone() {
-// 					instantiator.instantiate(&arg, &generics, &fqn[0..fqn.len() - 1])?;
-// 				}
-// 				instantiator.instantiate(&sig.return_type, &generics, &fqn[0..fqn.len() - 1])?;
-// 			}
-// 			Symbol::Struct(generics, fields) => {
-// 				let generics = (0..generics.len())
-// 					.map(|i| instantiator.add(Type::Placeholder(i)))
-// 					.collect::<Vec<_>>();
+	for name in ns.keys().map(ToOwned::to_owned).collect::<Vec<_>>() {
+		let ns = if let Some(subtype) = subtype {
+			ins.subtype_members.get(&subtype).unwrap()
+		} else {
+			&ins.global_namespace
+		};
+		let params = ns.get(&name).unwrap().parameters;
+		let generics = (0..params)
+			.map(|i| ins.add(Type::Placeholder(i)))
+			.collect::<Vec<_>>();
 
-// 				for (_, arg) in fields {
-// 					instantiator.instantiate(&arg, &generics, &fqn[0..fqn.len() - 1])?;
-// 				}
-// 			}
-// 			Symbol::Fn(sig, body) => {
-// 				let generics = (0..sig.generics.len())
-// 					.map(|i| instantiator.add(Type::Placeholder(i)))
-// 					.collect::<Vec<_>>();
+		let ns = if let Some(subtype) = subtype {
+			ins.subtype_members.get(&subtype).unwrap()
+		} else {
+			&ins.global_namespace
+		};
 
-// 				let return_type_ins = instantiator.instantiate(
-// 					&sig.return_type,
-// 					&generics,
-// 					&fqn[0..fqn.len() - 1],
-// 				)?;
+		let expr = ns.get(&name).unwrap().expr.clone();
+		let t = ins.instantiate(&expr, &generics)?;
+		if ins.subtype_members.contains_key(&t) {
+			implementation_pass(ins, Some(t))?;
+		}
+	}
 
-// 				let mut scope = Scope::new();
-
-// 				for (idx, arg) in sig.args.iter().enumerate() {
-// 					scope.insert(
-// 						arg.clone(),
-// 						instantiator.instantiate(
-// 							&sig.arg_types[idx],
-// 							&generics,
-// 							&fqn[0..fqn.len() - 1],
-// 						)?,
-// 					);
-// 				}
-
-// 				let body_type = infer_expr_type(
-// 					body,
-// 					&mut instantiator,
-// 					&mut scope,
-// 					return_type_ins,
-// 					&generics,
-// 					&fqn[0..fqn.len() - 1],
-// 				)?;
-
-// 				if !instantiator
-// 					.compatible(body_type.typ, return_type_ins, 0)
-// 					.unwrap()
-// 				{
-// 					return Err(InfoError {
-// 						span: sig.return_type.idx.clone(),
-// 						data: Error::TypeError(TypeError::IncompatibleTypes {
-// 							expected: instantiator.get_type(return_type_ins).unwrap().clone(),
-// 							got: instantiator.get_type(body_type.typ).unwrap().clone(),
-// 						}),
-// 					});
-// 				}
-// 			}
-// 		}
-// 	}
-
-// 	Ok(())
-// }
+	Ok(())
+}
 
 fn expect_function_signature<'a>(
 	tokens: &[InfoToken<'a>],

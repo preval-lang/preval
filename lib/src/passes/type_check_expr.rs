@@ -53,7 +53,6 @@ pub fn infer_expr_type<'a>(
 	scope: &mut Scope,
 	return_type: usize,
 	generics: &[usize],
-	prefix: &[String],
 ) -> Result<TypedExpr, InfoTypeError<'a>> {
 	match expr.expr {
 		Expr::Local(_) => unreachable!("At this stage locals will be Names instead"),
@@ -67,7 +66,7 @@ pub fn infer_expr_type<'a>(
 				idx: _,
 			} = &name
 			{
-				if name.len() == 1 && params.len() == 0 {
+				if params.len() == 0 {
 					if let Some(type_id) = scope.get(name) {
 						return Ok(TypedExpr {
 							typ: type_id,
@@ -92,7 +91,6 @@ pub fn infer_expr_type<'a>(
 					&mut scope,
 					return_type,
 					generics,
-					prefix,
 				)?);
 			}
 
@@ -133,7 +131,7 @@ pub fn infer_expr_type<'a>(
 			let mut assignees = HashMap::new();
 
 			for (name, field) in fields {
-				let assignee = infer_expr_type(field, ins, scope, return_type, generics, prefix)?;
+				let assignee = infer_expr_type(field, ins, scope, return_type, generics)?;
 
 				let assignee_type = assignee.typ;
 
@@ -164,8 +162,7 @@ pub fn infer_expr_type<'a>(
 			})
 		}
 		Expr::Access(struct_expr, field_name) => {
-			let struct_typed =
-				infer_expr_type(*struct_expr, ins, scope, return_type, generics, prefix)?;
+			let struct_typed = infer_expr_type(*struct_expr, ins, scope, return_type, generics)?;
 
 			let typ = if let Type::Concrete(ConcreteType::Struct(struct_type)) =
 				ins.get_type(struct_typed.typ).unwrap()
@@ -201,8 +198,7 @@ pub fn infer_expr_type<'a>(
 			},
 		}),
 		Expr::Call(function_expr, args_exprs) => {
-			let function_expr =
-				infer_expr_type(*function_expr, ins, scope, return_type, generics, prefix)?;
+			let function_expr = infer_expr_type(*function_expr, ins, scope, return_type, generics)?;
 
 			let (args, callee_return_type) =
 				if let Type::Concrete(ConcreteType::Function(args, callee_return_type, _imp)) =
@@ -231,14 +227,8 @@ pub fn infer_expr_type<'a>(
 			let mut typed_arg_exprs = Vec::new();
 
 			for i in 0..args.len() {
-				let arg_expr = infer_expr_type(
-					args_exprs[i].clone(),
-					ins,
-					scope,
-					return_type,
-					generics,
-					prefix,
-				)?;
+				let arg_expr =
+					infer_expr_type(args_exprs[i].clone(), ins, scope, return_type, generics)?;
 				if !ins.compatible(arg_expr.typ, args[i], 0).unwrap() {
 					return Err(InfoTypeError {
 						span: expr.idx.clone(),
@@ -257,7 +247,7 @@ pub fn infer_expr_type<'a>(
 			})
 		}
 		Expr::If { cond, then, els } => {
-			let cond_typed = infer_expr_type(*cond, ins, scope, return_type, generics, prefix)?;
+			let cond_typed = infer_expr_type(*cond, ins, scope, return_type, generics)?;
 			let bool = ins.add(Type::Concrete(ConcreteType::Bool));
 			if !ins.compatible(cond_typed.typ, bool, 0).unwrap() {
 				return Err(InfoTypeError {
@@ -272,17 +262,9 @@ pub fn infer_expr_type<'a>(
 			if let Expr::Is { name, typ } = &cond_typed.expr {
 				then_scope.insert(name.clone(), *typ);
 			}
-			let then_typed =
-				infer_expr_type(*then, ins, &mut then_scope, return_type, generics, prefix)?;
+			let then_typed = infer_expr_type(*then, ins, &mut then_scope, return_type, generics)?;
 			let els_typed = if let Some(els) = els {
-				Some(infer_expr_type(
-					*els,
-					ins,
-					scope,
-					return_type,
-					generics,
-					prefix,
-				)?)
+				Some(infer_expr_type(*els, ins, scope, return_type, generics)?)
 			} else {
 				None
 			};
@@ -306,9 +288,8 @@ pub fn infer_expr_type<'a>(
 			})
 		}
 		Expr::Guard { dependency, body } => {
-			let dependency =
-				infer_expr_type(*dependency, ins, scope, return_type, generics, prefix)?;
-			let body = infer_expr_type(*body, ins, scope, return_type, generics, prefix)?;
+			let dependency = infer_expr_type(*dependency, ins, scope, return_type, generics)?;
+			let body = infer_expr_type(*body, ins, scope, return_type, generics)?;
 			Ok(TypedExpr {
 				typ: body.typ,
 				expr: Expr::Guard {
@@ -319,8 +300,7 @@ pub fn infer_expr_type<'a>(
 		}
 		Expr::Index(_, _) => panic!("TODO: remove indexing until i add operator overloading"),
 		Expr::Let(name, value_expr) => {
-			let value_typed =
-				infer_expr_type(*value_expr, ins, scope, return_type, generics, prefix)?;
+			let value_typed = infer_expr_type(*value_expr, ins, scope, return_type, generics)?;
 
 			scope.insert(name.clone(), value_typed.typ);
 
@@ -331,8 +311,7 @@ pub fn infer_expr_type<'a>(
 		}
 		Expr::Return(return_expr) => {
 			let (expr_type, out) = if let Some(expr) = return_expr {
-				let return_expr_typed =
-					infer_expr_type(*expr, ins, scope, return_type, generics, prefix)?;
+				let return_expr_typed = infer_expr_type(*expr, ins, scope, return_type, generics)?;
 				(
 					return_expr_typed.typ,
 					Expr::Return(Some(Box::new(return_expr_typed))),

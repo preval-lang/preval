@@ -3,7 +3,10 @@ use std::{borrow::Cow, collections::HashMap, fs::read_dir, path::PathBuf};
 use preval_lib::{
 	error::Span,
 	ir::Partial,
-	parser::{module::declaration_pass, typ::InfoTypeExpr},
+	parser::{
+		module::{declaration_pass, implementation_pass},
+		typ::InfoTypeExpr,
+	},
 	passes::remove_unused::{Usage, remove_unused},
 	tokeniser::{get_line_and_column, tokenise},
 	typ::{ConcreteType, Implementation, Instantiator, Template, Type, TypeExpr, type_id},
@@ -75,7 +78,6 @@ fn add_dir(path: PathBuf, module: &mut HashMap<String, Template<'_>>, path_strin
 
 fn compile(project_path: Vec<PathBuf>) -> (RunResult, Vec<Type>) {
 	println!("TODO: Solve unification types");
-	println!("TODO: Check types 💀");
 
 	let mut ins = Instantiator::new();
 
@@ -83,17 +85,17 @@ fn compile(project_path: Vec<PathBuf>) -> (RunResult, Vec<Type>) {
 		add_dir(path, &mut ins.global_namespace, vec![]);
 	}
 
-	// match implementation_pass(symbols, &mut module) {
-	// 	Ok(tokens) => tokens,
-	// 	Err(error) => {
-	// 		let (line, column) = get_line_and_column(
-	// 			&std::fs::read_to_string(error.span.file.as_ref()).unwrap(),
-	// 			error.span.index,
-	// 		)
-	// 		.unwrap();
-	// 		panic!("{:?} at {:?}:{line}:{column}", error.data, error.span.file);
-	// 	}
-	// };
+	match implementation_pass(&mut ins, None) {
+		Ok(tokens) => tokens,
+		Err(error) => {
+			let (line, column) = get_line_and_column(
+				&std::fs::read_to_string(error.span.file.as_ref()).unwrap(),
+				error.span.index,
+			)
+			.unwrap();
+			panic!("{:?} at {:?}:{line}:{column}", error.data, error.span.file);
+		}
+	};
 
 	let main_type_id = ins
 		.instantiate(

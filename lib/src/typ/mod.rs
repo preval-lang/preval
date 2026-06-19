@@ -8,6 +8,7 @@ use crate::{
 	error::Span,
 	ir::{Block, IRContext, Terminal, to_ir},
 	parser::{expression::InfoExpr, typ::InfoTypeExpr},
+	passes::type_check_expr::{Scope, infer_expr_type},
 	value::native::NativeFunction,
 };
 
@@ -96,7 +97,7 @@ pub struct Instantiator<'a> {
 	pub global_namespace: HashMap<String, Template<'a>>,
 	pub types: Vec<Type>,
 	next_unification_var: usize,
-	subtype_members: HashMap<usize, HashMap<String, Template<'a>>>,
+	pub subtype_members: HashMap<usize, HashMap<String, Template<'a>>>,
 }
 
 macro_rules! type_ids {
@@ -298,12 +299,17 @@ impl<'a> Instantiator<'a> {
 				}
 				self.add(Type::Concrete(ConcreteType::Tuple(ins_elems)))
 			}
-			TypeExpr::Function(args, ret, imp, arg_names) => {
+			TypeExpr::Function(args, ret_e, imp, arg_names) => {
 				let mut ins_args = Vec::new();
-				for arg in args {
-					ins_args.push(self.instantiate(arg, generics)?);
+
+				let mut scope = Scope::new();
+
+				for (arg, name) in args.iter().zip(arg_names) {
+					let t = self.instantiate(arg, generics)?;
+					ins_args.push(t);
+					scope.insert(name.clone(), t);
 				}
-				let ret = self.instantiate(ret, generics)?;
+				let ret = self.instantiate(ret_e, generics)?;
 
 				let imp = match imp
 					.as_ref()
@@ -311,6 +317,19 @@ impl<'a> Instantiator<'a> {
 				{
 					GenericImplementation::Native(native) => Implementation::Native(native.clone()),
 					GenericImplementation::Normal(body) => Implementation::Normal({
+						let body_type =
+							infer_expr_type(*body.to_owned(), self, &mut scope, ret, &generics)?;
+
+						if !self.compatible(body_type.typ, ret, 0).unwrap() {
+							return Err(InfoTypeError {
+								span: ret_e.idx.clone(),
+								error: TypeError::IncompatibleTypes {
+									expected: self.get_type(ret).unwrap().clone(),
+									got: self.get_type(body_type.typ).unwrap().clone(),
+								},
+							});
+						}
+
 						let mut last_var = arg_names.len();
 						let last_var2 = last_var;
 						let mut locals = HashMap::new();
