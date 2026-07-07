@@ -2,11 +2,11 @@ use crate::ir::IRContext;
 use crate::ir::Operation;
 use crate::ir::Statement;
 use crate::ir::to_ir;
-use crate::parser::expression::InfoExpr;
+use crate::passes::type_check_expr::TypedExpr;
 
 pub fn variable_declaration<'a>(
 	name: String,
-	value_expr: Box<InfoExpr<'a>>,
+	value_expr: Box<TypedExpr>,
 	block: &mut usize,
 	store: Option<usize>,
 	context: &mut IRContext<'_, 'a>,

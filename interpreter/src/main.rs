@@ -4,7 +4,7 @@ use preval_lib::{
 	error::Span,
 	ir::Partial,
 	parser::{
-		module::{declaration_pass, implementation_pass},
+		module::{Module, declaration_pass, implementation_pass},
 		typ::InfoTypeExpr,
 	},
 	passes::remove_unused::{Usage, remove_unused},
@@ -15,20 +15,24 @@ use preval_lib::{
 };
 use ron::ser::PrettyConfig;
 
-fn add_dir(path: PathBuf, module: &mut HashMap<String, Template<'_>>, path_strings: Vec<String>) {
+fn add_dir(path: PathBuf, module: &mut Module, path_strings: Vec<String>) {
 	for entry in read_dir(path).unwrap() {
 		let entry = entry.unwrap();
 		if entry.file_type().unwrap().is_dir() {
-			let mut child = HashMap::new();
 			let mut new_path_strings = path_strings.clone();
 			new_path_strings.push(entry.file_name().into_string().unwrap());
-			add_dir(entry.path(), &mut child, new_path_strings.clone());
-			if let Some(_) = module.insert(
+			let mut child = Module {
+				methods: HashMap::new(),
+				path: new_path_strings.clone(),
+				templates: HashMap::new(),
+			};
+			add_dir(entry.path(), &mut child, new_path_strings);
+			if let Some(_) = module.templates.insert(
 				entry.file_name().into_string().unwrap(),
 				Template {
 					parameters: 0,
 					expr: InfoTypeExpr {
-						expr: TypeExpr::Module(child, new_path_strings),
+						expr: TypeExpr::Module(child),
 						idx: Span {
 							file: Cow::Owned("asldjlasjd".to_owned()),
 							index: 0,
@@ -60,7 +64,7 @@ fn add_dir(path: PathBuf, module: &mut HashMap<String, Template<'_>>, path_strin
 				};
 
 				match declaration_pass(&tokens, module) {
-					Ok(tokens) => tokens,
+					Ok(_) => {}
 					Err(error) => {
 						let (line, column) =
 							get_line_and_column(&contents, error.span.index).unwrap();

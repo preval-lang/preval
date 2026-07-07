@@ -2,14 +2,15 @@ mod access;
 mod block;
 mod call;
 mod conditional;
+mod global;
 mod guard;
 mod index;
 mod initialize_struct;
 mod is;
 mod literal;
+mod local;
 mod returns;
 mod to_ir;
-mod variable;
 mod variable_declaration;
 
 pub use to_ir::*;

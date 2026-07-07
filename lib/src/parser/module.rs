@@ -36,9 +36,16 @@ pub struct Signature<'a> {
 	return_type: InfoTypeExpr<'a>,
 }
 
+#[derive(Debug, Clone)]
+pub struct Module<'a> {
+	pub templates: HashMap<String, Template<'a>>,
+	pub methods: HashMap<String, HashMap<String, Template<'a>>>,
+	pub path: Vec<String>,
+}
+
 pub fn declaration_pass<'a>(
 	tokens: &[InfoToken<'a>],
-	module: &mut HashMap<String, Template<'a>>,
+	module: &mut Module<'a>,
 ) -> Result<(), InfoError<'a>> {
 	let mut i = 0;
 
@@ -74,7 +81,7 @@ pub fn declaration_pass<'a>(
 					}
 				}
 
-				module.insert(
+				module.templates.insert(
 					path.last().unwrap().clone(),
 					Template {
 						expr: parse_type(&tokens[start..end], &vec![])?,
@@ -88,7 +95,7 @@ pub fn declaration_pass<'a>(
 
 				let body = expect_block_or_expr(&tokens, &mut i, &signature.generics)?;
 
-				module.insert(
+				module.templates.insert(
 					signature.name,
 					Template {
 						expr: InfoTypeExpr {
@@ -107,54 +114,7 @@ pub fn declaration_pass<'a>(
 			Token::Keyword(Keyword::Struct) => {
 				let idx = i;
 				i += 1;
-				let name = if let Token::Name(name) = &tokens[i].token {
-					Ok(name)
-				} else {
-					Err(InfoParseError {
-						span: tokens[i].span.clone(),
-						error: ParseError::ExpectedName,
-					})
-				}?;
-				i += 1;
-				let generics_tokens = if let Token::LessThan = &tokens[i].token {
-					i += 1;
-					let start = i;
-					loop {
-						if let Some(InfoToken {
-							token: Token::GreaterThan,
-							span: _,
-						}) = tokens.iter().nth(i)
-						{
-							break;
-						}
-						i += 1;
-					}
-					i += 1;
-					Some(&tokens[start..i - 1])
-				} else {
-					None
-				};
-				let generics = if let Some(generics_tokens) = generics_tokens {
-					let generics = read_punctuated(generics_tokens, Token::Comma)?;
-					generics
-						.iter()
-						.map(|param_tokens| {
-							if let [
-								InfoToken {
-									token: Token::Name(name),
-									span: _,
-								},
-							] = &param_tokens[..]
-							{
-								name.clone()
-							} else {
-								panic!("Non name tokens in generic {param_tokens:?}")
-							}
-						})
-						.collect()
-				} else {
-					Vec::new()
-				};
+				let (name, generics) = read_name_and_generics(tokens, &mut i)?;
 				let block = if let Token::Braces(block) = &tokens[i].token {
 					Ok(block)
 				} else {
@@ -184,7 +144,7 @@ pub fn declaration_pass<'a>(
 				}
 				i += 1;
 
-				module.insert(
+				module.templates.insert(
 					name.clone(),
 					Template {
 						expr: InfoTypeExpr {
@@ -224,7 +184,7 @@ pub fn declaration_pass<'a>(
 					.into());
 				}
 				i += 1;
-				module.insert(
+				module.templates.insert(
 					signature.name.clone(),
 					Template {
 						expr: InfoTypeExpr {
@@ -243,6 +203,61 @@ pub fn declaration_pass<'a>(
 					},
 				);
 			}
+			Token::Keyword(Keyword::Impl) => {
+				i += 1;
+
+				let (name, _) = read_name_and_generics(tokens, &mut i)?;
+
+				let braces = if let Some(InfoToken {
+					token: Token::Braces(contents),
+					span: _,
+				}) = tokens.get(i)
+				{
+					contents
+				} else {
+					return Err(InfoParseError {
+						error: ParseError::ExpectedExpression(vec![tokens[i].clone()]),
+						span: tokens[i].span.clone(),
+					}
+					.into());
+				};
+				i += 1;
+
+				{
+					let mut i = 0;
+					while i < braces.len() {
+						match braces[i].token {
+							Token::Keyword(Keyword::Fn) => {
+								i += 1;
+								let sig = expect_function_signature(braces, &mut i)?;
+								let body = expect_block_or_expr(braces, &mut i, &sig.generics)?;
+
+								if !module.methods.contains_key(&name) {
+									module.methods.insert(name.clone(), HashMap::new());
+								}
+								if let Some(_) = module.methods.get_mut(&name).unwrap().insert(
+									sig.name.clone(),
+									Template {
+										expr: InfoTypeExpr {
+											expr: TypeExpr::Function(
+												sig.arg_types,
+												Box::new(sig.return_type),
+												Some(GenericImplementation::Normal(Box::new(body))),
+												sig.args,
+											),
+											idx: sig.name_idx,
+										},
+										parameters: sig.generics.len(),
+									},
+								) {
+									panic!("Method {:?}", sig.name)
+								}
+							}
+							_ => panic!("expected fn"),
+						}
+					}
+				}
+			}
 			_tk => {
 				return Err(InfoParseError {
 					span: tokens[i].span.clone(),
@@ -256,21 +271,77 @@ pub fn declaration_pass<'a>(
 	Ok(())
 }
 
+fn read_name_and_generics<'a>(
+	tokens: &[InfoToken<'a>],
+	i: &mut usize,
+) -> Result<(String, Vec<String>), InfoParseError<'a>> {
+	let name = if let Token::Name(name) = &tokens[*i].token {
+		Ok(name)
+	} else {
+		Err(InfoParseError {
+			span: tokens[*i].span.clone(),
+			error: ParseError::ExpectedName,
+		})
+	}?;
+	*i += 1;
+	let generics_tokens = if let Token::LessThan = &tokens[*i].token {
+		*i += 1;
+		let start = *i;
+		loop {
+			if let Some(InfoToken {
+				token: Token::GreaterThan,
+				span: _,
+			}) = tokens.iter().nth(*i)
+			{
+				break;
+			}
+			*i += 1;
+		}
+		*i += 1;
+		Some(&tokens[start..*i - 1])
+	} else {
+		None
+	};
+	let generics = if let Some(generics_tokens) = generics_tokens {
+		let generics = read_punctuated(generics_tokens, Token::Comma)?;
+		generics
+			.iter()
+			.map(|param_tokens| {
+				if let [
+					InfoToken {
+						token: Token::Name(name),
+						span: _,
+					},
+				] = &param_tokens[..]
+				{
+					name.clone()
+				} else {
+					panic!("Non name tokens in generic {param_tokens:?}")
+				}
+			})
+			.collect()
+	} else {
+		Vec::new()
+	};
+
+	Ok((name.clone(), generics))
+}
+
 pub fn implementation_pass<'a>(
 	ins: &mut Instantiator<'a>,
 	subtype: Option<usize>,
 ) -> Result<(), InfoError<'a>> {
 	let ns = if let Some(subtype) = subtype {
-		ins.subtype_members.get(&subtype).unwrap()
+		&ins.subtype_members.get(&subtype).unwrap().templates
 	} else {
-		&ins.global_namespace
+		&ins.global_namespace.templates
 	};
 
 	for name in ns.keys().map(ToOwned::to_owned).collect::<Vec<_>>() {
 		let ns = if let Some(subtype) = subtype {
-			ins.subtype_members.get(&subtype).unwrap()
+			&ins.subtype_members.get(&subtype).unwrap().templates
 		} else {
-			&ins.global_namespace
+			&ins.global_namespace.templates
 		};
 		let params = ns.get(&name).unwrap().parameters;
 		let generics = (0..params)
@@ -278,9 +349,9 @@ pub fn implementation_pass<'a>(
 			.collect::<Vec<_>>();
 
 		let ns = if let Some(subtype) = subtype {
-			ins.subtype_members.get(&subtype).unwrap()
+			&ins.subtype_members.get(&subtype).unwrap().templates
 		} else {
-			&ins.global_namespace
+			&ins.global_namespace.templates
 		};
 
 		let expr = ns.get(&name).unwrap().expr.clone();

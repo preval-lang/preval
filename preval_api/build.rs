@@ -10,7 +10,7 @@ fn main() {
 		language: cbindgen::Language::C,
 		cpp_compat: true,
 		export: ExportConfig {
-			include: vec!["API".to_string()],
+			include: vec!["PrevalAPI".to_string()],
 			..Default::default()
 		},
 		..Default::default()

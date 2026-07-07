@@ -13,4 +13,4 @@ pub struct Value {
 	p: PhantomData<()>,
 }
 
-pub type API = RawAPI<Value>;
+pub type PrevalAPI = RawAPI<Value>;

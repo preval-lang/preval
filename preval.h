@@ -13,4 +13,4 @@ typedef struct RawAPI_Value {
   struct Value *(*new_string_value)(const uint8_t*, uintptr_t);
 } RawAPI_Value;
 
-typedef struct RawAPI_Value API;
+typedef struct RawAPI_Value PrevalAPI;

@@ -1,42 +1,4 @@
-(Partial((
-    blocks: [
-        (
-            statements: [
-                (
-                    store: Some(2),
-                    operation: LoadLiteral((Tuple([]), "()", 2)),
-                ),
-                (
-                    store: Some(4),
-                    operation: LoadLiteral((String, "\"Hello\"", 3)),
-                ),
-                (
-                    store: Some(5),
-                    operation: LoadLiteral((NativeFunction, "(lib_name:\"print\",func_name:\"print\")", 7)),
-                ),
-                (
-                    store: Some(3),
-                    operation: LoadLocal(
-                        src: 1,
-                    ),
-                ),
-                (
-                    store: None,
-                    operation: Call(
-                        function: Var(5),
-                        args: [
-                            3,
-                            4,
-                        ],
-                    ),
-                ),
-            ],
-            terminal: Return(2),
-        ),
-    ],
-    start_block: 0,
-    generics: [],
-)), [
+(Concrete((Tuple([]), "()", 2)), [
     Concrete(Integer(
         size: Size,
         signed: false,
@@ -45,20 +7,20 @@
     Concrete(Tuple([])),
     Concrete(String),
     Concrete(IO),
-    Concrete(Module([
-        "std",
-    ])),
-    Concrete(Module([
-        "std",
-        "io",
-    ])),
     Concrete(Function([
-        4,
-        3,
-    ], 2, Native((
-        lib_name: "print",
-        func_name: "print",
-    )))),
+        0,
+        0,
+    ], 0, Normal([
+        (
+            statements: [
+                (
+                    store: Some(2),
+                    operation: LoadLiteral((USize, "0", 0)),
+                ),
+            ],
+            terminal: Return(2),
+        ),
+    ]))),
     Concrete(Function([
         4,
         4,
@@ -67,17 +29,15 @@
             statements: [
                 (
                     store: Some(3),
-                    operation: LoadLocal(
-                        src: 1,
-                    ),
+                    operation: LoadLiteral((USize, "5", 0)),
                 ),
                 (
                     store: Some(4),
-                    operation: LoadLiteral((String, "\"Hello\"", 3)),
+                    operation: LoadLiteral((USize, "2", 0)),
                 ),
                 (
                     store: Some(5),
-                    operation: LoadFunction(7),
+                    operation: LoadFunction(5),
                 ),
                 (
                     store: None,
@@ -97,4 +57,18 @@
             terminal: Return(2),
         ),
     ]))),
+    Concrete(Module([
+        "std",
+    ])),
+    Concrete(Module([
+        "std",
+        "io",
+    ])),
+    Concrete(Function([
+        4,
+        3,
+    ], 2, Native((
+        lib_name: "print",
+        func_name: "print",
+    )))),
 ])

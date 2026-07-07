@@ -4,11 +4,11 @@ use crate::ir::Operation;
 use crate::ir::Statement;
 use crate::ir::Terminal;
 use crate::ir::to_ir;
-use crate::parser::expression::InfoExpr;
+use crate::passes::type_check_expr::TypedExpr;
 
 pub fn call<'a>(
-	callee: Box<InfoExpr<'a>>,
-	args: Vec<InfoExpr<'a>>,
+	callee: Box<TypedExpr>,
+	args: Vec<TypedExpr>,
 	block: &mut usize,
 	store: Option<usize>,
 	tail: bool,

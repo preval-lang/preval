@@ -1,17 +1,15 @@
 use crate::ir::IRContext;
+use crate::ir::{Block, Operation, Statement, Terminal, to_ir};
+use crate::passes::type_check_expr::TypedExpr;
 use crate::typ::type_id;
 use crate::value::Value;
 use crate::value::primitive::EmptyTuple;
-use crate::{
-	ir::{Block, Operation, Statement, Terminal, to_ir},
-	parser::expression::InfoExpr,
-};
 use std::collections::HashMap;
 
 pub fn conditional<'a>(
-	cond: Box<InfoExpr<'a>>,
-	then: Box<InfoExpr<'a>>,
-	els: Option<Box<InfoExpr<'a>>>,
+	cond: Box<TypedExpr>,
+	then: Box<TypedExpr>,
+	els: Option<Box<TypedExpr>>,
 	block: &mut usize,
 	store: Option<usize>,
 	tail: bool,

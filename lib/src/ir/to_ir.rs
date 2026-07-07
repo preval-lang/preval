@@ -1,14 +1,18 @@
 use std::collections::HashMap;
 
 use crate::{
-	ir::{Block, access::access, guard::guard, initialize_struct::initialize_struct, is::is},
-	parser::expression::{Expr, InfoExpr},
+	ir::{
+		Block, access::access, guard::guard, initialize_struct::initialize_struct, is::is,
+		local::local,
+	},
+	parser::expression::Expr,
+	passes::type_check_expr::TypedExpr,
 	typ::Instantiator,
 };
 
 use crate::ir::{
-	block::compile_block, call::call, conditional::conditional, index::index, literal::literal,
-	returns::returns, variable::variable, variable_declaration::variable_declaration,
+	block::compile_block, call::call, conditional::conditional, global::global, index::index,
+	literal::literal, returns::returns, variable_declaration::variable_declaration,
 };
 
 pub struct IRContext<'a, 'typ> {
@@ -28,7 +32,7 @@ impl<'a, 'typ> IRContext<'a, 'typ> {
 
 pub fn to_ir<'typ>(
 	block: &mut usize,
-	expr: InfoExpr<'typ>,
+	expr: TypedExpr,
 	store: Option<usize>,
 	tail: bool,
 	context: &mut IRContext<'_, 'typ>,
@@ -47,10 +51,11 @@ pub fn to_ir<'typ>(
 		}
 		Expr::Return(value_expr) => returns(value_expr, block, context),
 		Expr::Call(callee, args) => call(callee, args, block, store, tail, context),
-		Expr::Name(name) => variable(name, block, store, context),
+		Expr::Name(name) => global(name, block, store, context),
 		Expr::If { cond, then, els } => conditional(cond, then, els, block, store, tail, context),
 		Expr::Guard { dependency, body } => guard(dependency, body, block, store, tail, context),
 		Expr::Index(left, right) => index(left, right, block, store, context),
-		Expr::Is { name, typ } => is(name, typ, expr.idx, block, store, context),
+		Expr::Is { name, typ } => is(name, typ, block, store, context),
+		Expr::Local(name) => local(name, block, store, context),
 	}
 }

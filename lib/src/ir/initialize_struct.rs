@@ -2,12 +2,12 @@ use std::collections::HashMap;
 
 use crate::{
 	ir::{IRContext, Operation, Statement, to_ir},
-	parser::{expression::InfoExpr, typ::InfoTypeExpr},
+	passes::type_check_expr::TypedExpr,
 };
 
 pub fn initialize_struct<'a>(
-	typ: InfoTypeExpr<'a>,
-	fields: HashMap<String, InfoExpr<'a>>,
+	typ: usize,
+	fields: HashMap<String, TypedExpr>,
 	block: &mut usize,
 	store: Option<usize>,
 	context: &mut IRContext<'_, 'a>,
@@ -22,13 +22,7 @@ pub fn initialize_struct<'a>(
 		}
 		context.blocks[*block].statements.push(Statement {
 			store: Some(store),
-			operation: Operation::InitializeStruct(
-				context
-					.ins
-					.instantiate(&typ, context.generics)
-					.expect("Pass type error up properly"),
-				field_vars,
-			),
+			operation: Operation::InitializeStruct(typ, field_vars),
 		});
 	}
 }

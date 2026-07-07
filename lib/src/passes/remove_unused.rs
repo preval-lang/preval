@@ -103,7 +103,7 @@ pub fn remove_unused(
 						Callable::Var(v) => {
 							used_vars.insert(*v);
 						}
-						Callable::Partial(_) => {}
+						_ => {}
 					}
 				}
 				Statement {
@@ -212,7 +212,7 @@ pub fn remove_unused(
 					Callable::Var(var) => {
 						used_vars.insert(*var);
 					}
-					Callable::Partial(_) => {}
+					_ => {}
 				}
 				for arg in args {
 					used_vars.insert(*arg);

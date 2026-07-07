@@ -1,12 +1,10 @@
+use crate::ir::{Block, Terminal, to_ir};
 use crate::ir::{IRContext, Operation, Statement};
-use crate::{
-	ir::{Block, Terminal, to_ir},
-	parser::expression::InfoExpr,
-};
+use crate::passes::type_check_expr::TypedExpr;
 
 pub fn guard<'a>(
-	dependency: Box<InfoExpr<'a>>,
-	body: Box<InfoExpr<'a>>,
+	dependency: Box<TypedExpr>,
+	body: Box<TypedExpr>,
 	block: &mut usize,
 	store: Option<usize>,
 	tail: bool,

@@ -1,11 +1,9 @@
 use crate::ir::{IRContext, to_ir};
-use crate::{
-	ir::{Operation, Statement},
-	parser::expression::InfoExpr,
-};
+use crate::ir::{Operation, Statement};
+use crate::passes::type_check_expr::TypedExpr;
 
 pub fn access<'a>(
-	left: Box<InfoExpr<'a>>,
+	left: Box<TypedExpr>,
 	right: String,
 	block: &mut usize,
 	store: Option<usize>,

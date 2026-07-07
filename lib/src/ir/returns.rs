@@ -3,13 +3,13 @@ use crate::ir::Operation;
 use crate::ir::Statement;
 use crate::ir::Terminal;
 use crate::ir::to_ir;
-use crate::parser::expression::InfoExpr;
+use crate::passes::type_check_expr::TypedExpr;
 use crate::typ::type_id;
 use crate::value::Value;
 use crate::value::primitive::EmptyTuple;
 
 pub fn returns<'a>(
-	value_expr: Option<Box<InfoExpr<'a>>>,
+	value_expr: Option<Box<TypedExpr>>,
 	block: &mut usize,
 	context: &mut IRContext<'_, 'a>,
 ) {

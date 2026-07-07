@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
 	error::Span,
 	ir::{Block, IRContext, Terminal, to_ir},
-	parser::{expression::InfoExpr, typ::InfoTypeExpr},
+	parser::{expression::InfoExpr, module::Module, typ::InfoTypeExpr},
 	passes::type_check_expr::{Scope, infer_expr_type},
 	value::native::NativeFunction,
 };
@@ -52,7 +52,6 @@ pub enum TypeExpr<'a> {
 	Parameter(usize),
 	Struct(HashMap<String, InfoTypeExpr<'a>>),
 	Tuple(Vec<InfoTypeExpr<'a>>),
-
 	Integer {
 		size: IntegerSize,
 		signed: bool,
@@ -71,7 +70,7 @@ pub enum TypeExpr<'a> {
 		Vec<String>,
 	),
 
-	Module(HashMap<String, Template<'a>>, Vec<String>),
+	Module(Module<'a>),
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -94,10 +93,11 @@ pub struct Template<'a> {
 
 #[derive(Debug, Clone)]
 pub struct Instantiator<'a> {
-	pub global_namespace: HashMap<String, Template<'a>>,
+	pub global_namespace: Module<'a>,
 	pub types: Vec<Type>,
 	next_unification_var: usize,
-	pub subtype_members: HashMap<usize, HashMap<String, Template<'a>>>,
+	pub subtype_members: HashMap<usize, Module<'a>>,
+	ins_builtins: bool,
 }
 
 macro_rules! type_ids {
@@ -142,10 +142,14 @@ type_ids! {
 
 impl<'a> Instantiator<'a> {
 	pub fn new() -> Self {
-		let mut global_namespace = HashMap::new();
+		let mut global_namespace = Module {
+			methods: HashMap::new(),
+			path: Vec::new(),
+			templates: HashMap::new(),
+		};
 
 		for (name, typ) in TYPE_NAMES.iter().zip(TYPES) {
-			global_namespace.insert(
+			global_namespace.templates.insert(
 				name.to_string(),
 				Template {
 					parameters: 0,
@@ -160,31 +164,18 @@ impl<'a> Instantiator<'a> {
 			);
 		}
 
-		let mut this = Instantiator {
+		let this = Instantiator {
 			global_namespace,
 			types: Vec::new(),
 			next_unification_var: 0,
+			ins_builtins: false,
 			subtype_members: HashMap::new(),
 		};
-
-		for name in TYPE_NAMES {
-			this.instantiate(
-				&InfoTypeExpr {
-					expr: TypeExpr::Name(name.to_string(), vec![]),
-					idx: Span {
-						file: Cow::Borrowed(file!().into()),
-						index: 0,
-					},
-				},
-				&vec![],
-			)
-			.unwrap();
-		}
 
 		this
 	}
 
-	fn instantiate_name(
+	pub fn instantiate_name(
 		&mut self,
 		n: &String,
 		params: &Vec<Option<InfoTypeExpr<'a>>>,
@@ -192,6 +183,10 @@ impl<'a> Instantiator<'a> {
 		generics: &[usize],
 		namespace: Option<usize>,
 	) -> Result<usize, InfoTypeError<'a>> {
+		if let Some(namespace) = namespace {
+			println!("TYPE: {:?}", self.get_type(namespace));
+		}
+
 		let namespace = if let Some(namespace) = namespace {
 			match self.subtype_members.get(&namespace) {
 				Some(namespace) => namespace,
@@ -205,7 +200,11 @@ impl<'a> Instantiator<'a> {
 		} else {
 			&self.global_namespace
 		};
-		let template = match namespace.get(n) {
+
+		let methods = namespace.methods.get(n).cloned();
+		let path = namespace.path.clone();
+
+		let template = match namespace.templates.get(n) {
 			Some(temp) => temp.clone(),
 			None => {
 				return Err(InfoTypeError {
@@ -241,7 +240,26 @@ impl<'a> Instantiator<'a> {
 			self.next_unification_var += 1;
 		}
 
-		self.instantiate(&template.expr, &template_params)
+		let tid = self.instantiate(&template.expr, &template_params)?;
+
+		if let Some(methods) = methods {
+			if !self.subtype_members.contains_key(&tid) {
+				self.subtype_members.insert(
+					tid,
+					Module {
+						templates: HashMap::new(),
+						methods: HashMap::new(),
+						path,
+					},
+				);
+			}
+			let subtype_members = self.subtype_members.get_mut(&tid).unwrap();
+			for (name, template) in methods {
+				subtype_members.templates.insert(name, template);
+			}
+		}
+
+		Ok(tid)
 	}
 
 	pub fn instantiate(
@@ -249,10 +267,27 @@ impl<'a> Instantiator<'a> {
 		expr: &InfoTypeExpr<'a>,
 		generics: &[usize],
 	) -> Result<usize, InfoTypeError<'a>> {
+		if !self.ins_builtins {
+			for name in TYPE_NAMES {
+				self.ins_builtins = true;
+				self.instantiate(
+					&InfoTypeExpr {
+						expr: TypeExpr::Name(name.to_string(), vec![]),
+						idx: Span {
+							file: Cow::Borrowed(file!().into()),
+							index: 0,
+						},
+					},
+					&vec![],
+				)
+				.unwrap();
+			}
+		}
+
 		let type_ = match &expr.expr {
-			TypeExpr::Module(members, path) => {
-				let typ = self.add(Type::Concrete(ConcreteType::Module(path.clone())));
-				self.subtype_members.insert(typ, members.clone());
+			TypeExpr::Module(module) => {
+				let typ = self.add(Type::Concrete(ConcreteType::Module(module.path.clone())));
+				self.subtype_members.insert(typ, module.clone());
 				typ
 			}
 			TypeExpr::Subtype(parent, child_name, child_generics) => match parent {
@@ -350,13 +385,7 @@ impl<'a> Instantiator<'a> {
 						};
 
 						let mut block = 0;
-						to_ir(
-							&mut block,
-							*(body).clone(),
-							Some(last_var2),
-							true,
-							&mut context,
-						);
+						to_ir(&mut block, body_type, Some(last_var2), true, &mut context);
 
 						ir
 					}),

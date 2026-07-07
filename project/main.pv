@@ -1,5 +1,9 @@
-use std::io;
+impl usize {
+	fn plus(self: usize, other: usize): usize {
+		0
+	}
+}
 
 fn main(compile_io: IO, io: IO) {
-    io::print(io, "Hello");
+	5 + 2;
 }

@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::{borrow::Cow, collections::HashMap, convert::Infallible};
 
 use crate::{
 	parser::{expression::InfoExpr, typ::InfoTypeExpr},
@@ -44,7 +44,7 @@ impl<'a> Scope<'a> {
 #[derive(Debug, Clone)]
 pub struct TypedExpr {
 	pub typ: usize,
-	pub expr: Expr<TypedExpr, usize, String>,
+	pub expr: Expr<TypedExpr, usize, String, Infallible>,
 }
 
 pub fn infer_expr_type<'a>(
@@ -56,6 +56,9 @@ pub fn infer_expr_type<'a>(
 ) -> Result<TypedExpr, InfoTypeError<'a>> {
 	match expr.expr {
 		Expr::Local(_) => unreachable!("At this stage locals will be Names instead"),
+		Expr::MethodAccess(_, _, _) => {
+			panic!("TODO: better error for using method as a value")
+		}
 		Expr::Literal(value) => Ok(TypedExpr {
 			typ: ins.add(Type::Concrete(value.get_type())),
 			expr: Expr::Literal(value.clone()),
@@ -197,8 +200,31 @@ pub fn infer_expr_type<'a>(
 				typ: ins.instantiate(&comparison_type, generics)?,
 			},
 		}),
-		Expr::Call(function_expr, args_exprs) => {
-			let function_expr = infer_expr_type(*function_expr, ins, scope, return_type, generics)?;
+		Expr::Call(function_expr, mut args_exprs) => {
+			let function_expr =
+				if let Expr::MethodAccess(obj, method_name, params) = function_expr.expr {
+					args_exprs = {
+						let mut temp = vec![*obj.clone()];
+						temp.extend(args_exprs.iter().cloned());
+						temp
+					};
+					let obj = infer_expr_type(*obj, ins, scope, return_type, generics)?;
+
+					let method = ins.instantiate_name(
+						&method_name,
+						&params,
+						&expr.idx,
+						generics,
+						Some(obj.typ),
+					)?;
+
+					TypedExpr {
+						typ: method,
+						expr: Expr::Name(method),
+					}
+				} else {
+					infer_expr_type(*function_expr, ins, scope, return_type, generics)?
+				};
 
 			let (args, callee_return_type) =
 				if let Type::Concrete(ConcreteType::Function(args, callee_return_type, _imp)) =

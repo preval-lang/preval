@@ -16,16 +16,21 @@ pub enum InfixOp {
 }
 
 impl InfixOp {
-	pub fn function(&self) -> &'static [&'static str] {
+	pub fn function(&self) -> &'static str {
 		match self {
-			Self::Plus => &["plus"],
-			Self::Minus => &["minus"],
+			Self::Plus => "plus",
+			Self::Minus => "minus",
 		}
 	}
 }
 
 #[derive(Debug, Clone)]
-pub enum Expr<Expression: Clone + Debug, Type: Clone + Debug, LocalType: Clone + Debug> {
+pub enum Expr<
+	Expression: Clone + Debug,
+	Type: Clone + Debug,
+	LocalType: Clone + Debug,
+	MethodType: Clone + Debug,
+> {
 	Index(Box<Expression>, Box<Expression>),
 	Name(Type),
 	Literal(Literal),
@@ -49,12 +54,13 @@ pub enum Expr<Expression: Clone + Debug, Type: Clone + Debug, LocalType: Clone +
 		typ: Type,
 	},
 	Local(LocalType),
+	MethodAccess(Box<Expression>, MethodType, Vec<Option<Type>>),
 }
 
 #[derive(Debug, Clone)]
 pub struct InfoExpr<'a> {
 	pub idx: Span<'a>,
-	pub expr: Expr<InfoExpr<'a>, InfoTypeExpr<'a>, Infallible>,
+	pub expr: Expr<InfoExpr<'a>, InfoTypeExpr<'a>, Infallible, String>,
 }
 
 pub struct InfoParseError<'a> {
@@ -120,6 +126,10 @@ pub fn parse_expression<'a>(
 		return Ok(expr);
 	}
 
+	if let Some(expr) = try_parse_method_access(tokens, generics)? {
+		return Ok(expr);
+	}
+
 	if let Some(expr) = try_parse_is(tokens, generics)? {
 		return Ok(expr);
 	}
@@ -141,6 +151,43 @@ pub fn parse_expression<'a>(
 	}
 
 	todo!("expected expression error span should be passed to parse_expression")
+}
+
+fn try_parse_method_access<'a>(
+	tokens: &[InfoToken<'a>],
+	generics: &[String],
+) -> Result<Option<InfoExpr<'a>>, InfoParseError<'a>> {
+	let (index, _) = if let Some(a) = tokens
+		.iter()
+		.enumerate()
+		.find(|(_, tk)| tk.token == Token::Colon)
+	{
+		a
+	} else {
+		return Ok(None);
+	};
+
+	let left = parse_expression(&tokens[0..index], generics)?;
+	let (name, params) = if let Some(InfoExpr {
+		idx: _,
+		expr: Expr::Name(InfoTypeExpr {
+			expr: TypeExpr::Name(name, params),
+			idx: _,
+		}),
+	}) = try_parse_name(&tokens[index + 1..], generics)?
+	{
+		(name, params)
+	} else {
+		return Err(InfoParseError {
+			span: tokens[index].span.clone(),
+			error: ParseError::ExpectedName,
+		});
+	};
+
+	return Ok(Some(InfoExpr {
+		idx: left.idx.clone(),
+		expr: Expr::MethodAccess(Box::new(left), name, params),
+	}));
 }
 
 fn try_parse_infix_op<'a>(
@@ -166,15 +213,9 @@ fn try_parse_infix_op<'a>(
 		expr: Expr::Call(
 			Box::new(InfoExpr {
 				idx: tokens[op_index].span.clone(),
-				expr: Expr::Name(InfoTypeExpr {
-					expr: TypeExpr::Name(
-						op.function().iter().map(ToString::to_string).collect(),
-						vec![],
-					),
-					idx: tokens[op_index].span.clone(),
-				}),
+				expr: Expr::MethodAccess(Box::new(left), op.function().to_string(), vec![]),
 			}),
-			vec![left, right],
+			vec![right],
 		),
 	}))
 }
