@@ -1,9 +1,20 @@
-impl usize {
+trait Plus<T> {
+
+	type Output;
+
+	fn plus(self, other: T): Output;
+
+}
+
+impl Plus<usize> for usize {
+
+	type Output = usize;
+
 	fn plus(self: usize, other: usize): usize {
 		0
 	}
 }
 
 fn main(compile_io: IO, io: IO) {
-	5 + 2;
+	
 }

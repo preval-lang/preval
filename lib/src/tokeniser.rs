@@ -20,6 +20,8 @@ pub enum Keyword {
 	Is,
 	Use,
 	Impl,
+	Trait,
+	Type,
 }
 
 impl TryFrom<&str> for Keyword {
@@ -40,6 +42,8 @@ impl TryFrom<&str> for Keyword {
 			"is" => Ok(Keyword::Is),
 			"use" => Ok(Keyword::Use),
 			"impl" => Ok(Keyword::Impl),
+			"trait" => Ok(Keyword::Trait),
+			"type" => Ok(Keyword::Type),
 			_ => Err(()),
 		}
 	}

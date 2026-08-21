@@ -66,11 +66,35 @@ pub enum TypeExpr<'a> {
 	Function(
 		Vec<InfoTypeExpr<'a>>,
 		Box<InfoTypeExpr<'a>>,
-		Option<GenericImplementation<'a>>,
+		GenericImplementation<'a>,
 		Vec<String>,
 	),
 
 	Module(Module<'a>),
+
+	Trait(Trait<'a>),
+}
+
+#[derive(Debug, Clone)]
+pub enum TraitMemberExpr<'a> {
+	Function {
+		generics: Vec<String>,
+		args: Vec<InfoTypeExpr<'a>>,
+		returns: InfoTypeExpr<'a>,
+	},
+	AssociatedType,
+}
+
+#[derive(Debug, Clone)]
+pub struct Trait<'a> {
+	pub members: HashMap<String, TraitMemberExpr<'a>>,
+	pub impls: HashMap<String, TraitImplExpr<'a>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TraitImplExpr<'a> {
+	pub on: InfoTypeExpr<'a>,
+	pub members: HashMap<String, InfoTypeExpr<'a>>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -285,6 +309,9 @@ impl<'a> Instantiator<'a> {
 		}
 
 		let type_ = match &expr.expr {
+			TypeExpr::Trait(_) => {
+				todo!("traits")
+			}
 			TypeExpr::Module(module) => {
 				let typ = self.add(Type::Concrete(ConcreteType::Module(module.path.clone())));
 				self.subtype_members.insert(typ, module.clone());
@@ -346,10 +373,7 @@ impl<'a> Instantiator<'a> {
 				}
 				let ret = self.instantiate(ret_e, generics)?;
 
-				let imp = match imp
-					.as_ref()
-					.expect("should not be null after implementation pass")
-				{
+				let imp = match imp {
 					GenericImplementation::Native(native) => Implementation::Native(native.clone()),
 					GenericImplementation::Normal(body) => Implementation::Normal({
 						let body_type =

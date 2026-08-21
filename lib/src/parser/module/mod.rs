@@ -1,40 +1,21 @@
-use std::{collections::HashMap, usize};
-
+mod expect_body;
+mod expect_function_signature;
+mod expect_name_and_generics;
 use crate::{
-	error::{InfoError, Span},
+	error::{Error, InfoError},
 	parser::{
-		expression::{InfoExpr, InfoParseError, ParseError, parse_expression},
+		expression::{InfoParseError, ParseError},
 		typ::{InfoTypeExpr, parse_type},
 		utility::read_punctuated,
 	},
 	tokeniser::{InfoToken, Keyword, Literal, Token},
-	typ::{GenericImplementation, Instantiator, Template, Type, TypeExpr},
+	typ::{GenericImplementation, Instantiator, Template, Trait, TraitMemberExpr, Type, TypeExpr},
 	value::native::NativeFunction,
 };
-
-pub fn add_prefix(prefix: &[String], name: String) -> Vec<String> {
-	let mut v = prefix.to_vec();
-	v.push(name);
-	v
-}
-
-#[derive(Debug)]
-pub enum Symbol<'a> {
-	Fn(Signature<'a>, InfoExpr<'a>),
-	DylibFn(Signature<'a>),
-	Struct(Vec<String>, HashMap<String, InfoTypeExpr<'a>>),
-	Alias,
-}
-
-#[derive(Clone, Debug)]
-pub struct Signature<'a> {
-	name: String,
-	name_idx: Span<'a>,
-	generics: Vec<String>,
-	args: Vec<String>,
-	arg_types: Vec<InfoTypeExpr<'a>>,
-	return_type: InfoTypeExpr<'a>,
-}
+use expect_body::expect_body;
+use expect_function_signature::expect_function_signature;
+use expect_name_and_generics::expect_name_and_generics;
+use std::{collections::HashMap, usize};
 
 #[derive(Debug, Clone)]
 pub struct Module<'a> {
@@ -93,7 +74,7 @@ pub fn declaration_pass<'a>(
 				i += 1;
 				let signature = expect_function_signature(&tokens, &mut i)?;
 
-				let body = expect_block_or_expr(&tokens, &mut i, &signature.generics)?;
+				let body = expect_body(&tokens, &mut i, &signature.generics)?;
 
 				module.templates.insert(
 					signature.name,
@@ -102,7 +83,7 @@ pub fn declaration_pass<'a>(
 							expr: TypeExpr::Function(
 								signature.arg_types,
 								Box::new(signature.return_type.clone()),
-								Some(GenericImplementation::Normal(Box::new(body.clone()))),
+								GenericImplementation::Normal(Box::new(body.clone())),
 								signature.args,
 							),
 							idx: signature.name_idx,
@@ -114,7 +95,7 @@ pub fn declaration_pass<'a>(
 			Token::Keyword(Keyword::Struct) => {
 				let idx = i;
 				i += 1;
-				let (name, generics) = read_name_and_generics(tokens, &mut i)?;
+				let (name, generics) = expect_name_and_generics(tokens, &mut i)?;
 				let block = if let Token::Braces(block) = &tokens[i].token {
 					Ok(block)
 				} else {
@@ -191,10 +172,10 @@ pub fn declaration_pass<'a>(
 							expr: TypeExpr::Function(
 								signature.arg_types,
 								Box::new(signature.return_type),
-								Some(GenericImplementation::Native(NativeFunction {
+								GenericImplementation::Native(NativeFunction {
 									lib_name,
 									func_name: signature.name,
-								})),
+								}),
 								signature.args,
 							),
 							idx: signature.name_idx,
@@ -206,7 +187,7 @@ pub fn declaration_pass<'a>(
 			Token::Keyword(Keyword::Impl) => {
 				i += 1;
 
-				let (name, _) = read_name_and_generics(tokens, &mut i)?;
+				let (name, _) = expect_name_and_generics(tokens, &mut i)?;
 
 				let braces = if let Some(InfoToken {
 					token: Token::Braces(contents),
@@ -230,7 +211,7 @@ pub fn declaration_pass<'a>(
 							Token::Keyword(Keyword::Fn) => {
 								i += 1;
 								let sig = expect_function_signature(braces, &mut i)?;
-								let body = expect_block_or_expr(braces, &mut i, &sig.generics)?;
+								let body = expect_body(braces, &mut i, &sig.generics)?;
 
 								if !module.methods.contains_key(&name) {
 									module.methods.insert(name.clone(), HashMap::new());
@@ -242,7 +223,7 @@ pub fn declaration_pass<'a>(
 											expr: TypeExpr::Function(
 												sig.arg_types,
 												Box::new(sig.return_type),
-												Some(GenericImplementation::Normal(Box::new(body))),
+												GenericImplementation::Normal(Box::new(body)),
 												sig.args,
 											),
 											idx: sig.name_idx,
@@ -258,6 +239,84 @@ pub fn declaration_pass<'a>(
 					}
 				}
 			}
+			Token::Keyword(Keyword::Trait) => {
+				i += 1;
+
+				let name_span = tokens[i].span.clone();
+				let (name, generics) = expect_name_and_generics(tokens, &mut i)?;
+
+				let braces = if let Token::Braces(contents) = &tokens[i].token {
+					contents
+				} else {
+					return Err(InfoError {
+						span: tokens[i].span.clone(),
+						data: Error::ParseError(ParseError::ExpectedTopLevel),
+					});
+				};
+				i += 1;
+
+				let mut members = HashMap::new();
+
+				{
+					let mut i = 0;
+
+					while i < braces.len() {
+						match braces[i].token {
+							Token::Keyword(Keyword::Fn) => {
+								i += 1;
+								let sig = expect_function_signature(braces, &mut i)?;
+								if tokens[i].token != Token::Semicolon {
+									return Err(InfoError {
+										span: tokens[i].span.clone(),
+										data: Error::ParseError(ParseError::ExpectedSemicolon(
+											tokens[i].clone(),
+										)),
+									});
+								}
+								i += 1;
+
+								members.insert(
+									sig.name,
+									TraitMemberExpr::Function {
+										generics: sig.generics,
+										args: sig.arg_types,
+										returns: sig.return_type,
+									},
+								);
+							}
+							Token::Keyword(Keyword::Type) => {
+								i += 1;
+								let name = if let Token::Name(name) = &tokens[i].token {
+									name
+								} else {
+									return Err(InfoError {
+										span: tokens[i].span.clone(),
+										data: Error::ParseError(ParseError::ExpectedName),
+									});
+								};
+								i += 1;
+
+								members.insert(name.clone(), TraitMemberExpr::AssociatedType);
+							}
+							_ => panic!("expected fn"),
+						}
+					}
+				}
+
+				module.templates.insert(
+					name,
+					Template {
+						parameters: generics.len(),
+						expr: InfoTypeExpr {
+							expr: TypeExpr::Trait(Trait {
+								members,
+								impls: HashMap::new(),
+							}),
+							idx: name_span,
+						},
+					},
+				);
+			}
 			_tk => {
 				return Err(InfoParseError {
 					span: tokens[i].span.clone(),
@@ -269,62 +328,6 @@ pub fn declaration_pass<'a>(
 	}
 
 	Ok(())
-}
-
-fn read_name_and_generics<'a>(
-	tokens: &[InfoToken<'a>],
-	i: &mut usize,
-) -> Result<(String, Vec<String>), InfoParseError<'a>> {
-	let name = if let Token::Name(name) = &tokens[*i].token {
-		Ok(name)
-	} else {
-		Err(InfoParseError {
-			span: tokens[*i].span.clone(),
-			error: ParseError::ExpectedName,
-		})
-	}?;
-	*i += 1;
-	let generics_tokens = if let Token::LessThan = &tokens[*i].token {
-		*i += 1;
-		let start = *i;
-		loop {
-			if let Some(InfoToken {
-				token: Token::GreaterThan,
-				span: _,
-			}) = tokens.iter().nth(*i)
-			{
-				break;
-			}
-			*i += 1;
-		}
-		*i += 1;
-		Some(&tokens[start..*i - 1])
-	} else {
-		None
-	};
-	let generics = if let Some(generics_tokens) = generics_tokens {
-		let generics = read_punctuated(generics_tokens, Token::Comma)?;
-		generics
-			.iter()
-			.map(|param_tokens| {
-				if let [
-					InfoToken {
-						token: Token::Name(name),
-						span: _,
-					},
-				] = &param_tokens[..]
-				{
-					name.clone()
-				} else {
-					panic!("Non name tokens in generic {param_tokens:?}")
-				}
-			})
-			.collect()
-	} else {
-		Vec::new()
-	};
-
-	Ok((name.clone(), generics))
 }
 
 pub fn implementation_pass<'a>(
@@ -362,142 +365,4 @@ pub fn implementation_pass<'a>(
 	}
 
 	Ok(())
-}
-
-fn expect_function_signature<'a>(
-	tokens: &[InfoToken<'a>],
-	i: &mut usize,
-) -> Result<Signature<'a>, InfoParseError<'a>> {
-	if let Token::Name(name) = &tokens[*i].token {
-		let name_idx = tokens[*i].span.clone();
-		*i += 1;
-
-		let mut args = Vec::new();
-		let generics_tokens = if let Token::LessThan = &tokens[*i].token {
-			*i += 1;
-			let start = *i;
-			loop {
-				if let Some(InfoToken {
-					token: Token::GreaterThan,
-					span: _,
-				}) = tokens.get(*i)
-				{
-					break;
-				}
-				*i += 1;
-			}
-			*i += 1;
-			Some(&tokens[start..*i - 1])
-		} else {
-			None
-		};
-		let generics = if let Some(generics_tokens) = generics_tokens {
-			let generics = read_punctuated(generics_tokens, Token::Comma)?;
-			generics
-				.iter()
-				.map(|param_tokens| {
-					if let [
-						InfoToken {
-							token: Token::Name(name),
-							span: _,
-						},
-					] = &param_tokens[..]
-					{
-						name.clone()
-					} else {
-						panic!("Non name tokens in generic {param_tokens:?}")
-					}
-				})
-				.collect()
-		} else {
-			Vec::new()
-		};
-
-		if let Token::Parens(contents) = &tokens[*i].token {
-			for arg_colon_type in read_punctuated(contents, Token::Comma)? {
-				if let [
-					InfoToken {
-						token: Token::Name(name),
-						span: _name_idx,
-					},
-					InfoToken {
-						token: Token::Colon,
-						span: _colon_idx,
-					},
-					typ @ ..,
-				] = &arg_colon_type[..]
-				{
-					let typ = parse_type(typ, &generics)?;
-					args.push((name.clone(), typ));
-				}
-			}
-			*i += 1;
-		} else {
-			panic!("Missing function parameters, got {:?}", tokens[*i]);
-		}
-		let returns = if let Token::Colon = &tokens[*i].token {
-			*i += 1;
-			let start = *i;
-			loop {
-				if let Some(InfoToken {
-					token: Token::Braces(_) | Token::Semicolon,
-					span: _,
-				}) = tokens.iter().nth(*i)
-				{
-					break;
-				}
-				*i += 1;
-			}
-
-			parse_type(&tokens[start..*i], &generics)?
-		} else {
-			InfoTypeExpr {
-				expr: TypeExpr::Tuple(Vec::new()),
-				idx: tokens[*i].span.clone(),
-			}
-		};
-		Ok(Signature {
-			name: name.clone(),
-			name_idx,
-			generics,
-			args: args.iter().map(|arg| arg.0.clone()).collect(),
-			arg_types: args.iter().map(|arg| arg.1.clone()).collect(),
-			return_type: returns,
-		})
-	} else {
-		Err(InfoParseError {
-			span: tokens[*i].span.clone(),
-			error: ParseError::ExpectedFunctionSignature(tokens[*i].clone()),
-		})
-	}
-}
-
-pub fn expect_block_or_expr<'a>(
-	tokens: &[InfoToken<'a>],
-	i: &mut usize,
-	generics: &[String],
-) -> Result<InfoExpr<'a>, InfoParseError<'a>> {
-	if let Some(InfoToken {
-		token: Token::Braces(_),
-		span: _,
-	}) = tokens.get(*i)
-	{
-		*i += 1;
-		return parse_expression(&tokens[*i - 1..*i], generics);
-	} else {
-		let mut out = Vec::new();
-		loop {
-			let token = tokens[*i].clone();
-
-			if token.token == Token::Semicolon {
-				*i += 1;
-				break;
-			}
-
-			out.push(token);
-
-			*i += 1;
-		}
-		return parse_expression(&out, generics);
-	}
 }
