@@ -25,6 +25,7 @@ fn add_dir(path: PathBuf, module: &mut Module, path_strings: Vec<String>) {
 				methods: HashMap::new(),
 				path: new_path_strings.clone(),
 				templates: HashMap::new(),
+				impls: Vec::new(),
 			};
 			add_dir(entry.path(), &mut child, new_path_strings);
 			if let Some(_) = module.templates.insert(
@@ -56,7 +57,7 @@ fn add_dir(path: PathBuf, module: &mut Module, path_strings: Vec<String>) {
 						let (line, column) =
 							get_line_and_column(&contents, error.idx.index).unwrap();
 						panic!(
-							"{:?} at {:?}:{line}:{column}",
+							"{:?} at {:}:{line}:{column}",
 							error.error,
 							entry.path().to_str().unwrap()
 						);
@@ -69,7 +70,7 @@ fn add_dir(path: PathBuf, module: &mut Module, path_strings: Vec<String>) {
 						let (line, column) =
 							get_line_and_column(&contents, error.span.index).unwrap();
 						panic!(
-							"{:?} at {:?}:{line}:{column}",
+							"{:?} at {:}:{line}:{column}",
 							error.data,
 							entry.path().to_str().unwrap()
 						);
@@ -97,7 +98,7 @@ fn compile(project_path: Vec<PathBuf>) -> (RunResult, Vec<Type>) {
 				error.span.index,
 			)
 			.unwrap();
-			panic!("{:?} at {:?}:{line}:{column}", error.data, error.span.file);
+			panic!("{:?} at {:}:{line}:{column}", error.data, error.span.file);
 		}
 	};
 

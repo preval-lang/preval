@@ -1,20 +1,13 @@
-trait Plus<T> {
+use std::io::print;
 
-	type Output;
-
-	fn plus(self, other: T): Output;
-
-}
-
-impl Plus<usize> for usize {
-
-	type Output = usize;
-
-	fn plus(self: usize, other: usize): usize {
-		0
-	}
+struct FileSystem {
+	io: IO,
 }
 
 fn main(compile_io: IO, io: IO) {
-	
+	let a = 2;
+
+	let b = fn(t) => "fart";
+
+	print(io, b("hello, world"));
 }

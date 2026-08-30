@@ -30,6 +30,7 @@ pub enum Expr<
 	Type: Clone + Debug,
 	LocalType: Clone + Debug,
 	MethodType: Clone + Debug,
+	InferredType: Clone + Debug,
 > {
 	Index(Box<Expression>, Box<Expression>),
 	Name(Type),
@@ -55,12 +56,13 @@ pub enum Expr<
 	},
 	Local(LocalType),
 	MethodAccess(Box<Expression>, MethodType, Vec<Option<Type>>),
+	Function(Vec<(String, InferredType)>, InferredType, Box<Expression>),
 }
 
 #[derive(Debug, Clone)]
 pub struct InfoExpr<'a> {
 	pub idx: Span<'a>,
-	pub expr: Expr<InfoExpr<'a>, InfoTypeExpr<'a>, Infallible, String>,
+	pub expr: Expr<InfoExpr<'a>, InfoTypeExpr<'a>, Infallible, String, Option<InfoTypeExpr<'a>>>,
 }
 
 pub struct InfoParseError<'a> {
@@ -87,6 +89,10 @@ pub fn parse_expression<'a>(
 	generics: &[String],
 ) -> Result<InfoExpr<'a>, InfoParseError<'a>> {
 	if let Some(expr) = try_parse_parens(tokens, generics)? {
+		return Ok(expr);
+	}
+
+	if let Some(expr) = try_parse_fn(tokens, generics)? {
 		return Ok(expr);
 	}
 
@@ -151,6 +157,87 @@ pub fn parse_expression<'a>(
 	}
 
 	todo!("expected expression error span should be passed to parse_expression")
+}
+
+fn try_parse_fn<'a>(
+	tokens: &[InfoToken<'a>],
+	generics: &[String],
+) -> Result<Option<InfoExpr<'a>>, InfoParseError<'a>> {
+	let mut i = 0;
+	if tokens[i].token != Token::Keyword(Keyword::Fn) {
+		return Ok(None);
+	}
+	i += 1;
+
+	let args_parens = if let Token::Parens(contents) = &tokens[i].token {
+		contents
+	} else {
+		todo!("Error: no parens after fn keyword in expression")
+	};
+
+	let mut args = Vec::new();
+
+	for arg in read_punctuated(&args_parens, Token::Comma)? {
+		match arg.as_slice() {
+			[
+				InfoToken {
+					span: _,
+					token: Token::Name(name),
+				},
+			] => {
+				args.push((name.clone(), None));
+			}
+
+			[
+				InfoToken {
+					token: Token::Name(name),
+					span: _,
+				},
+				InfoToken {
+					token: Token::Colon,
+					span: _,
+				},
+				typ @ ..,
+			] => {
+				args.push((name.clone(), Some(parse_type(typ, generics)?)));
+			}
+
+			_ => todo!("Error: no name in argument list"),
+		}
+	}
+
+	i += 1;
+
+	let return_type = if let Token::Colon = tokens[i].token {
+		i += 1;
+		let return_type_start = i;
+		while !matches!(tokens[i].token, Token::Arrow | Token::Braces(_)) {
+			i += 1;
+		}
+		let return_type_end = i;
+		Some(&tokens[return_type_start..return_type_end])
+	} else {
+		None
+	};
+
+	let return_type = if let Some(result) = return_type.map(|tokens| parse_type(tokens, generics)) {
+		Some(result?)
+	} else {
+		None
+	};
+
+	let body = match &tokens[i].token {
+		Token::Braces(_) => &tokens[i..i + 1],
+		Token::Arrow => &tokens[i + 1..],
+		_ => unreachable!(),
+	};
+
+	let body = parse_expression(body, generics)?;
+
+	return Ok(Some(InfoExpr {
+		idx: tokens[0].span.clone(),
+		expr: Expr::Function(args, return_type, Box::new(body)),
+	}));
 }
 
 fn try_parse_method_access<'a>(

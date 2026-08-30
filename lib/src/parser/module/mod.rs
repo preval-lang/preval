@@ -1,10 +1,18 @@
 mod expect_body;
 mod expect_function_signature;
+mod expect_generics;
+mod expect_impl_block;
 mod expect_name_and_generics;
+mod expect_token;
+mod expect_use;
 use crate::{
 	error::{Error, InfoError},
 	parser::{
 		expression::{InfoParseError, ParseError},
+		module::{
+			expect_impl_block::{ImplBlock, expect_impl_block},
+			expect_use::expect_use,
+		},
 		typ::{InfoTypeExpr, parse_type},
 		utility::read_punctuated,
 	},
@@ -22,6 +30,7 @@ pub struct Module<'a> {
 	pub templates: HashMap<String, Template<'a>>,
 	pub methods: HashMap<String, HashMap<String, Template<'a>>>,
 	pub path: Vec<String>,
+	pub impls: Vec<ImplBlock<'a>>,
 }
 
 pub fn declaration_pass<'a>(
@@ -33,40 +42,12 @@ pub fn declaration_pass<'a>(
 	while i < tokens.len() {
 		match tokens[i].token.clone() {
 			Token::Keyword(Keyword::Use) => {
-				i += 1;
-				let start = i;
-				while tokens[i].token != Token::Semicolon {
-					i += 1;
-				}
-				let end = i;
-				let items = read_punctuated(&tokens[start..end], Token::DoubleColon)?;
-				i += 1;
-
-				let mut path = Vec::new();
-
-				for item in items {
-					if let [
-						InfoToken {
-							token: Token::Name(name),
-							span: _,
-						},
-					] = &item[..]
-					{
-						path.push(name.clone());
-					} else {
-						return Err(InfoParseError {
-							error: ParseError::ExpectedName,
-							span: item[0].span.clone(),
-						}
-						.into());
-					}
-				}
-
+				let use_d = expect_use(tokens, &mut i)?;
 				module.templates.insert(
-					path.last().unwrap().clone(),
+					use_d.name,
 					Template {
-						expr: parse_type(&tokens[start..end], &vec![])?,
 						parameters: 0,
+						expr: use_d.typ,
 					},
 				);
 			}
@@ -185,59 +166,8 @@ pub fn declaration_pass<'a>(
 				);
 			}
 			Token::Keyword(Keyword::Impl) => {
-				i += 1;
-
-				let (name, _) = expect_name_and_generics(tokens, &mut i)?;
-
-				let braces = if let Some(InfoToken {
-					token: Token::Braces(contents),
-					span: _,
-				}) = tokens.get(i)
-				{
-					contents
-				} else {
-					return Err(InfoParseError {
-						error: ParseError::ExpectedExpression(vec![tokens[i].clone()]),
-						span: tokens[i].span.clone(),
-					}
-					.into());
-				};
-				i += 1;
-
-				{
-					let mut i = 0;
-					while i < braces.len() {
-						match braces[i].token {
-							Token::Keyword(Keyword::Fn) => {
-								i += 1;
-								let sig = expect_function_signature(braces, &mut i)?;
-								let body = expect_body(braces, &mut i, &sig.generics)?;
-
-								if !module.methods.contains_key(&name) {
-									module.methods.insert(name.clone(), HashMap::new());
-								}
-								if let Some(_) = module.methods.get_mut(&name).unwrap().insert(
-									sig.name.clone(),
-									Template {
-										expr: InfoTypeExpr {
-											expr: TypeExpr::Function(
-												sig.arg_types,
-												Box::new(sig.return_type),
-												GenericImplementation::Normal(Box::new(body)),
-												sig.args,
-											),
-											idx: sig.name_idx,
-										},
-										parameters: sig.generics.len(),
-									},
-								) {
-									panic!("Method {:?}", sig.name)
-								}
-							}
-							_ => panic!("expected fn"),
-						}
-					}
-				}
+				let impl_block = expect_impl_block(tokens, &mut i)?;
+				module.impls.push(impl_block);
 			}
 			Token::Keyword(Keyword::Trait) => {
 				i += 1;
@@ -265,11 +195,11 @@ pub fn declaration_pass<'a>(
 							Token::Keyword(Keyword::Fn) => {
 								i += 1;
 								let sig = expect_function_signature(braces, &mut i)?;
-								if tokens[i].token != Token::Semicolon {
+								if braces[i].token != Token::Semicolon {
 									return Err(InfoError {
-										span: tokens[i].span.clone(),
+										span: braces[i].span.clone(),
 										data: Error::ParseError(ParseError::ExpectedSemicolon(
-											tokens[i].clone(),
+											braces[i].clone(),
 										)),
 									});
 								}
@@ -286,19 +216,23 @@ pub fn declaration_pass<'a>(
 							}
 							Token::Keyword(Keyword::Type) => {
 								i += 1;
-								let name = if let Token::Name(name) = &tokens[i].token {
+								let name = if let Token::Name(name) = &braces[i].token {
+									i += 1;
 									name
 								} else {
 									return Err(InfoError {
-										span: tokens[i].span.clone(),
+										span: braces[i].span.clone(),
 										data: Error::ParseError(ParseError::ExpectedName),
 									});
 								};
-								i += 1;
-
+								if let Token::Semicolon = braces[i].token {
+									i += 1;
+								} else {
+									panic!("expected semicolon, got {:?}", braces[i]);
+								}
 								members.insert(name.clone(), TraitMemberExpr::AssociatedType);
 							}
-							_ => panic!("expected fn"),
+							ref tk => panic!("expected fn or type, got {tk:?}"),
 						}
 					}
 				}
@@ -330,34 +264,35 @@ pub fn declaration_pass<'a>(
 	Ok(())
 }
 
+fn namespace_templates<'a, 'b>(
+	ins: &'b Instantiator<'a>,
+	subtype: Option<usize>,
+) -> &'b HashMap<String, Template<'a>> {
+	match subtype {
+		Some(subtype) => &ins.subtype_members.get(&subtype).unwrap().templates,
+		None => &ins.global_namespace.templates,
+	}
+}
+
 pub fn implementation_pass<'a>(
 	ins: &mut Instantiator<'a>,
 	subtype: Option<usize>,
 ) -> Result<(), InfoError<'a>> {
-	let ns = if let Some(subtype) = subtype {
-		&ins.subtype_members.get(&subtype).unwrap().templates
-	} else {
-		&ins.global_namespace.templates
-	};
+	let names_and_params = namespace_templates(ins, subtype)
+		.iter()
+		.map(|(name, template)| (name.clone(), template.parameters))
+		.collect::<Vec<_>>();
 
-	for name in ns.keys().map(ToOwned::to_owned).collect::<Vec<_>>() {
-		let ns = if let Some(subtype) = subtype {
-			&ins.subtype_members.get(&subtype).unwrap().templates
-		} else {
-			&ins.global_namespace.templates
-		};
-		let params = ns.get(&name).unwrap().parameters;
+	for (name, params) in names_and_params {
 		let generics = (0..params)
 			.map(|i| ins.add(Type::Placeholder(i)))
 			.collect::<Vec<_>>();
 
-		let ns = if let Some(subtype) = subtype {
-			&ins.subtype_members.get(&subtype).unwrap().templates
-		} else {
-			&ins.global_namespace.templates
-		};
-
-		let expr = ns.get(&name).unwrap().expr.clone();
+		let expr = namespace_templates(ins, subtype)
+			.get(&name)
+			.unwrap()
+			.expr
+			.clone();
 		let t = ins.instantiate(&expr, &generics)?;
 		if ins.subtype_members.contains_key(&t) {
 			implementation_pass(ins, Some(t))?;

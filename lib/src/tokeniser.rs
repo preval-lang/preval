@@ -22,6 +22,7 @@ pub enum Keyword {
 	Impl,
 	Trait,
 	Type,
+	For,
 }
 
 impl TryFrom<&str> for Keyword {
@@ -44,6 +45,7 @@ impl TryFrom<&str> for Keyword {
 			"impl" => Ok(Keyword::Impl),
 			"trait" => Ok(Keyword::Trait),
 			"type" => Ok(Keyword::Type),
+			"for" => Ok(Keyword::For),
 			_ => Err(()),
 		}
 	}
@@ -67,6 +69,7 @@ pub enum Token<'a> {
 	GreaterThan,
 	DoubleColon,
 	InfixOp(InfixOp),
+	Arrow,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -189,14 +192,25 @@ pub fn tokenise<'a>(
 				i += 1;
 			}
 			Some('=') => {
-				out.push(InfoToken {
-					token: Token::Assignment,
-					span: Span {
-						index: offset + i,
-						file: file.clone(),
-					},
-				});
 				i += 1;
+				if input.chars().nth(i) == Some('>') {
+					i += 1;
+					out.push(InfoToken {
+						token: Token::Arrow,
+						span: Span {
+							index: offset + i,
+							file: file.clone(),
+						},
+					});
+				} else {
+					out.push(InfoToken {
+						token: Token::Assignment,
+						span: Span {
+							index: offset + i,
+							file: file.clone(),
+						},
+					});
+				}
 			}
 			Some(';') => {
 				out.push(InfoToken {

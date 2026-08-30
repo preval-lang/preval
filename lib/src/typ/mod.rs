@@ -170,6 +170,7 @@ impl<'a> Instantiator<'a> {
 			methods: HashMap::new(),
 			path: Vec::new(),
 			templates: HashMap::new(),
+			impls: Vec::new(),
 		};
 
 		for (name, typ) in TYPE_NAMES.iter().zip(TYPES) {
@@ -207,10 +208,6 @@ impl<'a> Instantiator<'a> {
 		generics: &[usize],
 		namespace: Option<usize>,
 	) -> Result<usize, InfoTypeError<'a>> {
-		if let Some(namespace) = namespace {
-			println!("TYPE: {:?}", self.get_type(namespace));
-		}
-
 		let namespace = if let Some(namespace) = namespace {
 			match self.subtype_members.get(&namespace) {
 				Some(namespace) => namespace,
@@ -254,14 +251,12 @@ impl<'a> Instantiator<'a> {
 			template_params.push(if let Some(param) = param {
 				self.instantiate(param, generics)?
 			} else {
-				self.next_unification_var += 1;
-				self.add(Type::UnificationVar(self.next_unification_var - 1))
+				self.unification_var()
 			});
 		}
 
 		while template_params.len() < template.parameters {
-			template_params.push(self.add(Type::UnificationVar(self.next_unification_var)));
-			self.next_unification_var += 1;
+			template_params.push(self.unification_var());
 		}
 
 		let tid = self.instantiate(&template.expr, &template_params)?;
@@ -273,6 +268,7 @@ impl<'a> Instantiator<'a> {
 					Module {
 						templates: HashMap::new(),
 						methods: HashMap::new(),
+						impls: Vec::new(),
 						path,
 					},
 				);
@@ -284,6 +280,11 @@ impl<'a> Instantiator<'a> {
 		}
 
 		Ok(tid)
+	}
+
+	pub fn unification_var(&mut self) -> usize {
+		self.next_unification_var += 1;
+		self.add(Type::UnificationVar(self.next_unification_var - 1))
 	}
 
 	pub fn instantiate(
@@ -375,44 +376,11 @@ impl<'a> Instantiator<'a> {
 
 				let imp = match imp {
 					GenericImplementation::Native(native) => Implementation::Native(native.clone()),
-					GenericImplementation::Normal(body) => Implementation::Normal({
-						let body_type =
-							infer_expr_type(*body.to_owned(), self, &mut scope, ret, &generics)?;
-
-						if !self.compatible(body_type.typ, ret, 0).unwrap() {
-							return Err(InfoTypeError {
-								span: ret_e.idx.clone(),
-								error: TypeError::IncompatibleTypes {
-									expected: self.get_type(ret).unwrap().clone(),
-									got: self.get_type(body_type.typ).unwrap().clone(),
-								},
-							});
-						}
-
-						let mut last_var = arg_names.len();
-						let last_var2 = last_var;
-						let mut locals = HashMap::new();
-						let mut ir = vec![Block {
-							terminal: Terminal::Return(last_var),
-							statements: Vec::new(),
-						}];
-						for (idx, arg) in arg_names.iter().enumerate() {
-							locals.insert(arg.clone(), idx);
-						}
-
-						let mut context = IRContext {
-							blocks: &mut ir,
-							generics,
-							ins: self,
-							locals: &mut locals,
-							next_var: &mut last_var,
-						};
-
-						let mut block = 0;
-						to_ir(&mut block, body_type, Some(last_var2), true, &mut context);
-
-						ir
-					}),
+					GenericImplementation::Normal(body) => {
+						Implementation::Normal(self.lower_function_body(
+							body, &mut scope, ret, &ret_e.idx, arg_names, generics,
+						)?)
+					}
 				};
 
 				self.add(Type::Concrete(ConcreteType::Function(ins_args, ret, imp)))
@@ -440,30 +408,115 @@ impl<'a> Instantiator<'a> {
 		self.types.get(index)
 	}
 
-	pub fn compatible(&mut self, assignee: usize, slot: usize, index: usize) -> Result<bool, ()> {
-		let assignee_t = self.get_type(assignee).ok_or(())?.clone();
-		if let Type::EarlyReturn = assignee_t {
-			return Ok(true);
+	/// Looks up and clones the `Type` at `index`. Every type id handed out by
+	/// this `Instantiator` is expected to stay valid for its lifetime, so an
+	/// invalid index here means an internal invariant was broken elsewhere.
+	pub fn type_of(&self, index: usize) -> Type {
+		self.get_type(index)
+			.cloned()
+			.expect("internal type index should always be valid")
+	}
+
+	/// Returns the field map if `idx` names a struct type, otherwise the
+	/// mismatched `Type` so the caller can build a `NotAStruct` error.
+	pub fn expect_struct(&self, idx: usize) -> Result<HashMap<String, usize>, Type> {
+		match self.type_of(idx) {
+			Type::Concrete(ConcreteType::Struct(fields)) => Ok(fields),
+			other => Err(other),
 		}
-		let slot_t = self.get_type(slot).ok_or(())?.clone();
+	}
+
+	/// Returns the (argument types, return type) if `idx` names a function
+	/// type, otherwise the mismatched `Type` so the caller can build a
+	/// `NotAFunction` error.
+	pub fn expect_function(&self, idx: usize) -> Result<(Vec<usize>, usize), Type> {
+		match self.type_of(idx) {
+			Type::Concrete(ConcreteType::Function(args, ret, _imp)) => Ok((args, ret)),
+			other => Err(other),
+		}
+	}
+
+	/// Checks whether a value of type `assignee` may be used somewhere `slot`
+	/// is expected. If `slot` is still an unresolved unification variable,
+	/// this also *binds* it to `assignee`'s type as a side effect - so despite
+	/// the name, this is a combined compatibility check + unification step,
+	/// not a pure predicate.
+	pub fn compatible(&mut self, assignee: usize, slot: usize) -> bool {
+		let assignee_t = self.type_of(assignee);
+		if let Type::EarlyReturn = assignee_t {
+			return true;
+		}
+		let slot_t = self.type_of(slot);
 
 		match &slot_t {
 			Type::Concrete(a) => match &assignee_t {
-				Type::Concrete(b) => Ok(a == b),
-				Type::Union(a, b) => Ok(self.compatible(*a, slot, index + 1)?
-					|| self.compatible(*b, slot, index + 1)?),
-				Type::Placeholder(_) => Ok(slot_t == assignee_t),
+				Type::Concrete(b) => a == b,
+				Type::Union(a, b) => self.compatible(*a, slot) || self.compatible(*b, slot),
+				Type::Placeholder(_) => slot_t == assignee_t,
 				Type::UnificationVar(_) => {
 					self.types[slot] = assignee_t;
-					Ok(true)
+					true
 				}
 				Type::EarlyReturn => panic!("Early return can't be assigned"),
 			},
-			Type::Union(a, b) => Ok(self.compatible(assignee, *a, index + 1)?
-				|| self.compatible(assignee, *b, index + 1)?),
+			Type::Union(a, b) => self.compatible(assignee, *a) || self.compatible(assignee, *b),
 			Type::EarlyReturn => panic!("Early return can't be a slot"),
-			Type::Placeholder(_) => Ok(slot_t == assignee_t),
-			Type::UnificationVar(_) => Ok(slot_t == assignee_t),
+			Type::Placeholder(_) => slot_t == assignee_t,
+			Type::UnificationVar(_) => {
+				self.types[slot] = assignee_t;
+				true
+			}
 		}
+	}
+
+	/// Type-checks a function body against its declared return type and
+	/// lowers it to IR blocks. Kept separate from `instantiate` so that
+	/// turning a `TypeExpr::Function` into a `ConcreteType::Function` (a
+	/// type-level operation) stays distinct from type-checking and
+	/// compiling its body (an expression/IR-level operation).
+	pub fn lower_function_body<'b>(
+		&mut self,
+		body: &InfoExpr<'a>,
+		scope: &mut Scope,
+		ret: usize,
+		ret_span: &Span<'a>,
+		arg_names: &[String],
+		generics: &[usize],
+	) -> Result<Vec<Block>, InfoTypeError<'a>> {
+		let body_type = infer_expr_type(body.clone(), self, scope, ret, generics)?;
+
+		if !self.compatible(body_type.typ, ret) {
+			return Err(InfoTypeError {
+				span: ret_span.clone(),
+				error: TypeError::IncompatibleTypes {
+					expected: self.type_of(ret),
+					got: self.type_of(body_type.typ),
+				},
+			});
+		}
+
+		let mut last_var = arg_names.len();
+		let last_var2 = last_var;
+		let mut locals = HashMap::new();
+		let mut ir = vec![Block {
+			terminal: Terminal::Return(last_var),
+			statements: Vec::new(),
+		}];
+		for (idx, arg) in arg_names.iter().enumerate() {
+			locals.insert(arg.clone(), idx);
+		}
+
+		let mut context = IRContext {
+			blocks: &mut ir,
+			generics,
+			ins: self,
+			locals: &mut locals,
+			next_var: &mut last_var,
+		};
+
+		let mut block = 0;
+		to_ir(&mut block, body_type, Some(last_var2), true, &mut context);
+
+		Ok(ir)
 	}
 }

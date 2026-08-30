@@ -1,4 +1,58 @@
-(Concrete((Tuple([]), "()", 2)), [
+(Partial((
+    blocks: [
+        (
+            statements: [
+                (
+                    store: Some(7),
+                    operation: LoadLiteral((String, "\"hello, world\"", 3)),
+                ),
+                (
+                    store: Some(3),
+                    operation: LoadLiteral((USize, "2", 0)),
+                ),
+                (
+                    store: Some(9),
+                    operation: LoadLiteral((NativeFunction, "(lib_name:\"print\",func_name:\"print\")", 8)),
+                ),
+                (
+                    store: Some(8),
+                    operation: LoadLiteral((Function, "(ir:[(statements:[(store:Some(1),operation:LoadLiteral((String,\"\\\"fart\\\"\",3)))],terminal:Return(1))],exported:false,generics:[])", 15)),
+                ),
+                (
+                    store: Some(4),
+                    operation: LoadLiteral((Function, "(ir:[(statements:[(store:Some(1),operation:LoadLiteral((String,\"\\\"fart\\\"\",3)))],terminal:Return(1))],exported:false,generics:[])", 15)),
+                ),
+                (
+                    store: Some(6),
+                    operation: LoadLiteral((String, "\"fart\"", 3)),
+                ),
+                (
+                    store: Some(2),
+                    operation: LoadLiteral((Tuple([]), "()", 2)),
+                ),
+                (
+                    store: Some(5),
+                    operation: LoadLocal(
+                        src: 1,
+                    ),
+                ),
+                (
+                    store: None,
+                    operation: Call(
+                        function: Var(9),
+                        args: [
+                            5,
+                            6,
+                        ],
+                    ),
+                ),
+            ],
+            terminal: Return(2),
+        ),
+    ],
+    start_block: 0,
+    generics: [],
+)), [
     Concrete(Integer(
         size: Size,
         signed: false,
@@ -7,56 +61,9 @@
     Concrete(Tuple([])),
     Concrete(String),
     Concrete(IO),
-    Concrete(Function([
-        0,
-        0,
-    ], 0, Normal([
-        (
-            statements: [
-                (
-                    store: Some(2),
-                    operation: LoadLiteral((USize, "0", 0)),
-                ),
-            ],
-            terminal: Return(2),
-        ),
-    ]))),
-    Concrete(Function([
-        4,
-        4,
-    ], 2, Normal([
-        (
-            statements: [
-                (
-                    store: Some(3),
-                    operation: LoadLiteral((USize, "5", 0)),
-                ),
-                (
-                    store: Some(4),
-                    operation: LoadLiteral((USize, "2", 0)),
-                ),
-                (
-                    store: Some(5),
-                    operation: LoadFunction(5),
-                ),
-                (
-                    store: None,
-                    operation: Call(
-                        function: Var(5),
-                        args: [
-                            3,
-                            4,
-                        ],
-                    ),
-                ),
-                (
-                    store: Some(2),
-                    operation: LoadLiteral((Tuple([]), "()", 2)),
-                ),
-            ],
-            terminal: Return(2),
-        ),
-    ]))),
+    Concrete(Struct({
+        "io": 4,
+    })),
     Concrete(Module([
         "std",
     ])),
@@ -71,4 +78,156 @@
         lib_name: "print",
         func_name: "print",
     )))),
+    Concrete(String),
+    Concrete(String),
+    Concrete(Function([
+        10,
+    ], 9, Normal([
+        (
+            statements: [
+                (
+                    store: Some(1),
+                    operation: LoadLiteral((String, "\"fart\"", 3)),
+                ),
+            ],
+            terminal: Return(1),
+        ),
+    ]))),
+    Concrete(Function([
+        4,
+        4,
+    ], 2, Normal([
+        (
+            statements: [
+                (
+                    store: Some(3),
+                    operation: LoadLiteral((USize, "2", 0)),
+                ),
+                (
+                    store: Some(4),
+                    operation: LoadFunction(11),
+                ),
+                (
+                    store: Some(5),
+                    operation: LoadLocal(
+                        src: 1,
+                    ),
+                ),
+                (
+                    store: Some(7),
+                    operation: LoadLiteral((String, "\"hello, world\"", 3)),
+                ),
+                (
+                    store: Some(8),
+                    operation: LoadLocal(
+                        src: 4,
+                    ),
+                ),
+                (
+                    store: Some(6),
+                    operation: Call(
+                        function: Var(8),
+                        args: [
+                            7,
+                        ],
+                    ),
+                ),
+                (
+                    store: Some(9),
+                    operation: LoadFunction(8),
+                ),
+                (
+                    store: None,
+                    operation: Call(
+                        function: Var(9),
+                        args: [
+                            5,
+                            6,
+                        ],
+                    ),
+                ),
+                (
+                    store: Some(2),
+                    operation: LoadLiteral((Tuple([]), "()", 2)),
+                ),
+            ],
+            terminal: Return(2),
+        ),
+    ]))),
+    Concrete(String),
+    Concrete(String),
+    Concrete(Function([
+        14,
+    ], 13, Normal([
+        (
+            statements: [
+                (
+                    store: Some(1),
+                    operation: LoadLiteral((String, "\"fart\"", 3)),
+                ),
+            ],
+            terminal: Return(1),
+        ),
+    ]))),
+    Concrete(Function([
+        4,
+        4,
+    ], 2, Normal([
+        (
+            statements: [
+                (
+                    store: Some(3),
+                    operation: LoadLiteral((USize, "2", 0)),
+                ),
+                (
+                    store: Some(4),
+                    operation: LoadFunction(15),
+                ),
+                (
+                    store: Some(5),
+                    operation: LoadLocal(
+                        src: 1,
+                    ),
+                ),
+                (
+                    store: Some(7),
+                    operation: LoadLiteral((String, "\"hello, world\"", 3)),
+                ),
+                (
+                    store: Some(8),
+                    operation: LoadLocal(
+                        src: 4,
+                    ),
+                ),
+                (
+                    store: Some(6),
+                    operation: Call(
+                        function: Var(8),
+                        args: [
+                            7,
+                        ],
+                    ),
+                ),
+                (
+                    store: Some(9),
+                    operation: LoadFunction(8),
+                ),
+                (
+                    store: None,
+                    operation: Call(
+                        function: Var(9),
+                        args: [
+                            5,
+                            6,
+                        ],
+                    ),
+                ),
+                (
+                    store: Some(2),
+                    operation: LoadLiteral((Tuple([]), "()", 2)),
+                ),
+            ],
+            terminal: Return(2),
+        ),
+    ]))),
 ])

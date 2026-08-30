@@ -2,7 +2,7 @@ use std::{borrow::Cow, collections::HashMap, convert::Infallible};
 
 use crate::{
 	parser::{expression::InfoExpr, typ::InfoTypeExpr},
-	typ::{ConcreteType, InfoTypeError, Instantiator, Type, TypeError, TypeExpr},
+	typ::{ConcreteType, Implementation, InfoTypeError, Instantiator, Type, TypeError, TypeExpr},
 };
 
 use crate::parser::expression::Expr;
@@ -44,7 +44,7 @@ impl<'a> Scope<'a> {
 #[derive(Debug, Clone)]
 pub struct TypedExpr {
 	pub typ: usize,
-	pub expr: Expr<TypedExpr, usize, String, Infallible>,
+	pub expr: Expr<TypedExpr, usize, String, Infallible, ()>,
 }
 
 pub fn infer_expr_type<'a>(
@@ -55,6 +55,45 @@ pub fn infer_expr_type<'a>(
 	generics: &[usize],
 ) -> Result<TypedExpr, InfoTypeError<'a>> {
 	match expr.expr {
+		Expr::Function(args, returns, body) => {
+			let returns = returns
+				.map(|r| ins.instantiate(&r, generics))
+				.unwrap_or_else(|| Ok(ins.unification_var()))?;
+			let mut arg_types = Vec::new();
+			let mut arg_names = Vec::new();
+			let mut scope = Scope::new();
+			for arg in args {
+				let typ = arg
+					.1
+					.map(|r| ins.instantiate(&r, generics))
+					.unwrap_or_else(|| Ok(ins.unification_var()))?;
+				arg_types.push(typ);
+
+				arg_names.push(arg.0.clone());
+
+				scope.insert(arg.0, typ);
+			}
+
+			let ir = ins.lower_function_body(
+				body.as_ref(),
+				&mut scope,
+				returns,
+				&expr.idx,
+				&arg_names,
+				generics,
+			)?;
+
+			let typ = ins.add(Type::Concrete(ConcreteType::Function(
+				arg_types,
+				returns,
+				Implementation::Normal(ir),
+			)));
+
+			Ok(TypedExpr {
+				typ,
+				expr: Expr::Name(typ),
+			})
+		}
 		Expr::Local(_) => unreachable!("At this stage locals will be Names instead"),
 		Expr::MethodAccess(_, _, _) => {
 			panic!("TODO: better error for using method as a value")
@@ -110,16 +149,12 @@ pub fn infer_expr_type<'a>(
 		}
 		Expr::InitializeStruct(struct_type_expr, fields) => {
 			let struct_type_id = ins.instantiate(&struct_type_expr, generics)?;
-			let struct_type = ins.get_type(struct_type_id).unwrap();
-			let struct_members = if let Type::Concrete(ConcreteType::Struct(members)) = struct_type
-			{
-				members.clone()
-			} else {
-				return Err(InfoTypeError {
-					span: struct_type_expr.idx.clone(),
-					error: TypeError::NotAStruct(struct_type.clone()),
-				});
-			};
+			let struct_members =
+				ins.expect_struct(struct_type_id)
+					.map_err(|typ| InfoTypeError {
+						span: struct_type_expr.idx.clone(),
+						error: TypeError::NotAStruct(typ),
+					})?;
 
 			if fields.len() != struct_members.len() {
 				return Err(InfoTypeError {
@@ -148,12 +183,12 @@ pub fn infer_expr_type<'a>(
 						error: TypeError::UnknownField(name.clone()),
 					});
 				};
-				if !ins.compatible(assignee_type, slot, 0).unwrap() {
+				if !ins.compatible(assignee_type, slot) {
 					return Err(InfoTypeError {
 						span: expr.idx.clone(),
 						error: TypeError::IncompatibleTypes {
-							expected: ins.get_type(slot).cloned().unwrap(),
-							got: ins.get_type(assignee_type).cloned().unwrap(),
+							expected: ins.type_of(slot),
+							got: ins.type_of(assignee_type),
 						},
 					});
 				}
@@ -167,23 +202,21 @@ pub fn infer_expr_type<'a>(
 		Expr::Access(struct_expr, field_name) => {
 			let struct_typed = infer_expr_type(*struct_expr, ins, scope, return_type, generics)?;
 
-			let typ = if let Type::Concrete(ConcreteType::Struct(struct_type)) =
-				ins.get_type(struct_typed.typ).unwrap()
-			{
-				if let Some(slot) = struct_type.get(&field_name) {
-					Ok(*slot)
-				} else {
-					Err(InfoTypeError {
+			let struct_members =
+				ins.expect_struct(struct_typed.typ)
+					.map_err(|typ| InfoTypeError {
 						span: expr.idx.clone(),
-						error: TypeError::UnknownField(field_name.clone()),
-					})
-				}
+						error: TypeError::NotAStruct(typ),
+					})?;
+
+			let typ = if let Some(slot) = struct_members.get(&field_name) {
+				*slot
 			} else {
-				Err(InfoTypeError {
+				return Err(InfoTypeError {
 					span: expr.idx.clone(),
-					error: TypeError::NotAStruct(ins.get_type(struct_typed.typ).unwrap().clone()),
-				})
-			}?;
+					error: TypeError::UnknownField(field_name.clone()),
+				});
+			};
 
 			Ok(TypedExpr {
 				typ,
@@ -227,18 +260,11 @@ pub fn infer_expr_type<'a>(
 				};
 
 			let (args, callee_return_type) =
-				if let Type::Concrete(ConcreteType::Function(args, callee_return_type, _imp)) =
-					ins.get_type(function_expr.typ).cloned().unwrap()
-				{
-					(args, callee_return_type)
-				} else {
-					return Err(InfoTypeError {
+				ins.expect_function(function_expr.typ)
+					.map_err(|typ| InfoTypeError {
 						span: expr.idx.clone(),
-						error: TypeError::NotAFunction(
-							ins.get_type(function_expr.typ).cloned().unwrap(),
-						),
-					});
-				};
+						error: TypeError::NotAFunction(typ),
+					})?;
 
 			if args_exprs.len() != args.len() {
 				return Err(InfoTypeError {
@@ -255,12 +281,12 @@ pub fn infer_expr_type<'a>(
 			for i in 0..args.len() {
 				let arg_expr =
 					infer_expr_type(args_exprs[i].clone(), ins, scope, return_type, generics)?;
-				if !ins.compatible(arg_expr.typ, args[i], 0).unwrap() {
+				if !ins.compatible(arg_expr.typ, args[i]) {
 					return Err(InfoTypeError {
 						span: expr.idx.clone(),
 						error: TypeError::IncompatibleTypes {
-							expected: ins.get_type(args[i]).cloned().unwrap(),
-							got: ins.get_type(arg_expr.typ).cloned().unwrap(),
+							expected: ins.type_of(args[i]),
+							got: ins.type_of(arg_expr.typ),
 						},
 					});
 				}
@@ -275,12 +301,12 @@ pub fn infer_expr_type<'a>(
 		Expr::If { cond, then, els } => {
 			let cond_typed = infer_expr_type(*cond, ins, scope, return_type, generics)?;
 			let bool = ins.add(Type::Concrete(ConcreteType::Bool));
-			if !ins.compatible(cond_typed.typ, bool, 0).unwrap() {
+			if !ins.compatible(cond_typed.typ, bool) {
 				return Err(InfoTypeError {
 					span: expr.idx.clone(),
 					error: TypeError::IncompatibleTypes {
 						expected: Type::Concrete(ConcreteType::Bool),
-						got: ins.get_type(cond_typed.typ).cloned().unwrap(),
+						got: ins.type_of(cond_typed.typ),
 					},
 				});
 			}
@@ -295,7 +321,7 @@ pub fn infer_expr_type<'a>(
 				None
 			};
 			let typ = if let Some(els_typed) = &els_typed {
-				if !ins.compatible(then_typed.typ, els_typed.typ, 0).unwrap() {
+				if !ins.compatible(then_typed.typ, els_typed.typ) {
 					ins.add(Type::Union(then_typed.typ, els_typed.typ))
 				} else {
 					then_typed.typ
@@ -349,12 +375,12 @@ pub fn infer_expr_type<'a>(
 				)
 			};
 
-			if !ins.compatible(expr_type, return_type, 0).unwrap() {
+			if !ins.compatible(expr_type, return_type) {
 				return Err(InfoTypeError {
 					span: expr.idx.clone(),
 					error: TypeError::IncompatibleTypes {
-						expected: ins.get_type(return_type).cloned().unwrap(),
-						got: ins.get_type(expr_type).cloned().unwrap(),
+						expected: ins.type_of(return_type),
+						got: ins.type_of(expr_type),
 					},
 				});
 			}

@@ -57,5 +57,8 @@ pub fn to_ir<'typ>(
 		Expr::Index(left, right) => index(left, right, block, store, context),
 		Expr::Is { name, typ } => is(name, typ, block, store, context),
 		Expr::Local(name) => local(name, block, store, context),
+		Expr::Function(_, _, _) => todo!(
+			"remove function expressions after type checking by splitting Expr into two types"
+		),
 	}
 }
