@@ -5,8 +5,7 @@ use crate::{
 		Block, access::access, guard::guard, initialize_struct::initialize_struct, is::is,
 		local::local,
 	},
-	parser::expression::Expr,
-	passes::type_check_expr::TypedExpr,
+	passes::type_check_expr::{TypedExpr, TypedExprKind},
 	typ::Instantiator,
 };
 
@@ -38,27 +37,28 @@ pub fn to_ir<'typ>(
 	context: &mut IRContext<'_, 'typ>,
 ) {
 	match expr.expr {
-		Expr::Literal(lit) => literal(lit, context.blocks, block, store),
-		Expr::Access(left, right) => access(left, right, block, store, context),
-		Expr::Let(name, value_expr) => {
+		TypedExprKind::Literal(lit) => literal(lit, context.blocks, block, store),
+		TypedExprKind::Access(left, right) => access(left, right, block, store, context),
+		TypedExprKind::Let(name, value_expr) => {
 			variable_declaration(name, value_expr, block, store, context)
 		}
-		Expr::Block(statements, returns) => {
+		TypedExprKind::Block(statements, returns) => {
 			compile_block(statements, returns, block, store, tail, context)
 		}
-		Expr::InitializeStruct(name, fields) => {
+		TypedExprKind::InitializeStruct(name, fields) => {
 			initialize_struct(name, fields, block, store, context)
 		}
-		Expr::Return(value_expr) => returns(value_expr, block, context),
-		Expr::Call(callee, args) => call(callee, args, block, store, tail, context),
-		Expr::Name(name) => global(name, block, store, context),
-		Expr::If { cond, then, els } => conditional(cond, then, els, block, store, tail, context),
-		Expr::Guard { dependency, body } => guard(dependency, body, block, store, tail, context),
-		Expr::Index(left, right) => index(left, right, block, store, context),
-		Expr::Is { name, typ } => is(name, typ, block, store, context),
-		Expr::Local(name) => local(name, block, store, context),
-		Expr::Function(_, _, _) => todo!(
-			"remove function expressions after type checking by splitting Expr into two types"
-		),
+		TypedExprKind::Return(value_expr) => returns(value_expr, block, context),
+		TypedExprKind::Call(callee, args) => call(callee, args, block, store, tail, context),
+		TypedExprKind::Name(name) => global(name, block, store, context),
+		TypedExprKind::If { cond, then, els } => {
+			conditional(cond, then, els, block, store, tail, context)
+		}
+		TypedExprKind::Guard { dependency, body } => {
+			guard(dependency, body, block, store, tail, context)
+		}
+		TypedExprKind::Index(left, right) => index(left, right, block, store, context),
+		TypedExprKind::Is { name, typ } => is(name, typ, block, store, context),
+		TypedExprKind::Local(name) => local(name, block, store, context),
 	}
 }

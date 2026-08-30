@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::convert::Infallible;
 use std::fmt::Debug;
 
 use crate::error::Span;
@@ -25,44 +24,41 @@ impl InfixOp {
 }
 
 #[derive(Debug, Clone)]
-pub enum Expr<
-	Expression: Clone + Debug,
-	Type: Clone + Debug,
-	LocalType: Clone + Debug,
-	MethodType: Clone + Debug,
-	InferredType: Clone + Debug,
-> {
-	Index(Box<Expression>, Box<Expression>),
-	Name(Type),
+pub enum InfoExprKind<'a> {
+	Index(Box<InfoExpr<'a>>, Box<InfoExpr<'a>>),
+	Name(InfoTypeExpr<'a>),
 	Literal(Literal),
-	Call(Box<Expression>, Vec<Expression>),
-	Return(Option<Box<Expression>>),
-	Block(Vec<Expression>, bool),
-	Let(String, Box<Expression>),
+	Call(Box<InfoExpr<'a>>, Vec<InfoExpr<'a>>),
+	Return(Option<Box<InfoExpr<'a>>>),
+	Block(Vec<InfoExpr<'a>>, bool),
+	Let(String, Box<InfoExpr<'a>>),
 	If {
-		cond: Box<Expression>,
-		then: Box<Expression>,
-		els: Option<Box<Expression>>,
+		cond: Box<InfoExpr<'a>>,
+		then: Box<InfoExpr<'a>>,
+		els: Option<Box<InfoExpr<'a>>>,
 	},
-	InitializeStruct(Type, HashMap<String, Expression>),
-	Access(Box<Expression>, String),
+	InitializeStruct(InfoTypeExpr<'a>, HashMap<String, InfoExpr<'a>>),
+	Access(Box<InfoExpr<'a>>, String),
 	Guard {
-		dependency: Box<Expression>,
-		body: Box<Expression>,
+		dependency: Box<InfoExpr<'a>>,
+		body: Box<InfoExpr<'a>>,
 	},
 	Is {
 		name: String,
-		typ: Type,
+		typ: InfoTypeExpr<'a>,
 	},
-	Local(LocalType),
-	MethodAccess(Box<Expression>, MethodType, Vec<Option<Type>>),
-	Function(Vec<(String, InferredType)>, InferredType, Box<Expression>),
+	MethodAccess(Box<InfoExpr<'a>>, String, Vec<Option<InfoTypeExpr<'a>>>),
+	Function(
+		Vec<(String, Option<InfoTypeExpr<'a>>)>,
+		Option<InfoTypeExpr<'a>>,
+		Box<InfoExpr<'a>>,
+	),
 }
 
 #[derive(Debug, Clone)]
 pub struct InfoExpr<'a> {
 	pub idx: Span<'a>,
-	pub expr: Expr<InfoExpr<'a>, InfoTypeExpr<'a>, Infallible, String, Option<InfoTypeExpr<'a>>>,
+	pub expr: InfoExprKind<'a>,
 }
 
 pub struct InfoParseError<'a> {
@@ -236,7 +232,7 @@ fn try_parse_fn<'a>(
 
 	return Ok(Some(InfoExpr {
 		idx: tokens[0].span.clone(),
-		expr: Expr::Function(args, return_type, Box::new(body)),
+		expr: InfoExprKind::Function(args, return_type, Box::new(body)),
 	}));
 }
 
@@ -257,10 +253,11 @@ fn try_parse_method_access<'a>(
 	let left = parse_expression(&tokens[0..index], generics)?;
 	let (name, params) = if let Some(InfoExpr {
 		idx: _,
-		expr: Expr::Name(InfoTypeExpr {
-			expr: TypeExpr::Name(name, params),
-			idx: _,
-		}),
+		expr:
+			InfoExprKind::Name(InfoTypeExpr {
+				expr: TypeExpr::Name(name, params),
+				idx: _,
+			}),
 	}) = try_parse_name(&tokens[index + 1..], generics)?
 	{
 		(name, params)
@@ -273,7 +270,7 @@ fn try_parse_method_access<'a>(
 
 	return Ok(Some(InfoExpr {
 		idx: left.idx.clone(),
-		expr: Expr::MethodAccess(Box::new(left), name, params),
+		expr: InfoExprKind::MethodAccess(Box::new(left), name, params),
 	}));
 }
 
@@ -297,10 +294,10 @@ fn try_parse_infix_op<'a>(
 
 	Ok(Some(InfoExpr {
 		idx: tokens[op_index].span.clone(),
-		expr: Expr::Call(
+		expr: InfoExprKind::Call(
 			Box::new(InfoExpr {
 				idx: tokens[op_index].span.clone(),
-				expr: Expr::MethodAccess(Box::new(left), op.function().to_string(), vec![]),
+				expr: InfoExprKind::MethodAccess(Box::new(left), op.function().to_string(), vec![]),
 			}),
 			vec![right],
 		),
@@ -327,7 +324,7 @@ fn try_parse_let<'a>(
 			}) = tokens.get(2)
 			{
 				return Ok(Some(InfoExpr {
-					expr: Expr::Let(
+					expr: InfoExprKind::Let(
 						name.clone(),
 						Box::new(parse_expression(&tokens[3..], generics)?),
 					),
@@ -367,7 +364,7 @@ fn try_parse_guard<'a>(
 	{
 		return Ok(Some(InfoExpr {
 			idx: guard_idx.clone(),
-			expr: Expr::Guard {
+			expr: InfoExprKind::Guard {
 				dependency: Box::new(parse_expression(dependency, generics)?),
 				body: Box::new(parse_expression(rest, generics)?),
 			},
@@ -394,7 +391,7 @@ fn try_parse_is<'a>(
 	{
 		return Ok(Some(InfoExpr {
 			idx: is_idx.clone(),
-			expr: Expr::Is {
+			expr: InfoExprKind::Is {
 				name: name.clone(),
 				typ: parse_type(type_expr, generics)?,
 			},
@@ -428,7 +425,7 @@ fn try_parse_if<'a>(
 	] = tokens
 	{
 		return Ok(Some(InfoExpr {
-			expr: Expr::If {
+			expr: InfoExprKind::If {
 				cond: Box::new(parse_expression(condition, generics)?),
 				then: Box::new(parse_expression(&[then_block.clone()], generics)?),
 				els: Some(Box::new(parse_expression(&[else_block.clone()], generics)?)),
@@ -473,7 +470,7 @@ fn try_parse_struct<'a>(
 		let type_expr = parse_type(type_tokens, &generics)?;
 
 		Ok(Some(InfoExpr {
-			expr: Expr::InitializeStruct(type_expr, fields),
+			expr: InfoExprKind::InitializeStruct(type_expr, fields),
 			idx: type_tokens[0].span.clone(),
 		}))
 	} else {
@@ -494,7 +491,7 @@ fn try_parse_return<'a>(
 	] = tokens
 	{
 		return Ok(Some(InfoExpr {
-			expr: Expr::Return({
+			expr: InfoExprKind::Return({
 				if return_tokens.is_empty() {
 					None
 				} else {
@@ -520,7 +517,7 @@ fn try_parse_index<'a>(
 	] = tokens
 	{
 		return Ok(Some(InfoExpr {
-			expr: Expr::Index(
+			expr: InfoExprKind::Index(
 				Box::new(parse_expression(left, generics)?),
 				Box::new(parse_expression(index, generics)?),
 			),
@@ -563,7 +560,7 @@ fn try_parse_dot<'a>(
 	] = tokens
 	{
 		return Ok(Some(InfoExpr {
-			expr: Expr::Access(Box::new(parse_expression(left, generics)?), name.clone()),
+			expr: InfoExprKind::Access(Box::new(parse_expression(left, generics)?), name.clone()),
 			idx: idx.clone(),
 		}));
 	}
@@ -584,7 +581,7 @@ fn try_parse_call<'a>(
 	] = tokens
 	{
 		return Ok(Some(InfoExpr {
-			expr: Expr::Call(Box::new(parse_expression(left, generics)?), {
+			expr: InfoExprKind::Call(Box::new(parse_expression(left, generics)?), {
 				let mut out = Vec::new();
 				for tokens in read_punctuated(contents, Token::Comma)? {
 					out.push(parse_expression(&tokens, generics)?);
@@ -625,7 +622,7 @@ fn try_parse_block<'a>(
 			}
 		}
 		return Ok(Some(InfoExpr {
-			expr: Expr::Block(out, returns),
+			expr: InfoExprKind::Block(out, returns),
 			idx: idx.clone(),
 		}));
 	}
@@ -638,7 +635,7 @@ fn try_parse_name<'a>(
 ) -> Result<Option<InfoExpr<'a>>, InfoParseError<'a>> {
 	Ok(Some(InfoExpr {
 		idx: tokens[0].span.clone(),
-		expr: Expr::Name(parse_type(tokens, generics)?),
+		expr: InfoExprKind::Name(parse_type(tokens, generics)?),
 	}))
 }
 
@@ -653,7 +650,7 @@ fn try_parse_literal<'a>(
 	] = tokens
 	{
 		return Ok(Some(InfoExpr {
-			expr: Expr::Literal(value.clone()),
+			expr: InfoExprKind::Literal(value.clone()),
 			idx: idx.clone(),
 		}));
 	}
@@ -671,7 +668,7 @@ fn try_parse_boolean<'a>(
 	] = tokens
 	{
 		return Ok(Some(InfoExpr {
-			expr: Expr::Literal(Literal::Bool(*value)),
+			expr: InfoExprKind::Literal(Literal::Bool(*value)),
 			idx: idx.clone(),
 		}));
 	}

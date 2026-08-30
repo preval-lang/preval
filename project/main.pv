@@ -1,13 +1,9 @@
 use std::io::print;
 
-struct FileSystem {
-	io: IO,
-}
-
 fn main(compile_io: IO, io: IO) {
-	let a = 2;
+	let msg = "hello, world!";
 
-	let b = fn(t) => "fart";
+	let x = guard(io) "hello";
 
-	print(io, b("hello, world"));
+	print(compile_io, x);
 }
